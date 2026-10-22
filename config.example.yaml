@@ -10,6 +10,11 @@ app:
   followup_days: 3       # na hoeveel dagen zonder antwoord een thread in "Wacht op antwoord" komt
   poll_seconds: 300      # max. tijd tussen syncs (IDLE meldt nieuwe mail meestal binnen enkele seconden)
   timezone: Europe/Brussels
+  # Standaard opruimen voor afzenders zónder eigen regel: na X dagen automatisch archiveren (0 = uit).
+  # Regels per afzender stel je in via het tabblad Opruimen en gaan altijd voor.
+  cleanup:
+    notificatie_days: 0
+    reclame_days: 0
 
 ai:
   enabled: true

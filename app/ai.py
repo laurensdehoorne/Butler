@@ -131,7 +131,7 @@ class AIWorker:
         if not t or not msgs:
             return None
         if all(m["bulk"] for m in msgs):
-            res = {"summary": msgs[-1]["snippet"][:200], "priority": "laag", "category": "nieuwsbrief",
+            res = {"summary": msgs[-1]["snippet"][:200], "priority": "laag", "category": msgs[-1].get("kind") or "reclame",
                    "action": "geen", "deadline": None}
         elif not self.active_for(t["account"]):
             return None

@@ -8,10 +8,29 @@ from email.utils import getaddresses, parsedate_to_datetime
 from bs4 import BeautifulSoup
 
 MID_RE = re.compile(r"<[^<>\s]+>")
-NOREPLY_RE = re.compile(
-    r"(no-?reply|do-?not-?reply|notifications?@|notify@|mailer-daemon|newsletter|nieuwsbrief|marketing@)",
+NOREPLY_RE = re.compile(r"(no-?reply|do-?not-?reply|mailer-daemon|postmaster@)", re.I)
+NOTIF_FROM_RE = re.compile(r"(notifications?@|notify@|alerts?@|noreply|no-reply|security@|account@|accounts@|support@|service@|system@|monitor)", re.I)
+MARKETING_FROM_RE = re.compile(r"(newsletter|nieuwsbrief|marketing|promo|offers?@|deals?@|news@|mailing|campaign|e-?mail\.)", re.I)
+TRANS_RE = re.compile(
+    r"(bestelling|order|factuur|invoice|rekening|betaling|payment|betaald|verzend|verzonden|shipped|levering|geleverd|"
+    r"delivery|track|pakket|parcel|zending|code|verificatie|verif|wachtwoord|password|login|inlog|aanmeld|sign.?in|"
+    r"beveiliging|security|alert|reservat|booking|boeking|bevestig|confirm|ticket|afspraak|appointment|receipt|"
+    r"ontvangstbewijs|statement|uittreksel|domiciliëring|abonnement verlengd|backup|storing|outage)",
     re.I,
 )
+
+
+def classify(from_addr, subject, has_list, unsub):
+    """'' = persoonlijk, 'notificatie' = automatisch/transactioneel, 'reclame' = nieuwsbrief/marketing."""
+    noreply = bool(NOREPLY_RE.search(from_addr or ""))
+    marketing = bool(MARKETING_FROM_RE.search(from_addr or ""))
+    if not (has_list or noreply or marketing or NOTIF_FROM_RE.search(from_addr or "")):
+        return ""
+    if TRANS_RE.search(subject or "") or (NOTIF_FROM_RE.search(from_addr or "") and not marketing):
+        return "notificatie"
+    if marketing or unsub:
+        return "reclame"
+    return "notificatie"
 BIG_NOTE = "(Groot bericht met bijlagen — open het in je mailapp voor de volledige inhoud.)"
 
 
@@ -114,12 +133,10 @@ def parse(raw, header_only=False):
 
     body = BIG_NOTE if header_only else _body(msg)
     prec = h("Precedence").lower()
-    bulk = bool(
-        h("List-Unsubscribe")
-        or h("List-Id")
-        or prec in ("bulk", "list", "junk")
-        or NOREPLY_RE.search(from_addr or "")
-    )
+    unsub = h("List-Unsubscribe")
+    subject = h("Subject") or "(geen onderwerp)"
+    has_list = bool(unsub or h("List-Id") or prec in ("bulk", "list", "junk"))
+    kind = classify(from_addr, subject, has_list, unsub)
     return {
         "message_id": (MID_RE.findall(h("Message-ID")) or [""])[0],
         "refs": MID_RE.findall(h("References")),
@@ -129,9 +146,12 @@ def parse(raw, header_only=False):
         "to": addrs("To"),
         "cc": addrs("Cc"),
         "reply_to": rt[0][1] if rt else "",
-        "subject": h("Subject") or "(geen onderwerp)",
+        "subject": subject,
         "date": date,
         "body": body[:50000],
         "snippet": make_snippet(body),
-        "bulk": bulk,
+        "kind": kind,
+        "bulk": bool(kind),
+        "unsub": unsub[:1000],
+        "unsub_post": "one-click" in h("List-Unsubscribe-Post").lower(),
     }

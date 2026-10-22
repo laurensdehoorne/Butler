@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS messages(
   outgoing INTEGER DEFAULT 0,
   in_inbox INTEGER DEFAULT 0,
   bulk INTEGER DEFAULT 0,
+  kind TEXT DEFAULT '',
+  unsub TEXT DEFAULT '',
+  unsub_post INTEGER DEFAULT 0,
   UNIQUE(account, folder, uid)
 );
 CREATE INDEX IF NOT EXISTS ix_m_thread ON messages(account, thread_key);
@@ -45,6 +48,16 @@ CREATE TABLE IF NOT EXISTS threads(
   UNIQUE(account, thread_key)
 );
 
+CREATE TABLE IF NOT EXISTS sender_rules(
+  account TEXT NOT NULL,
+  addr TEXT NOT NULL,
+  kind TEXT,                 -- NULL = automatische herkenning; '' = persoonlijk; 'reclame' | 'notificatie'
+  action TEXT DEFAULT 'none',-- none | keep | archive | trash | archive_after
+  after_days INTEGER DEFAULT 7,
+  unsubscribed_at TEXT,
+  PRIMARY KEY(account, addr)
+);
+
 CREATE TABLE IF NOT EXISTS folder_state(
   account TEXT NOT NULL,
   folder TEXT NOT NULL,
@@ -63,7 +76,14 @@ class DB:
         self.lock = threading.RLock()
         with self.lock:
             self.conn.execute("PRAGMA journal_mode=WAL")
+            # migratie van oudere databases (vóór reclame/notificaties)
+            have = {r[1] for r in self.conn.execute("PRAGMA table_info(messages)")}
+            if have and "kind" not in have:
+                for col in ("kind TEXT DEFAULT ''", "unsub TEXT DEFAULT ''", "unsub_post INTEGER DEFAULT 0"):
+                    self.conn.execute(f"ALTER TABLE messages ADD COLUMN {col}")
+                self.conn.execute("UPDATE messages SET kind='reclame' WHERE bulk=1")
             self.conn.executescript(SCHEMA)
+            self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")
 
     def q(self, sql, args=()):
         with self.lock:
@@ -102,3 +122,17 @@ def thread_messages(db, tid):
         index[k] = len(out)
         out.append(r)
     return dict(t), out
+
+
+def sender_rule(db, account, addr):
+    r = db.one("SELECT * FROM sender_rules WHERE account=? AND addr=?", (account, (addr or "").lower()))
+    return dict(r) if r else None
+
+
+def upsert_rule(db, account, addr, **fields):
+    addr = addr.lower()
+    db.x("INSERT OR IGNORE INTO sender_rules(account, addr) VALUES(?,?)", (account, addr))
+    for k, v in fields.items():
+        if k in ("kind", "action", "after_days", "unsubscribed_at"):
+            db.x(f"UPDATE sender_rules SET {k}=? WHERE account=? AND addr=?", (v, account, addr))
+    return sender_rule(db, account, addr)

@@ -76,6 +76,7 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;z-index:20;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
 .toast.on{opacity:1}
 .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+select.act{appearance:none;-webkit-appearance:none;padding-right:22px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 11px) 55%,calc(100% - 7px) 55%;background-size:4px 4px;background-repeat:no-repeat;background-color:var(--panel)}
 </style>
 </head>
 <body>
@@ -87,6 +88,7 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
   <div class="tabs">
     <button class="tab on" data-tab="followup">Opvolgen</button>
     <button class="tab" data-tab="inbox">Inbox</button>
+    <button class="tab" data-tab="cleanup">Opruimen</button>
   </div>
   <div class="row" id="accounts"></div>
   <div class="row" id="filters"></div>
@@ -110,10 +112,12 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 <div class="toast" id="toast"></div>
 
 <script>
-const S = { tab:'followup', filter:'alle', account:'', q:'', accounts:[], ai:false, thread:null };
+const S = { tab:'followup', filter:'alle', cfilter:'reclame', account:'', q:'', accounts:[], ai:false, thread:null };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const FILTERS = [['alle','Alles'],['ongelezen','Ongelezen'],['belangrijk','Belangrijk'],['persoonlijk','Geen nieuwsbrieven'],['nieuwsbrieven','Nieuwsbrieven']];
+const FILTERS = [['alle','Alles'],['ongelezen','Ongelezen'],['belangrijk','Belangrijk'],['persoonlijk','Persoonlijk'],['reclame','Reclame'],['notificaties','Notificaties']];
+const CFILTERS = [['reclame','Reclame'],['notificatie','Notificaties'],['alle','Alles']];
+const RULES = [['none','Geen regel'],['archive_after','Archiveren na … dagen'],['archive','Altijd meteen archiveren'],['trash','Altijd meteen verwijderen'],['keep','Nooit automatisch opruimen']];
 
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); }
 
@@ -145,8 +149,9 @@ function renderChips(){
   $('#accounts').innerHTML = multi ? [['','Alle accounts'],...S.accounts.map(a=>[a.id,a.name])]
     .map(([id,n])=>`<button class="chip ${S.account===id?'on':''}" data-acc="${esc(id)}">${esc(n)}</button>`).join('') : '';
   $('#accounts').style.display = multi ? '' : 'none';
-  $('#filters').innerHTML = S.tab==='inbox' ? FILTERS.map(([k,n])=>`<button class="chip ${S.filter===k?'on':''}" data-f="${k}">${n}</button>`).join('') : '';
-  $('#filters').style.display = S.tab==='inbox' ? '' : 'none';
+  $('#filters').innerHTML = S.tab==='inbox' ? FILTERS.map(([k,n])=>`<button class="chip ${S.filter===k?'on':''}" data-f="${k}">${n}</button>`).join('')
+    : S.tab==='cleanup' ? CFILTERS.map(([k,n])=>`<button class="chip ${S.cfilter===k?'on':''}" data-cf="${k}">${n}</button>`).join('') : '';
+  $('#filters').style.display = S.tab==='followup' ? 'none' : '';
 }
 
 function renderStatus(){
@@ -180,6 +185,14 @@ async function load(){
       const d = await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
       $('#list').innerHTML = d.threads.length ? d.threads.map(c=>card(c)).join('') :
         `<div class="empty">${S.q?'Niets gevonden.':'Inbox leeg 🎉'}</div>`;
+    } else if(S.tab==='cleanup'){
+      const d = await api(`/api/senders?account=${acc}&kind=${S.cfilter}`);
+      S.senders = d.senders;
+      const dflt = S.cfilter==='notificatie' ? d.defaults.notificatie_days : S.cfilter==='reclame' ? d.defaults.reclame_days : 0;
+      const inInbox = d.senders.reduce((a,x)=>a+x.in_inbox,0);
+      $('#list').innerHTML = `<div class="status">${d.senders.length} afzenders · ${inInbox} mails in je inbox`
+        + (dflt ? ` · zonder regel automatisch gearchiveerd na ${dflt} d` : '') + `</div>`
+        + (d.senders.length ? d.senders.map((x,i)=>senderCard(x,i)).join('') : '<div class="empty">Niets gevonden.</div>');
     } else {
       const d = await api(`/api/followup?account=${acc}`);
       const sec = (title, arr, mode, emptyTxt) => `<h2>${title} (${arr.length})</h2>` +
@@ -190,6 +203,51 @@ async function load(){
         sec(`Wacht op antwoord (≥ ${d.followup_days} d)`, d.waiting_on_them, 'them', 'Geen openstaande vragen aan anderen.');
     }
   }catch(e){ $('#list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+function senderCard(x, i){
+  const b = [];
+  if(S.accounts.length>1) b.push(`<span class="badge">${esc(x.account_name)}</span>`);
+  b.push(`<span class="badge">${x.kind==='reclame'?'reclame':x.kind==='notificatie'?'notificatie':'persoonlijk'}</span>`);
+  if(x.unsubscribed_at) b.push('<span class="badge age">uitgeschreven</span>');
+  const stats = `${x.n} mails · ${x.in_inbox} in inbox` + (x.read_pct!==null?` · ${x.read_pct}% gelezen`:'') + ` · laatste ${esc(when(x.last_date))}`;
+  const rule = RULES.map(([k,n])=>`<option value="${k}" ${x.action===k?'selected':''}>${n.replace('…', x.after_days)}</option>`).join('');
+  const unsub = x.unsub_method && !x.unsubscribed_at
+    ? `<button class="act" data-s="unsub" data-i="${i}">Uitschrijven${x.unsub_method==='link'?' ↗':''}</button>` : '';
+  return `<div class="card" style="cursor:default">
+    <div class="l1"><span class="who">${esc(x.name)}</span>${b.join('')}</div>
+    <div class="status" style="margin:2px 0">${esc(x.addr)}</div>
+    <div class="sum">${stats}</div>
+    <div class="actions">
+      ${unsub}
+      ${x.in_inbox?`<button class="act" data-s="archive" data-i="${i}">Archiveer ${x.in_inbox}</button>`:''}
+      ${x.in_inbox?`<button class="act" data-s="trash" data-i="${i}">🗑 ${x.in_inbox}</button>`:''}
+      <select class="act" data-rule="${i}">${rule}</select>
+      <select class="act" data-kind="${i}">
+        <option value="">Soort…</option><option value="reclame">Is reclame</option>
+        <option value="notificatie">Is notificatie</option><option value="persoonlijk">Is persoonlijk</option>
+      </select>
+    </div></div>`;
+}
+
+async function senderAction(a, i, btn){
+  const x = S.senders[i]; const who = {account:x.account, addr:x.addr};
+  if(btn) btn.disabled = true;
+  try{
+    if(a==='unsub'){
+      if(x.unsub_method==='link'){
+        if(!confirm(`${x.name} heeft enkel een uitschrijfpagina. Openen?`)) return;
+        const r = await post('/api/senders/unsubscribe', who); window.open(r.url, '_blank', 'noopener'); return;
+      }
+      if(!confirm(`Uitschrijven bij ${x.name}? Nieuwe mails van deze afzender worden daarna automatisch gearchiveerd.`)) return;
+      const r = await post('/api/senders/unsubscribe', who);
+      toast(r.method==='one-click' ? 'Uitgeschreven' : 'Uitschrijfmail verstuurd');
+    }
+    if(a==='archive'){ const r = await post('/api/senders/archive', who); toast(`${r.moved} gearchiveerd`); }
+    if(a==='trash'){ if(!confirm(`Alle ${x.in_inbox} mails van ${x.name} uit je inbox verwijderen?`)) return;
+      const r = await post('/api/senders/trash', who); toast(`${r.moved} verwijderd`); }
+    load();
+  }catch(e){ toast('Mislukt: '+e.message); if(btn) btn.disabled=false; }
 }
 
 async function loadAccounts(){
@@ -287,14 +345,31 @@ async function doAction(a, btn){
 
 /* ---------- events ---------- */
 document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-tab],[data-acc],[data-f],[data-tid],[data-a],[data-toggle]');
+  const el = e.target.closest('[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
   if(el.dataset.tab){ S.tab=el.dataset.tab; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on', b===el)); load(); }
   else if(el.dataset.acc!==undefined){ S.account=el.dataset.acc; load(); }
   else if(el.dataset.f){ S.filter=el.dataset.f; load(); }
+  else if(el.dataset.cf){ S.cfilter=el.dataset.cf; load(); }
+  else if(el.dataset.s){ senderAction(el.dataset.s, +el.dataset.i, el); }
   else if(el.dataset.tid){ openThread(+el.dataset.tid); }
   else if(el.dataset.a){ doAction(el.dataset.a, el); }
   else if(el.hasAttribute('data-toggle')){ el.parentElement.classList.toggle('collapsed'); }
+});
+document.addEventListener('change', async e=>{
+  const el = e.target;
+  if(el.dataset.rule!==undefined){
+    const x = S.senders[+el.dataset.rule]; let body = {account:x.account, addr:x.addr, action:el.value};
+    if(el.value==='archive_after'){ const d = prompt('Na hoeveel dagen archiveren?', x.after_days); if(!d) return load(); body.after_days = parseInt(d,10)||7; }
+    if(el.value==='trash' && !confirm(`Alle huidige én toekomstige mails van ${x.name} automatisch verwijderen?`)) return load();
+    try{ await post('/api/senders/rule', body); toast('Regel opgeslagen — wordt toegepast bij de volgende sync'); }catch(err){ toast('Mislukt: '+err.message); }
+    load();
+  }
+  if(el.dataset.kind!==undefined && el.value){
+    const x = S.senders[+el.dataset.kind];
+    try{ await post('/api/senders/rule', {account:x.account, addr:x.addr, kind:el.value}); toast('Aangepast'); }catch(err){ toast('Mislukt: '+err.message); }
+    load();
+  }
 });
 $('#back').onclick = () => history.length>1 && location.hash.startsWith('#t=') ? history.back() : closeThread();
 window.addEventListener('popstate', ()=>{ const m=location.hash.match(/^#t=(\d+)/); m ? openThread(+m[1], false) : ($('#sheet').classList.contains('open') && closeThread()); });

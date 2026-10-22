@@ -3,13 +3,15 @@ import re
 import smtplib
 import ssl
 import time
+from urllib.parse import parse_qs, unquote, urlsplit
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
+import httpx
 from imapclient import DRAFT, SEEN
 
-from .db import thread_messages
+from .db import thread_messages, upsert_rule
 from .mailparse import make_snippet
 
 
@@ -72,6 +74,19 @@ def _quote(m):
     return f"\n\nOp {d} schreef {who} <{m['from_addr']}>:\n{quoted}\n"
 
 
+def smtp_send(acc, em):
+    ctx = ssl.create_default_context()
+    if acc.smtp_port == 465:
+        with smtplib.SMTP_SSL(acc.smtp_host, acc.smtp_port, timeout=60, context=ctx) as s:
+            s.login(acc.smtp_user, acc.password)
+            s.send_message(em)
+    else:
+        with smtplib.SMTP(acc.smtp_host, acc.smtp_port, timeout=60) as s:
+            s.starttls(context=ctx)
+            s.login(acc.smtp_user, acc.password)
+            s.send_message(em)
+
+
 def build_reply(db, acc, tid, body, reply_all=False):
     t, msgs = thread_messages(db, tid)
     if not t or not msgs:
@@ -132,16 +147,7 @@ def save_draft(db, acc, tid, body, reply_all=False):
 def send_reply(db, acc, tid, body, reply_all=False):
     t, em, mid, to, cc, subject, refs = build_reply(db, acc, tid, body, reply_all)
 
-    ctx = ssl.create_default_context()
-    if acc.smtp_port == 465:
-        with smtplib.SMTP_SSL(acc.smtp_host, acc.smtp_port, timeout=60, context=ctx) as s:
-            s.login(acc.smtp_user, acc.password)
-            s.send_message(em)
-    else:
-        with smtplib.SMTP(acc.smtp_host, acc.smtp_port, timeout=60) as s:
-            s.starttls(context=ctx)
-            s.login(acc.smtp_user, acc.password)
-            s.send_message(em)
+    smtp_send(acc, em)
 
     if acc.append_sent and acc.folders.get("sent"):
         raw = em.as_bytes()
@@ -160,3 +166,78 @@ def send_reply(db, acc, tid, body, reply_all=False):
          subject, now, make_snippet(body), body),
     )
     return {"to": to, "cc": cc, "subject": subject}
+
+
+# --- afzenders: alles verplaatsen en uitschrijven ------------------------------
+def move_sender(db, acc, addr, role):
+    rows = db.q(
+        "SELECT id, uid FROM messages WHERE account=? AND from_addr=? AND folder='INBOX' AND uid>0",
+        (acc.id, addr.lower()),
+    )
+    if not rows:
+        return 0
+    dest = acc.folders.get(role)
+    if not dest:
+        raise RuntimeError(f"geen {role}-map gevonden voor {acc.name}")
+    uids = [r["uid"] for r in rows]
+
+    def fn(c):
+        c.select_folder("INBOX")
+        if c.has_capability("MOVE"):
+            c.move(uids, dest)
+        else:
+            c.copy(uids, dest)
+            c.delete_messages(uids)
+            c.expunge(uids)
+
+    acc.run_imap(fn)
+    db.xm("UPDATE messages SET in_inbox=0, folder='_weg', uid=-id WHERE id=?", [(r["id"],) for r in rows])
+    return len(rows)
+
+
+def unsub_method(unsub, unsub_post):
+    links = re.findall(r"<([^>]+)>", unsub or "")
+    https = [l for l in links if l.lower().startswith("https://")]
+    mailto = [l for l in links if l.lower().startswith("mailto:")]
+    if https and unsub_post:
+        return "one-click", https[0]
+    if mailto:
+        return "mail", mailto[0]
+    if https:
+        return "link", https[0]
+    return None, None
+
+
+def unsubscribe(db, acc, addr):
+    """Uitschrijven volgens RFC 8058 (one-click) of RFC 2369 (mailto). Een gewone link geven we terug om zelf te openen."""
+    r = db.one(
+        "SELECT unsub, unsub_post FROM messages WHERE account=? AND from_addr=? AND unsub != '' ORDER BY date DESC LIMIT 1",
+        (acc.id, addr.lower()),
+    )
+    if not r:
+        raise ValueError("geen uitschrijflink gevonden in de mails van deze afzender")
+    method, target = unsub_method(r["unsub"], r["unsub_post"])
+    if method == "one-click":
+        resp = httpx.post(target, data={"List-Unsubscribe": "One-Click"}, timeout=20, follow_redirects=True,
+                          headers={"User-Agent": "Postvak (RFC 8058 one-click unsubscribe)"})
+        if resp.status_code >= 400:
+            raise RuntimeError(f"uitschrijven geweigerd door afzender (HTTP {resp.status_code})")
+    elif method == "mail":
+        u = urlsplit(target)
+        qs = {k.lower(): v[0] for k, v in parse_qs(u.query).items()}
+        em = EmailMessage()
+        em["From"] = acc.email
+        em["To"] = unquote(u.path)
+        em["Subject"] = qs.get("subject", "unsubscribe")
+        em["Date"] = formatdate(localtime=True)
+        em["Message-ID"] = make_msgid(domain=acc.email.split("@", 1)[1])
+        em.set_content(qs.get("body", "unsubscribe"))
+        smtp_send(acc, em)
+    elif method == "link":
+        return {"method": "link", "url": target}
+    else:
+        raise ValueError("geen bruikbare uitschrijfmethode")
+    rule = upsert_rule(db, acc.id, addr, unsubscribed_at=datetime.now(timezone.utc).isoformat())
+    if rule["action"] in (None, "none"):
+        upsert_rule(db, acc.id, addr, action="archive")  # wat nog binnenkomt, gaat meteen naar het archief
+    return {"method": method}

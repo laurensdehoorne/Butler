@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from . import actions
 from .accounts import Account
 from .ai import AIWorker
-from .db import DB, thread_messages
+from .db import DB, sender_rule, thread_messages, upsert_rule
 from .notify import Notifier
 from .sync import Syncer
 
@@ -109,6 +109,7 @@ def _card(t, msgs, extra=None):
         "unread": sum(1 for m in msgs if m["in_inbox"] and not m["seen"]),
         "in_inbox": any(m["in_inbox"] for m in msgs),
         "bulk": all(m["bulk"] for m in inc) if inc else False,
+        "kind": (inc[-1]["kind"] if inc else "") or "",
         "last_outgoing": bool(last["outgoing"]),
         "summary": t["summary"],
         "summary_stale": bool(t["summary"]) and (t["ai_count"] or 0) < len(msgs),
@@ -192,7 +193,9 @@ def inbox(account: str = "", filter: str = "alle", q: str = "", limit: int = 150
             continue
         if filter == "persoonlijk" and card["bulk"]:
             continue
-        if filter == "nieuwsbrieven" and not card["bulk"]:
+        if filter == "reclame" and card["kind"] != "reclame":
+            continue
+        if filter == "notificaties" and card["kind"] != "notificatie":
             continue
         out.append(card)
         if len(out) >= limit:
@@ -384,6 +387,115 @@ def save_draft(tid: int, body: DraftSaveIn):
     if not body.body.strip():
         raise HTTPException(400, "Leeg bericht")
     res = _run(lambda: actions.save_draft(db, _acc(t["account"]), tid, body.body, body.reply_all))
+    return {"ok": True, **res}
+
+
+# --- afzenders: reclame & notificaties --------------------------------------
+@app.get("/api/senders", dependencies=[Depends(auth)])
+def senders(kind: str = "alle", account: str = ""):
+    rows = db.q(
+        """SELECT m.account, m.from_addr, MAX(m.from_name) AS from_name,
+              COUNT(DISTINCT COALESCE(m.message_id, m.id)) AS n,
+              SUM(m.in_inbox) AS in_inbox,
+              SUM(CASE WHEN m.in_inbox=1 AND m.seen=0 THEN 1 ELSE 0 END) AS unread,
+              SUM(CASE WHEN m.folder='INBOX' THEN 1 ELSE 0 END) AS inbox_rows,
+              SUM(CASE WHEN m.folder='INBOX' AND m.seen=1 THEN 1 ELSE 0 END) AS inbox_seen,
+              MAX(m.date) AS last_date,
+              (SELECT m2.kind FROM messages m2 WHERE m2.account=m.account AND m2.from_addr=m.from_addr
+                 ORDER BY m2.date DESC LIMIT 1) AS kind,
+              (SELECT m3.unsub FROM messages m3 WHERE m3.account=m.account AND m3.from_addr=m.from_addr AND m3.unsub!=''
+                 ORDER BY m3.date DESC LIMIT 1) AS unsub,
+              MAX(m.unsub_post) AS unsub_post
+           FROM messages m
+           WHERE m.outgoing=0 AND m.folder != '_pending' AND (?='' OR m.account=?)
+             AND (m.bulk=1 OR m.from_addr IN (SELECT addr FROM sender_rules r WHERE r.account=m.account))
+           GROUP BY m.account, m.from_addr""",
+        (account, account),
+    )
+    out = []
+    for r in rows:
+        rule = sender_rule(db, r["account"], r["from_addr"]) or {}
+        k = rule.get("kind") if rule.get("kind") is not None else (r["kind"] or "")
+        if kind in ("reclame", "notificatie") and k != kind:
+            continue
+        if kind == "alle" and not k and not rule:
+            continue
+        method, _ = actions.unsub_method(r["unsub"], r["unsub_post"])
+        acc = accounts.get(r["account"])
+        out.append({
+            "account": r["account"],
+            "account_name": acc.name if acc else r["account"],
+            "addr": r["from_addr"],
+            "name": r["from_name"] or r["from_addr"],
+            "kind": k,
+            "n": r["n"],
+            "in_inbox": r["in_inbox"] or 0,
+            "unread": r["unread"] or 0,
+            "read_pct": round(100 * r["inbox_seen"] / r["inbox_rows"]) if r["inbox_rows"] else None,
+            "last_date": r["last_date"],
+            "unsub_method": method,
+            "unsubscribed_at": rule.get("unsubscribed_at"),
+            "action": rule.get("action") or "none",
+            "after_days": rule.get("after_days") or 7,
+        })
+    out.sort(key=lambda x: (-x["in_inbox"], -x["n"]))
+    cl = APP.get("cleanup") or {}
+    return {"senders": out[:300], "defaults": {"notificatie_days": int(cl.get("notificatie_days", 0) or 0),
+                                               "reclame_days": int(cl.get("reclame_days", 0) or 0)}}
+
+
+class SenderIn(BaseModel):
+    account: str
+    addr: str
+
+
+class RuleIn(SenderIn):
+    action: str | None = None        # none | keep | archive | trash | archive_after
+    after_days: int | None = None
+    kind: str | None = None          # 'reclame' | 'notificatie' | 'persoonlijk' | 'auto'
+
+
+@app.post("/api/senders/rule", dependencies=[Depends(auth)])
+def sender_set_rule(body: RuleIn):
+    acc = _acc(body.account)
+    fields = {}
+    if body.action is not None:
+        if body.action not in ("none", "keep", "archive", "trash", "archive_after"):
+            raise HTTPException(400, "ongeldige actie")
+        fields["action"] = body.action
+    if body.after_days is not None:
+        fields["after_days"] = max(1, min(body.after_days, 365))
+    if body.kind is not None:
+        kind = {"persoonlijk": "", "auto": None}.get(body.kind, body.kind)
+        if kind not in (None, "", "reclame", "notificatie"):
+            raise HTTPException(400, "ongeldige soort")
+        fields["kind"] = kind
+        if kind is not None:  # bestaande mails meteen herclassificeren
+            db.x("UPDATE messages SET kind=?, bulk=? WHERE account=? AND from_addr=? AND outgoing=0",
+                 (kind, 1 if kind else 0, acc.id, body.addr.lower()))
+    rule = upsert_rule(db, acc.id, body.addr, **fields)
+    acc.wake.set()  # regels meteen toepassen bij de volgende sync
+    return {"ok": True, "rule": rule}
+
+
+@app.post("/api/senders/archive", dependencies=[Depends(auth)])
+def sender_archive(body: SenderIn):
+    acc = _acc(body.account)
+    n = _run(lambda: actions.move_sender(db, acc, body.addr, "archive"))
+    return {"ok": True, "moved": n}
+
+
+@app.post("/api/senders/trash", dependencies=[Depends(auth)])
+def sender_trash(body: SenderIn):
+    acc = _acc(body.account)
+    n = _run(lambda: actions.move_sender(db, acc, body.addr, "trash"))
+    return {"ok": True, "moved": n}
+
+
+@app.post("/api/senders/unsubscribe", dependencies=[Depends(auth)])
+def sender_unsubscribe(body: SenderIn):
+    acc = _acc(body.account)
+    res = _run(lambda: actions.unsubscribe(db, acc, body.addr))
     return {"ok": True, **res}
 
 

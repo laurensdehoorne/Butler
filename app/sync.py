@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from imapclient import SEEN
 
+from .db import sender_rule
 from .mailparse import parse
 
 log = logging.getLogger("postvak.sync")
@@ -36,6 +37,10 @@ class Syncer:
         self.sync_days = int(app_cfg.get("sync_days", 60))
         self.poll = int(app_cfg.get("poll_seconds", 300))
         self.ai_initial_days = int(ai_cfg.get("initial_days", 7))
+        cl = app_cfg.get("cleanup") or {}
+        # standaard voor afzenders zonder eigen regel: na X dagen archiveren (0 = uit)
+        self.cleanup = {"notificatie": int(cl.get("notificatie_days", 0) or 0),
+                        "reclame": int(cl.get("reclame_days", 0) or 0)}
 
     def start(self):
         for acc in self.accounts.values():
@@ -81,11 +86,60 @@ class Syncer:
 
     def sync_account(self, c, acc):
         self.sync_folder(c, acc, "inbox")
+        self.apply_rules(c, acc)
         if acc.folders.get("sent"):
             self.sync_folder(c, acc, "sent")
         cutoff = (datetime.now(timezone.utc) - timedelta(days=self.sync_days * 2)).isoformat()
         self.db.x("DELETE FROM messages WHERE account=? AND folder IN ('_weg','_pending') AND date < ?", (acc.id, cutoff))
         acc.last_sync = datetime.now(timezone.utc).isoformat()
+
+    # --- opruimregels --------------------------------------------------
+    def plan_cleanup(self, acc):
+        """Welke inbox-berichten moeten volgens de regels weg? → {'archive': [(id, uid)], 'trash': [...]}"""
+        rules = {r["addr"]: r for r in self.db.q("SELECT * FROM sender_rules WHERE account=?", (acc.id,))}
+        now = datetime.now(timezone.utc)
+        plan = {"archive": [], "trash": []}
+        rows = self.db.q(
+            "SELECT id, uid, from_addr, kind, date FROM messages WHERE account=? AND folder='INBOX' AND uid>0 AND outgoing=0",
+            (acc.id,),
+        )
+        for m in rows:
+            try:
+                age = (now - datetime.fromisoformat(m["date"])).total_seconds() / 86400
+            except Exception:
+                age = 0
+            r = rules.get(m["from_addr"])
+            act = r["action"] if r else "none"
+            if act == "keep":
+                continue
+            if act in ("archive", "trash"):
+                plan[act].append((m["id"], m["uid"]))
+            elif act == "archive_after" and age >= (r["after_days"] or 7):
+                plan["archive"].append((m["id"], m["uid"]))
+            elif act == "none":
+                days = self.cleanup.get(m["kind"] or "", 0)
+                if days and age >= days:
+                    plan["archive"].append((m["id"], m["uid"]))
+        return plan
+
+    def apply_rules(self, c, acc):
+        plan = self.plan_cleanup(acc)
+        if not (plan["archive"] or plan["trash"]):
+            return
+        c.select_folder("INBOX", readonly=False)
+        for role, items in plan.items():
+            dest = acc.folders.get(role)
+            if not items or not dest:
+                continue
+            uids = [u for _, u in items]
+            if c.has_capability("MOVE"):
+                c.move(uids, dest)
+            else:
+                c.copy(uids, dest)
+                c.delete_messages(uids)
+                c.expunge(uids)
+            self.db.xm("UPDATE messages SET in_inbox=0, folder='_weg', uid=-id WHERE id=?", [(i,) for i, _ in items])
+            log.info("%s: %d berichten automatisch naar %s (opruimregels)", acc.id, len(items), dest)
 
     # --- map synchroniseren ---------------------------------------------
     def sync_folder(self, c, acc, role):
@@ -209,18 +263,25 @@ class Syncer:
 
     def store(self, acc, folder, role, uid, p, seen, thrid=None):
         outgoing = acc.is_me(p["from_addr"])
+        rule = sender_rule(self.db, acc.id, p["from_addr"])
+        if rule and rule["kind"] is not None:  # handmatige correctie per afzender
+            p["kind"] = rule["kind"]
+            p["bulk"] = bool(rule["kind"])
+        if outgoing:
+            p["kind"], p["bulk"] = "", False
         key = self.thread_key_for(acc, folder, uid, p, thrid)
         if p["message_id"]:
             self.db.x("DELETE FROM messages WHERE account=? AND folder='_pending' AND message_id=?",
                       (acc.id, p["message_id"]))
         self.db.x(
             """INSERT OR REPLACE INTO messages(account, folder, uid, message_id, thread_key, refs, from_addr, from_name,
-               to_addrs, cc_addrs, reply_to, subject, date, snippet, body, seen, outgoing, in_inbox, bulk)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               to_addrs, cc_addrs, reply_to, subject, date, snippet, body, seen, outgoing, in_inbox, bulk,
+               kind, unsub, unsub_post)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (acc.id, folder, uid, p["message_id"], key, " ".join(p["refs"]), p["from_addr"], p["from_name"],
              json.dumps(p["to"]), json.dumps(p["cc"]), p["reply_to"], p["subject"], p["date"], p["snippet"],
              p["body"], 1 if (seen or outgoing) else 0, 1 if outgoing else 0, 1 if role == "inbox" else 0,
-             1 if (p["bulk"] and not outgoing) else 0),
+             1 if p["bulk"] else 0, p["kind"], p.get("unsub", ""), 1 if p.get("unsub_post") else 0),
         )
         self.db.x("INSERT OR IGNORE INTO threads(account, thread_key) VALUES(?,?)", (acc.id, key))
         tid = self.db.one("SELECT tid FROM threads WHERE account=? AND thread_key=?", (acc.id, key))["tid"]

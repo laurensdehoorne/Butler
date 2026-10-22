@@ -20,6 +20,20 @@ Postvak is bedoeld als **assistent naast** je mailapp, niet als vervanger:
 - **Concepten in plaats van versturen.** Een antwoordvoorstel kun je met *Zet als concept* in de Concepten-map van je mailbox zetten; je vindt het dan in Spark terug om na te kijken en te versturen. Rechtstreeks versturen kan ook nog.
 - **Geen dubbele meldingen.** Laat Spark gewoon elke mail melden en zet Postvak op `notify.mode: important`: dan krijg je enkel een extra (time-sensitive) melding voor wat écht dringend is, plus de ochtendsamenvatting (`digest_time`).
 
+## Reclame en notificaties opruimen
+
+Elke mail wordt herkend als **persoonlijk**, **notificatie** (bestellingen, verzendingen, beveiligingsmeldingen, systemen, …) of **reclame** (nieuwsbrieven, promoties), op basis van `List-Unsubscribe`/`List-Id`, de afzender (`noreply@`, `newsletter@`, …) en het onderwerp. Klopt het niet voor een afzender, dan corrigeer je dat één keer en geldt het voortaan voor al zijn mails.
+
+Het tabblad **Opruimen** toont per afzender hoeveel mails er binnenkwamen, hoeveel nog in je inbox staan en welk deel je effectief leest. Per afzender kun je:
+
+- **Uitschrijven**: via RFC 8058 *one-click* (één POST, zonder webpagina), via een uitschrijfmail (`mailto:`), of door de uitschrijfpagina te openen als de afzender enkel dat aanbiedt. Na uitschrijven gaat wat nog binnenkomt automatisch naar het archief.
+- **Alles archiveren of verwijderen** wat nu in je inbox staat.
+- **Een regel instellen**: altijd meteen archiveren, altijd meteen verwijderen, archiveren na X dagen, of nooit automatisch opruimen.
+
+Regels worden bij elke sync toegepast en verplaatsen mail echt op de server, dus Spark ziet hetzelfde. Zonder regel gebeurt er niets, tenzij je in `app.cleanup` een standaard instelt (bv. `notificatie_days: 7`). Nieuwsbrieven en notificaties gaan nooit naar de AI, verschijnen niet in de opvolglijst en geven geen pushmelding.
+
+Uitschrijven bevestigt aan de afzender dat je adres actief is. Gebruik het voor legitieme afzenders (winkels, nieuwsbrieven); echte spam markeer je beter als spam in je mailapp.
+
 ## Hoe het werkt
 
 ```
