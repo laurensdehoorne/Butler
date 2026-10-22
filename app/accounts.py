@@ -3,7 +3,7 @@ import threading
 
 from imapclient import IMAPClient
 
-log = logging.getLogger("postvak.accounts")
+log = logging.getLogger("butler.accounts")
 
 PRESETS = {
     "gmail": dict(imap_host="imap.gmail.com", smtp_host="smtp.gmail.com", smtp_port=587, append_sent=False),

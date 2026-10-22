@@ -1,4 +1,4 @@
-# Postvak
+# Butler
 
 Self-hosted mailassistent die **Gmail en iCloud** (en elke andere IMAP-mailbox) samenbrengt in één webapp:
 
@@ -8,17 +8,17 @@ Self-hosted mailassistent die **Gmail en iCloud** (en elke andere IMAP-mailbox) 
 - **Pushmeldingen** – via [ntfy](https://ntfy.sh) en/of een Home Assistant-webhook, enkel voor belangrijke mail of voor alles, met stille uren.
 - **Antwoorden** – via SMTP met correcte threading (`In-Reply-To`/`References`), zodat het antwoord ook in Gmail, Apple Mail en Spark netjes in de conversatie staat.
 
-Alles wat je in Postvak doet (archiveren, gelezen, verwijderen) gebeurt echt op de mailserver, dus je andere mailapps blijven in sync.
+Alles wat je in Butler doet (archiveren, gelezen, verwijderen) gebeurt echt op de mailserver, dus je andere mailapps blijven in sync.
 
 ## Samen met je gewone mailapp (bv. Spark)
 
-Postvak is bedoeld als **assistent naast** je mailapp, niet als vervanger:
+Butler is bedoeld als **assistent naast** je mailapp, niet als vervanger:
 
-- **Niets verandert vanzelf.** Postvak leest met `BODY.PEEK` en in read-only-modus: mails worden niet als gelezen gemarkeerd, verplaatst of gelabeld tenzij je zelf op een knop drukt.
-- **Opvolgen is het startscherm.** "Klaar", snoozen en tags zijn lokaal in Postvak en raken je mailbox niet.
+- **Niets verandert vanzelf.** Butler leest met `BODY.PEEK` en in read-only-modus: mails worden niet als gelezen gemarkeerd, verplaatst of gelabeld tenzij je zelf op een knop drukt.
+- **Opvolgen is het startscherm.** "Klaar", snoozen en tags zijn lokaal in Butler en raken je mailbox niet.
 - **Antwoorden die je in Spark verstuurt worden herkend** via de Verzonden-map: de thread verdwijnt dan vanzelf uit *Wacht op jou* en verschijnt na `followup_days` in *Wacht op antwoord* als er niets terugkomt.
 - **Concepten in plaats van versturen.** Een antwoordvoorstel kun je met *Zet als concept* in de Concepten-map van je mailbox zetten; je vindt het dan in Spark terug om na te kijken en te versturen. Rechtstreeks versturen kan ook nog.
-- **Geen dubbele meldingen.** Laat Spark gewoon elke mail melden en zet Postvak op `notify.mode: important`: dan krijg je enkel een extra (time-sensitive) melding voor wat écht dringend is, plus de ochtendsamenvatting (`digest_time`).
+- **Geen dubbele meldingen.** Laat Spark gewoon elke mail melden en zet Butler op `notify.mode: important`: dan krijg je enkel een extra (time-sensitive) melding voor wat écht dringend is, plus de ochtendsamenvatting (`digest_time`).
 
 ## Reclame en notificaties opruimen
 
@@ -38,20 +38,20 @@ Uitschrijven bevestigt aan de afzender dat je adres actief is. Gebruik het voor 
 
 ```
 Gmail  ─┐ IMAP IDLE                         ┌─ Claude API (samenvatting, antwoord)
-iCloud ─┼──────────► Postvak (FastAPI) ─────┼─ ntfy / Home Assistant (push)
+iCloud ─┼──────────► Butler (FastAPI) ─────┼─ ntfy / Home Assistant (push)
 andere ─┘ SMTP ◄──── SQLite-cache /data ────┘─ Webinterface (browser / PWA)
 ```
 
 - Per account een IMAP-verbinding die met **IDLE** op nieuwe mail wacht (meestal binnen enkele seconden), met een volledige sync minstens elke `poll_seconds`.
-- INBOX en Verzonden van de laatste `sync_days` dagen worden lokaal gecachet in SQLite (`/data/postvak.db`). Threads worden opgebouwd via `X-GM-THRID` (Gmail) of `References`/`In-Reply-To` (iCloud en andere).
+- INBOX en Verzonden van de laatste `sync_days` dagen worden lokaal gecachet in SQLite (`/data/butler.db`). Threads worden opgebouwd via `X-GM-THRID` (Gmail) of `References`/`In-Reply-To` (iCloud en andere).
 - Grote berichten (> 5 MB) worden enkel met headers opgehaald.
 - Bij de eerste sync worden geen meldingen verstuurd en enkel threads van de laatste `ai.initial_days` dagen samengevat, om kosten te beperken. Nieuwsbrieven (herkend aan `List-Unsubscribe` e.d.) gaan nooit naar de AI.
 
 ## Installatie (Docker)
 
 ```bash
-git clone https://github.com/laurensdehoorne/postvak.git
-cd postvak
+git clone https://github.com/laurensdehoorne/butler.git
+cd butler
 cp config.example.yaml config.yaml && chmod 600 config.yaml
 mkdir -p data && sudo chown 1000:1000 data     # container draait als uid 1000
 nano config.yaml
@@ -63,14 +63,14 @@ Open daarna `http://<host>:8088` en geef het token uit `app.token` in. Op iPhone
 
 ### Enkel via Tailscale (aanbevolen)
 
-`docker-compose.tailscale.yml` zet een Tailscale-container naast Postvak. Postvak deelt diens netwerk, opent geen poort op de host en is enkel bereikbaar op `https://postvak.<jouw-tailnet>.ts.net` (geldig certificaat via `tailscale serve`).
+`docker-compose.tailscale.yml` zet een Tailscale-container naast Butler. Butler deelt diens netwerk, opent geen poort op de host en is enkel bereikbaar op `https://butler.<jouw-tailnet>.ts.net` (geldig certificaat via `tailscale serve`).
 
 ```bash
-cp .env.example .env            # TS_AUTHKEY invullen (Tailscale-admin → Settings → Keys, met tag:postvak)
+cp .env.example .env            # TS_AUTHKEY invullen (Tailscale-admin → Settings → Keys, met tag:butler)
 docker compose -f docker-compose.tailscale.yml up -d --build
 ```
 
-Zet daarna `app.base_url` op `https://postvak.<jouw-tailnet>.ts.net`. Voeg `tag:postvak` toe aan `tagOwners` in je tailnet policy en geef enkel jezelf toegang. HTTPS moet aanstaan in de Tailscale-admin (*DNS → HTTPS Certificates*).
+Zet daarna `app.base_url` op `https://butler.<jouw-tailnet>.ts.net`. Voeg `tag:butler` toe aan `tagOwners` in je tailnet policy en geef enkel jezelf toegang. HTTPS moet aanstaan in de Tailscale-admin (*DNS → HTTPS Certificates*).
 
 ### Wachtwoorden
 
@@ -81,7 +81,7 @@ Gebruik nooit je gewone wachtwoord:
 
 ### Bereikbaarheid
 
-Postvak heeft volledige toegang tot je mail. Zet hem **niet rechtstreeks op internet**. Aanbevolen:
+Butler heeft volledige toegang tot je mail. Zet hem **niet rechtstreeks op internet**. Aanbevolen:
 
 - enkel via **Tailscale** (eventueel `tailscale serve` voor HTTPS), of
 - achter een **Cloudflare Tunnel met Cloudflare Access** (e-mail-OTP of SSO) ervoor.
@@ -101,17 +101,17 @@ Met `ai.enabled: true` gaat de inhoud van (niet-nieuwsbrief-)mails naar de Claud
 
 Met een eigen ntfy-server op iOS: zet `upstream-base-url: "https://ntfy.sh"` in de serverconfig, anders komen meldingen niet direct binnen.
 
-Een tik op de melding opent de thread in Postvak (via `app.base_url`).
+Een tik op de melding opent de thread in Butler (via `app.base_url`).
 
 ### Home Assistant
 
-Zet `ha_webhook` op `http://<ha>:8123/api/webhook/postvak_nieuwe_mail` en voeg deze automatisering toe:
+Zet `ha_webhook` op `http://<ha>:8123/api/webhook/butler_nieuwe_mail` en voeg deze automatisering toe:
 
 ```yaml
-alias: Postvak – nieuwe mail
+alias: Butler – nieuwe mail
 triggers:
   - trigger: webhook
-    webhook_id: postvak_nieuwe_mail
+    webhook_id: butler_nieuwe_mail
     allowed_methods: [POST]
     local_only: true
 actions:
@@ -146,13 +146,13 @@ Zie [`config.example.yaml`](config.example.yaml). Belangrijkste opties:
 
 ```bash
 pip install -r requirements.txt
-POSTVAK_CONFIG=./config.yaml POSTVAK_DB=./data/postvak.db uvicorn app.main:app --reload --port 8088
+BUTLER_CONFIG=./config.yaml BUTLER_DB=./data/butler.db uvicorn app.main:app --reload --port 8088
 ```
 
-`POSTVAK_NO_SYNC=1` start de webinterface zonder IMAP-verbindingen.
+`BUTLER_NO_SYNC=1` start de webinterface zonder IMAP-verbindingen.
 
 ## Beperkingen
 
 - Bijlagen worden niet getoond of gedownload; open die in je gewone mailapp.
 - Nieuwe mails opstellen (zonder bestaande thread) zit er nog niet in, enkel antwoorden.
-- Gmail-labels worden niet gesynchroniseerd; tags in Postvak zijn lokaal.
+- Gmail-labels worden niet gesynchroniseerd; tags in Butler zijn lokaal.

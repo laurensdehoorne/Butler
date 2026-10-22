@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Postvak">
+<meta name="apple-mobile-web-app-title" content="Butler">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg">
 <link rel="apple-touch-icon" href="/icon.svg">
-<title>Postvak</title>
+<title>Butler</title>
 <style>
 :root{
   --bg:#f6f5f2; --panel:#ffffff; --ink:#1c1d21; --muted:#6c6f76; --line:#e4e2dc;
@@ -82,7 +82,7 @@ select.act{appearance:none;-webkit-appearance:none;padding-right:22px;background
 <body>
 <header>
   <div class="top">
-    <h1>Postvak</h1>
+    <h1>Butler</h1>
     <button class="iconbtn" id="refresh" title="Vernieuwen">↻</button>
   </div>
   <div class="tabs">
@@ -122,11 +122,11 @@ const RULES = [['none','Geen regel'],['archive_after','Archiveren na … dagen']
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); }
 
 async function api(path, opts={}){
-  let token=''; try{ token=localStorage.getItem('postvak_token')||''; }catch(e){}
+  let token=''; try{ token=localStorage.getItem('butler_token')||''; }catch(e){}
   const r = await fetch(path, {...opts, headers:{'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{})}});
   if(r.status===401){
-    const n = prompt('Toegangstoken voor Postvak');
-    if(n){ try{ localStorage.setItem('postvak_token', n.trim()); }catch(e){} return api(path, opts); }
+    const n = prompt('Toegangstoken voor Butler');
+    if(n){ try{ localStorage.setItem('butler_token', n.trim()); }catch(e){} return api(path, opts); }
     throw new Error('Niet aangemeld');
   }
   if(!r.ok){ let d=r.statusText; try{ d=(await r.json()).detail||d; }catch(e){} throw new Error(d); }

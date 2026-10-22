@@ -1,6 +1,6 @@
 {
-  "name": "Postvak",
-  "short_name": "Postvak",
+  "name": "Butler",
+  "short_name": "Butler",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f5f2",

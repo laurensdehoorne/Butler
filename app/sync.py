@@ -9,7 +9,7 @@ from imapclient import SEEN
 from .db import sender_rule
 from .mailparse import parse
 
-log = logging.getLogger("postvak.sync")
+log = logging.getLogger("butler.sync")
 
 MAX_FULL_SIZE = 5 * 1024 * 1024  # groter → enkel headers
 CHUNK = 40

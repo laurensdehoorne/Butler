@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-log = logging.getLogger("postvak.notify")
+log = logging.getLogger("butler.notify")
 
 
 class Notifier:

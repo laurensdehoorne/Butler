@@ -19,15 +19,15 @@ from .notify import Notifier
 from .sync import Syncer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("postvak")
+log = logging.getLogger("butler")
 
-CFG_PATH = os.environ.get("POSTVAK_CONFIG", "/config/config.yaml")
+CFG_PATH = os.environ.get("BUTLER_CONFIG", "/config/config.yaml")
 with open(CFG_PATH, encoding="utf-8") as f:
     CFG = yaml.safe_load(f) or {}
 APP = CFG.get("app") or {}
 AI_CFG = CFG.get("ai") or {}
 
-db = DB(os.environ.get("POSTVAK_DB", "/data/postvak.db"))
+db = DB(os.environ.get("BUTLER_DB", "/data/butler.db"))
 accounts = {str(a["id"]): Account(a) for a in (CFG.get("accounts") or [])}
 notifier = Notifier(CFG.get("notify") or {}, APP)
 ai = AIWorker(db, AI_CFG, accounts, notifier)
@@ -38,7 +38,7 @@ STATIC = Path(__file__).parent / "static"
 
 @asynccontextmanager
 async def lifespan(_):
-    if os.environ.get("POSTVAK_NO_SYNC") != "1":
+    if os.environ.get("BUTLER_NO_SYNC") != "1":
         ai.start()
         syncer.start()
         import threading
@@ -46,7 +46,7 @@ async def lifespan(_):
     yield
 
 
-app = FastAPI(title="Postvak", lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(title="Butler", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
 def auth(request: Request):
@@ -539,7 +539,7 @@ def digest_loop():
             try:
                 text = digest_text()
                 if text:
-                    notifier.send("Postvak – opvolgen", text, extra={"type": "digest"}, force=True)
+                    notifier.send("Butler – opvolgen", text, extra={"type": "digest"}, force=True)
             except Exception:
                 log.exception("ochtendsamenvatting mislukt")
         _t.sleep(20)

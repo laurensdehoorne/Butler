@@ -8,7 +8,7 @@ from datetime import date
 from .db import thread_messages
 from .mailparse import strip_quotes
 
-log = logging.getLogger("postvak.ai")
+log = logging.getLogger("butler.ai")
 
 PRIORITIES = {"hoog", "normaal", "laag"}
 ACTIONS = {"antwoorden", "actie", "lezen", "wachten", "geen"}

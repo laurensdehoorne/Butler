@@ -5,7 +5,7 @@ app:
   # Leeg laten = geen login (enkel doen als de app uitsluitend via Tailscale bereikbaar is).
   token: "verander-mij"
   # Adres waarop je de app opent; wordt gebruikt in de link van pushmeldingen.
-  base_url: "http://postvak.jouw-tailnet.ts.net:8088"
+  base_url: "http://butler.jouw-tailnet.ts.net:8088"
   sync_days: 60          # hoeveel dagen mail lokaal bijgehouden wordt
   followup_days: 3       # na hoeveel dagen zonder antwoord een thread in "Wacht op antwoord" komt
   poll_seconds: 300      # max. tijd tussen syncs (IDLE meldt nieuwe mail meestal binnen enkele seconden)
@@ -38,7 +38,7 @@ notify:
   ntfy_topic: ""
   ntfy_token: ""         # enkel nodig bij een eigen ntfy-server met auth
   # Home Assistant-webhook (zie README voor de automatisering)
-  ha_webhook: ""         # bv. http://homeassistant.local:8123/api/webhook/postvak_nieuwe_mail
+  ha_webhook: ""         # bv. http://homeassistant.local:8123/api/webhook/butler_nieuwe_mail
 
 accounts:
   - id: gmail
