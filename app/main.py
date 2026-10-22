@@ -143,6 +143,13 @@ def icon():
     return FileResponse(STATIC / "icon.svg", media_type="image/svg+xml")
 
 
+@app.get("/{name}.png")
+def png_icon(name: str):
+    if name not in ("apple-touch-icon", "icon-192", "icon-512"):
+        raise HTTPException(404)
+    return FileResponse(STATIC / f"{name}.png", media_type="image/png", headers={"Cache-Control": "max-age=86400"})
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
