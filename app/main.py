@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from . import actions
 from .accounts import Account
-from .ai import AIWorker
+from .ai import PROVIDERS, AIError, AIWorker
 from .db import DB, sender_rule, thread_messages, upsert_rule
 from .notify import Notifier
 from .sync import Syncer
@@ -158,7 +158,22 @@ def health():
 # --- API ------------------------------------------------------------------
 @app.get("/api/accounts", dependencies=[Depends(auth)])
 def get_accounts():
-    return {"accounts": [a.public() for a in accounts.values()], "ai": ai.enabled, "followup_days": FOLLOWUP_DAYS}
+    return {"accounts": [a.public() for a in accounts.values()], "ai": ai.enabled, "followup_days": FOLLOWUP_DAYS,
+            "ai_provider": ai.provider, "ai_providers": [{"id": p, "name": PROVIDERS[p], "triage_model": ai.model("triage", p),
+                                                           "draft_model": ai.model("draft", p)} for p in ai.available()]}
+
+
+class ProviderIn(BaseModel):
+    provider: str
+
+
+@app.post("/api/settings/ai", dependencies=[Depends(auth)])
+def set_ai_provider(body: ProviderIn):
+    try:
+        ai.set_provider(body.provider)
+    except AIError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "ai_provider": ai.provider}
 
 
 @app.post("/api/sync", dependencies=[Depends(auth)])
@@ -278,6 +293,9 @@ def _run(fn):
         return fn()
     except HTTPException:
         raise
+    except AIError as e:
+        log.warning("AI: %s", e)
+        raise HTTPException(502, str(e)[:300])
     except Exception as e:
         log.exception("actie mislukt")
         raise HTTPException(502, str(e)[:300])

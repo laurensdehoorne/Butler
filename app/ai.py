@@ -1,4 +1,5 @@
 import json
+import os
 import logging
 import queue
 import re
@@ -47,21 +48,102 @@ def thread_text(msgs, max_msgs=8, per_msg=3500):
     return "\n\n".join(parts)
 
 
+PROVIDERS = {"claude": "Claude", "openai": "ChatGPT"}
+DEFAULT_MODELS = {
+    "claude": {"triage": "claude-haiku-5-5", "draft": "claude-sonnet-5-5"},
+    "openai": {"triage": "gpt-6-luna", "draft": "gpt-6-luna"},  # zoals CellarPeaks; gpt-6.1-sol is het sterkere model
+}
+
+
+class AIError(RuntimeError):
+    """Fout van de AI-dienst, in gewone taal voor de interface."""
+
+
+def _openai_error(e):
+    import openai
+
+    if isinstance(e, openai.AuthenticationError):
+        return AIError("De OpenAI-sleutel is ongeldig of ingetrokken. Pas hem aan in config.yaml.")
+    if isinstance(e, openai.RateLimitError):
+        if getattr(e, "code", None) == "insufficient_quota":
+            return AIError("Je OpenAI-krediet is op. Vul het aan op platform.openai.com (Billing).")
+        return AIError("Te veel verzoeken tegelijk bij OpenAI. Wacht even en probeer opnieuw.")
+    if isinstance(e, openai.NotFoundError):
+        return AIError("Dit OpenAI-model bestaat niet of is niet beschikbaar met je sleutel. Kies een ander in config.yaml.")
+    if isinstance(e, openai.APIStatusError):
+        if e.status_code >= 500:
+            return AIError("OpenAI is tijdelijk overbelast. Probeer zo dadelijk opnieuw.")
+        msg = e.body.get("message") if isinstance(e.body, dict) else None
+        return AIError(f"Fout {e.status_code} van OpenAI: {msg}" if msg else f"Fout {e.status_code} van OpenAI.")
+    if isinstance(e, openai.APITimeoutError):
+        return AIError("OpenAI antwoordde niet op tijd. Probeer opnieuw.")
+    if isinstance(e, openai.APIConnectionError):
+        return AIError("De server kan OpenAI niet bereiken. Controleer de internetverbinding.")
+    return AIError(f"Onverwachte fout bij OpenAI: {e}")
+
+
+def _claude_error(e):
+    import anthropic
+
+    if isinstance(e, anthropic.AuthenticationError):
+        return AIError("De Claude-sleutel is ongeldig of ingetrokken. Pas hem aan in config.yaml.")
+    if isinstance(e, anthropic.RateLimitError):
+        return AIError("Te veel verzoeken tegelijk bij Claude. Wacht even en probeer opnieuw.")
+    if isinstance(e, anthropic.NotFoundError):
+        return AIError("Dit Claude-model bestaat niet of is niet beschikbaar met je sleutel. Kies een ander in config.yaml.")
+    if isinstance(e, anthropic.APIStatusError):
+        if e.status_code >= 500 or e.status_code == 529:
+            return AIError("Claude is tijdelijk overbelast. Probeer zo dadelijk opnieuw.")
+        return AIError(f"Fout {e.status_code} van Claude: {getattr(e, 'message', e)}")
+    if isinstance(e, anthropic.APITimeoutError):
+        return AIError("Claude antwoordde niet op tijd. Probeer opnieuw.")
+    if isinstance(e, anthropic.APIConnectionError):
+        return AIError("De server kan Claude niet bereiken. Controleer de internetverbinding.")
+    return AIError(f"Onverwachte fout bij Claude: {e}")
+
+
 class AIWorker:
     def __init__(self, db, cfg, accounts, notifier):
         self.db = db
         self.cfg = cfg
         self.accounts = accounts
         self.notifier = notifier
-        self.enabled = bool(cfg.get("enabled")) and bool(cfg.get("api_key"))
-        self.client = None
-        if self.enabled:
-            import anthropic
-
-            self.client = anthropic.Anthropic(api_key=cfg["api_key"])
+        self.keys = {
+            "claude": cfg.get("api_key") or os.environ.get("ANTHROPIC_API_KEY") or "",
+            "openai": cfg.get("openai_api_key") or os.environ.get("OPENAI_API_KEY") or "",
+        }
+        self.keys = {k: v for k, v in self.keys.items() if v and not v.endswith("...")}
+        self.switched_on = bool(cfg.get("enabled", True))
+        self._clients = {}
+        self._no_reasoning = set()  # OpenAI-modellen die de reasoning-instelling weigeren
         self.q = queue.Queue()
         self.pending = set()
         self.lock = threading.Lock()
+
+    # --- dienst kiezen --------------------------------------------------
+    def available(self):
+        return [p for p in PROVIDERS if p in self.keys]
+
+    @property
+    def provider(self):
+        row = self.db.one("SELECT value FROM settings WHERE key='ai_provider'")
+        chosen = (row["value"] if row else None) or self.cfg.get("provider") or "claude"
+        avail = self.available()
+        return chosen if chosen in avail else (avail[0] if avail else chosen)
+
+    def set_provider(self, provider):
+        if provider not in self.available():
+            raise AIError(f"Geen sleutel voor {PROVIDERS.get(provider, provider)} in config.yaml.")
+        self.db.x("INSERT OR REPLACE INTO settings(key, value) VALUES('ai_provider', ?)", (provider,))
+
+    def model(self, kind, provider=None):
+        provider = provider or self.provider
+        prefix = "" if provider == "claude" else "openai_"
+        return self.cfg.get(f"{prefix}{kind}_model") or DEFAULT_MODELS[provider][kind]
+
+    @property
+    def enabled(self):
+        return self.switched_on and self.provider in self.keys
 
     def active_for(self, account_id):
         acc = self.accounts.get(account_id)
@@ -75,14 +157,68 @@ class AIWorker:
             signature=self.cfg.get("signature", "").strip(),
         )
 
-    def _call(self, model, system, user, max_tokens):
-        r = self.client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-        return "".join(getattr(b, "text", "") for b in r.content).strip()
+    # --- aanroepen ------------------------------------------------------
+    def _client(self, provider):
+        if provider not in self._clients:
+            if provider == "claude":
+                import anthropic
+
+                self._clients[provider] = anthropic.Anthropic(api_key=self.keys["claude"], timeout=120.0, max_retries=1)
+            else:
+                import openai
+
+                self._clients[provider] = openai.OpenAI(api_key=self.keys["openai"], timeout=120.0, max_retries=1)
+        return self._clients[provider]
+
+    def _call(self, kind, system, user, max_tokens):
+        provider = self.provider
+        name = self.model(kind, provider)
+        if provider == "claude":
+            try:
+                r = self._client("claude").messages.create(
+                    model=name, max_tokens=max_tokens, system=system,
+                    messages=[{"role": "user", "content": user}],
+                )
+            except Exception as e:
+                raise _claude_error(e) from e
+            return "".join(getattr(b, "text", "") for b in r.content).strip()
+        return self._call_openai(name, system, user, max_tokens)
+
+    def _call_openai(self, name, system, user, max_tokens):
+        """Responses API, zoals CellarPeaks. store=False: OpenAI bewaart het antwoord niet als 'response' aan zijn kant."""
+        import openai
+
+        kwargs = {"model": name, "instructions": system, "input": user, "store": False,
+                  # redeneertokens tellen mee in max_output_tokens: ruimte laten
+                  "max_output_tokens": max_tokens * 4, "reasoning": {"effort": "low"},
+                  "prompt_cache_key": "butler"}
+        while True:
+            if name in self._no_reasoning:
+                kwargs.pop("reasoning", None)
+            try:
+                r = self._client("openai").responses.create(**kwargs)
+                break
+            except openai.BadRequestError as e:
+                if "reasoning" in str(e.message).lower() and "reasoning" in kwargs:
+                    self._no_reasoning.add(name)
+                    continue
+                if "prompt_cache_key" in str(e.message).lower() and "prompt_cache_key" in kwargs:
+                    kwargs.pop("prompt_cache_key")
+                    continue
+                raise _openai_error(e) from e
+            except Exception as e:
+                raise _openai_error(e) from e
+        for item in getattr(r, "output", None) or []:
+            for part in getattr(item, "content", None) or []:
+                if getattr(part, "type", None) == "refusal":
+                    raise AIError("ChatGPT weigerde dit verzoek.")
+        text = (getattr(r, "output_text", "") or "").strip()
+        if not text:
+            details = getattr(r, "incomplete_details", None)
+            if getattr(details, "reason", None) == "max_output_tokens":
+                raise AIError("Het antwoord van ChatGPT werd afgebroken (te lang). Probeer opnieuw.")
+            raise AIError("Geen antwoord ontvangen van ChatGPT. Probeer opnieuw.")
+        return text
 
     # --- wachtrij -------------------------------------------------------
     def start(self):
@@ -137,7 +273,7 @@ class AIWorker:
             return None
         else:
             raw = self._call(
-                self.cfg.get("triage_model", "claude-haiku-5-5"),
+                "triage",
                 self._fmt(TRIAGE_SYSTEM),
                 thread_text(msgs),
                 600,
@@ -162,7 +298,7 @@ class AIWorker:
 
     def draft(self, tid, instruction=""):
         if not self.enabled:
-            raise RuntimeError("AI staat uit in de configuratie")
+            raise AIError("AI staat uit, of er is geen sleutel voor de gekozen dienst in config.yaml")
         t, msgs = thread_messages(self.db, tid)
         if not t:
             raise RuntimeError("thread niet gevonden")
@@ -173,4 +309,4 @@ class AIWorker:
             user += f"\n\n--- Instructie van {self.cfg.get('name', 'de gebruiker')} voor het antwoord:\n{instruction.strip()}"
         else:
             user += "\n\n--- Schrijf een gepast antwoord op het laatste bericht."
-        return self._call(self.cfg.get("draft_model", "claude-sonnet-5-5"), self._fmt(DRAFT_SYSTEM), user, 1500)
+        return self._call("draft", self._fmt(DRAFT_SYSTEM), user, 1500)

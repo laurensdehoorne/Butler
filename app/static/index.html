@@ -83,6 +83,7 @@ select.act{appearance:none;-webkit-appearance:none;padding-right:22px;background
 <header>
   <div class="top">
     <h1>Butler</h1>
+    <select class="iconbtn act" id="provider" title="AI-dienst" style="display:none"></select>
     <button class="iconbtn" id="refresh" title="Vernieuwen">↻</button>
   </div>
   <div class="tabs">
@@ -251,7 +252,16 @@ async function senderAction(a, i, btn){
 }
 
 async function loadAccounts(){
-  try{ const d = await api('/api/accounts'); S.accounts=d.accounts; S.ai=d.ai; renderStatus(); renderChips(); }catch(e){}
+  try{
+    const d = await api('/api/accounts'); S.accounts=d.accounts; S.ai=d.ai; renderStatus(); renderChips();
+    const sel = $('#provider');
+    if(d.ai_providers.length > 1 && document.activeElement !== sel){
+      sel.innerHTML = d.ai_providers.map(p=>`<option value="${esc(p.id)}" ${p.id===d.ai_provider?'selected':''}>${esc(p.name)}</option>`).join('');
+      const cur = d.ai_providers.find(p=>p.id===d.ai_provider);
+      sel.title = cur ? `AI-dienst · samenvatten: ${cur.triage_model} · antwoorden: ${cur.draft_model}` : 'AI-dienst';
+      sel.style.display = '';
+    } else if(d.ai_providers.length <= 1){ sel.style.display = 'none'; }
+  }catch(e){}
 }
 
 /* ---------- thread ---------- */
@@ -374,6 +384,11 @@ document.addEventListener('change', async e=>{
 $('#back').onclick = () => history.length>1 && location.hash.startsWith('#t=') ? history.back() : closeThread();
 window.addEventListener('popstate', ()=>{ const m=location.hash.match(/^#t=(\d+)/); m ? openThread(+m[1], false) : ($('#sheet').classList.contains('open') && closeThread()); });
 let qh; $('#q').addEventListener('input', e=>{ clearTimeout(qh); qh=setTimeout(()=>{ S.q=e.target.value; if(S.tab!=='inbox'){ S.tab='inbox'; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on', b.dataset.tab==='inbox')); } load(); }, 300); });
+$('#provider').addEventListener('change', async e=>{
+  try{ const r = await post('/api/settings/ai', {provider:e.target.value});
+    toast('AI-dienst: ' + e.target.selectedOptions[0].textContent); loadAccounts(); }
+  catch(err){ toast('Mislukt: '+err.message); loadAccounts(); }
+});
 $('#refresh').onclick = async () => { try{ await post('/api/sync'); toast('Synchroniseren…'); setTimeout(()=>{ loadAccounts(); load(); }, 4000); }catch(e){ toast(e.message); } };
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !S.thread){ loadAccounts(); load(); } });
 setInterval(()=>{ if(!document.hidden && !S.thread){ loadAccounts(); load(); } }, 60000);

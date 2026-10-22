@@ -58,6 +58,11 @@ CREATE TABLE IF NOT EXISTS sender_rules(
   PRIMARY KEY(account, addr)
 );
 
+CREATE TABLE IF NOT EXISTS settings(
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS folder_state(
   account TEXT NOT NULL,
   folder TEXT NOT NULL,

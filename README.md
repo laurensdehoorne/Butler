@@ -88,9 +88,13 @@ Butler heeft volledige toegang tot je mail. Zet hem **niet rechtstreeks op inter
 
 Het `app.token` is een extra laag, geen vervanging daarvoor.
 
+### Claude of ChatGPT
+
+Butler werkt met **Claude** (Anthropic) of **ChatGPT** (OpenAI, via de Responses API), net als CellarPeaks. Vul één of beide sleutels in onder `ai` in `config.yaml` (of als `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in de omgeving). Zijn beide ingevuld, dan staat rechtsboven in de app een keuzelijst *AI-dienst*; de keuze wordt bewaard. Standaardmodellen: `claude-haiku-5-5` en `claude-sonnet-5-5`, of `gpt-6-luna` (voor allebei; `gpt-6.1-sol` is sterker). Fouten van de dienst (ongeldige sleutel, krediet op, model onbekend) verschijnen in gewone taal.
+
 ### Privacy
 
-Met `ai.enabled: true` gaat de inhoud van (niet-nieuwsbrief-)mails naar de Claude API van Anthropic. Zet `ai: false` op accounts met gevoelige inhoud (bv. patiënt- of klantgegevens); die worden dan nooit doorgestuurd en krijgen gewoon een melding per persoonlijke mail.
+Met `ai.enabled: true` gaat de inhoud van persoonlijke mails naar de gekozen dienst (Claude API van Anthropic of OpenAI API). Beide trainen standaard niet op API-data en verwijderen ze na hoogstens 30 dagen; bij OpenAI stuurt Butler `store: false` mee, zodat het antwoord niet als opgeslagen *response* bij OpenAI blijft staan. Zet `ai: false` op accounts met gevoelige inhoud (bv. patiënt- of klantgegevens); die worden dan nooit doorgestuurd en krijgen gewoon een melding per persoonlijke mail.
 
 ## Pushmeldingen
 

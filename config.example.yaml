@@ -18,9 +18,16 @@ app:
 
 ai:
   enabled: true
+  # Welke dienst standaard: claude of openai (ChatGPT). Zijn beide sleutels ingevuld, dan wissel je in de app.
+  provider: claude
+  # Claude (Anthropic). Mag ook als ANTHROPIC_API_KEY in de omgeving.
   api_key: "sk-ant-..."
   triage_model: claude-haiku-5-5     # samenvatting + prioriteit per thread (goedkoop)
   draft_model: claude-sonnet-5-5     # antwoordvoorstellen
+  # ChatGPT (OpenAI), via de Responses API. Mag ook als OPENAI_API_KEY in de omgeving.
+  openai_api_key: ""
+  openai_triage_model: gpt-6-luna
+  openai_draft_model: gpt-6-luna     # gpt-6.1-sol = sterker, duurder
   initial_days: 7                    # bij de eerste sync enkel threads van de laatste X dagen samenvatten
   name: "Jan"
   owner: "Jan Peeters, zelfstandige in Gent"
