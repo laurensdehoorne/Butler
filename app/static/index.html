@@ -53,8 +53,14 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .badge.age{color:var(--warn)}
 .empty{color:var(--muted);text-align:center;padding:40px 0}
 /* thread */
-#sheet{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;display:none;-webkit-overflow-scrolling:touch}
-#sheet.open{display:block}
+#sheet,#settings{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;display:none;-webkit-overflow-scrolling:touch}
+#sheet.open,#settings.open{display:block}
+#settings{z-index:11}
+.sec{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+.sec h3{margin:0 0 6px;font-size:15px}
+.sec .row2{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+.sec .row2:first-of-type{border-top:0}
+.muted{color:var(--muted);font-size:13px}
 .shead{position:sticky;top:0;background:var(--bg);padding:calc(env(safe-area-inset-top) + 8px) 16px 8px;border-bottom:1px solid var(--line);z-index:2}
 .shead .top h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
@@ -83,8 +89,8 @@ select.act{appearance:none;-webkit-appearance:none;padding-right:22px;background
 <header>
   <div class="top">
     <h1>Butler</h1>
-    <select class="iconbtn act" id="provider" title="AI-dienst" style="display:none"></select>
-    <button class="iconbtn" id="refresh" title="Vernieuwen">↻</button>
+    <button class="iconbtn" id="refresh" title="Vernieuwen" aria-label="Vernieuwen">↻</button>
+    <button class="iconbtn" id="gear" title="Instellingen" aria-label="Instellingen">⚙︎</button>
   </div>
   <div class="tabs">
     <button class="tab on" data-tab="followup">Opvolgen</button>
@@ -109,6 +115,10 @@ select.act{appearance:none;-webkit-appearance:none;padding-right:22px;background
     <div class="actions" id="s-actions"></div>
   </div>
   <div class="sbody" id="s-body"></div>
+</div>
+<div id="settings" role="dialog" aria-modal="true">
+  <div class="shead"><div class="top"><button class="iconbtn" id="s-close">‹ Terug</button><h1>Instellingen</h1></div></div>
+  <div class="sbody" id="set-body"></div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -254,13 +264,7 @@ async function senderAction(a, i, btn){
 async function loadAccounts(){
   try{
     const d = await api('/api/accounts'); S.accounts=d.accounts; S.ai=d.ai; renderStatus(); renderChips();
-    const sel = $('#provider');
-    if(d.ai_providers.length > 1 && document.activeElement !== sel){
-      sel.innerHTML = d.ai_providers.map(p=>`<option value="${esc(p.id)}" ${p.id===d.ai_provider?'selected':''}>${esc(p.name)}</option>`).join('');
-      const cur = d.ai_providers.find(p=>p.id===d.ai_provider);
-      sel.title = cur ? `AI-dienst · samenvatten: ${cur.triage_model} · antwoorden: ${cur.draft_model}` : 'AI-dienst';
-      sel.style.display = '';
-    } else if(d.ai_providers.length <= 1){ sel.style.display = 'none'; }
+    S.ai_provider = d.ai_provider; S.ai_providers = d.ai_providers;
   }catch(e){}
 }
 
@@ -384,11 +388,90 @@ document.addEventListener('change', async e=>{
 $('#back').onclick = () => history.length>1 && location.hash.startsWith('#t=') ? history.back() : closeThread();
 window.addEventListener('popstate', ()=>{ const m=location.hash.match(/^#t=(\d+)/); m ? openThread(+m[1], false) : ($('#sheet').classList.contains('open') && closeThread()); });
 let qh; $('#q').addEventListener('input', e=>{ clearTimeout(qh); qh=setTimeout(()=>{ S.q=e.target.value; if(S.tab!=='inbox'){ S.tab='inbox'; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on', b.dataset.tab==='inbox')); } load(); }, 300); });
-$('#provider').addEventListener('change', async e=>{
-  try{ const r = await post('/api/settings/ai', {provider:e.target.value});
-    toast('AI-dienst: ' + e.target.selectedOptions[0].textContent); loadAccounts(); }
-  catch(err){ toast('Mislukt: '+err.message); loadAccounts(); }
+/* ---------- instellingen: meldingen, AI-dienst, kosten ---------- */
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const onIOS = () => /iPhone|iPad/.test(navigator.userAgent);
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+function urlBytes(b64){ const s=atob((b64+'='.repeat((4-b64.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(s, c=>c.charCodeAt(0)); }
+async function mySub(){ if(!pushSupported()) return null; const reg = await navigator.serviceWorker.ready; return reg.pushManager.getSubscription(); }
+const eur = v => new Intl.NumberFormat('nl-BE',{style:'currency',currency:'EUR',minimumFractionDigits: v<1?3:2}).format(v||0);
+const monthName = m => new Date(m+'-01').toLocaleDateString('nl-BE',{month:'long',year:'numeric'});
+
+async function openSettings(){
+  $('#settings').classList.add('open'); document.body.style.overflow='hidden';
+  $('#set-body').innerHTML = '<div class="status">Laden…</div>';
+  const [dev, cost, sub] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})), mySub().catch(()=>null)]);
+  S.set = {devices: dev.devices, costs: cost.months, here: !!sub};
+  renderSettings();
+}
+function closeSettings(){ $('#settings').classList.remove('open'); document.body.style.overflow = S.thread ? 'hidden' : ''; }
+
+function renderSettings(){
+  const st = S.set;
+  let push;
+  if(!pushSupported()) push = `<div class="muted">${onIOS() && !standalone() ? 'Meldingen werken enkel vanuit de app op je beginscherm: tik in Safari op Delen → <b>Zet op beginscherm</b> en open Butler daar (iOS 16.4 of nieuwer).' : 'Deze browser ondersteunt geen pushmeldingen.'}</div>`;
+  else push = `<div class="muted">${st.here ? 'Dit toestel krijgt meldingen.' : 'Dit toestel krijgt nog geen meldingen.'}</div>
+    <div class="actions">${st.here ? '<button class="act" data-set="push-off">Uitzetten op dit toestel</button><button class="act" data-set="push-test">Testmelding</button>' : '<button class="act primary" data-set="push-on">Meldingen aanzetten</button>'}</div>`;
+  const devs = st.devices.length ? st.devices.map(d=>`<div class="row2"><span>${esc(d.device)}<br><span class="muted">sinds ${esc(when(d.created_at))}</span></span><button class="act" data-set="push-forget" data-id="${esc(d.id)}">Vergeet</button></div>`).join('') : '<div class="muted">Nog geen toestellen.</div>';
+
+  const provs = S.ai_providers || [];
+  const ai = !provs.length ? '<div class="muted">Geen AI-sleutel ingesteld in config.yaml.</div>'
+    : provs.map(p=>`<label class="row2" style="cursor:pointer"><span><input type="radio" name="prov" value="${esc(p.id)}" ${p.id===S.ai_provider?'checked':''} ${provs.length<2?'disabled':''}> <b>${esc(p.name)}</b><br>
+        <span class="muted">samenvatten: ${esc(p.triage_model)} · antwoorden: ${esc(p.draft_model)}</span></span></label>`).join('');
+
+  const costs = !st.costs.length ? '<div class="muted">Nog geen AI-gebruik.</div>' : st.costs.map((m,i)=>`
+    <details ${i===0?'open':''} style="padding:6px 0;border-top:${i?'1px solid var(--line)':'0'}">
+      <summary style="cursor:pointer;display:flex;justify-content:space-between"><span>${esc(monthName(m.month))}</span><b>${eur(m.cost_eur)}</b></summary>
+      ${m.lines.map(l=>`<div class="row2"><span>${l.provider==='openai'?'ChatGPT':'Claude'} · ${esc(l.model)}<br><span class="muted">${l.kind==='draft'?'antwoorden':'samenvatten'} · ${l.calls}× · ${(l.input_tokens/1000).toFixed(0)}k in / ${(l.output_tokens/1000).toFixed(1)}k uit</span></span><span>${eur(l.cost_eur)}</span></div>`).join('')}
+      ${m.uncertain?`<div class="muted">${m.uncertain} aanroep(en) zonder volledige prijs: het werkelijke bedrag kan hoger liggen.</div>`:''}
+    </details>`).join('');
+
+  $('#set-body').innerHTML = `
+    <div class="sec"><h3>Meldingen</h3>${push}</div>
+    <div class="sec"><h3>Toestellen met meldingen</h3>${devs}</div>
+    <div class="sec"><h3>AI-dienst</h3>${ai}</div>
+    <div class="sec"><h3>AI-kosten</h3>${costs}<div class="muted" style="margin-top:6px">Schatting: verbruik × lijstprijs, omgerekend naar euro. Wat je echt betaalt, staat in de console van Anthropic of OpenAI.</div></div>`;
+}
+
+async function settingAction(a, el){
+  el.disabled = true;
+  try{
+    if(a==='push-on'){
+      const perm = await Notification.requestPermission(); // iOS vraagt enkel na een tik
+      if(perm !== 'granted') throw new Error(onIOS() ? 'Meldingen zijn niet toegestaan. Zet ze aan bij Instellingen op je iPhone → Meldingen → Butler.' : 'Meldingen zijn niet toegestaan in deze browser.');
+      const reg = await navigator.serviceWorker.ready;
+      const {key} = await api('/api/push/key');
+      const sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:urlBytes(key)});
+      const r = await post('/api/push/subscribe', {subscription: sub.toJSON()});
+      S.set.here = true; S.set.devices = r.devices; toast('Meldingen staan aan');
+    }
+    if(a==='push-off'){
+      const sub = await mySub();
+      if(sub){ await post('/api/push/unsubscribe', {endpoint: sub.endpoint}); await sub.unsubscribe(); }
+      S.set.here = false; S.set.devices = (await api('/api/push/devices')).devices; toast('Meldingen uit op dit toestel');
+    }
+    if(a==='push-test'){ await post('/api/push/test'); toast('Testmelding verstuurd'); }
+    if(a==='push-forget'){ const r = await api('/api/push/devices/'+el.dataset.id, {method:'DELETE'}); S.set.devices = r.devices; toast('Toestel vergeten'); }
+  }catch(e){ toast(e.message); }
+  renderSettings();
+}
+$('#gear').onclick = openSettings;
+$('#s-close').onclick = closeSettings;
+$('#set-body').addEventListener('click', e=>{ const el=e.target.closest('[data-set]'); if(el) settingAction(el.dataset.set, el); });
+$('#set-body').addEventListener('change', async e=>{
+  if(e.target.name!=='prov') return;
+  try{ await post('/api/settings/ai', {provider:e.target.value}); await loadAccounts(); toast('AI-dienst: '+(S.ai_providers.find(p=>p.id===S.ai_provider)||{}).name); }
+  catch(err){ toast('Mislukt: '+err.message); }
+  renderSettings();
 });
+
+/* ---------- service worker ---------- */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  navigator.serviceWorker.addEventListener('message', e=>{ // tik op een melding terwijl de app open is
+    const m = (e.data && e.data.open || '').match(/^#t=(\d+)/); if(m){ closeSettings(); openThread(+m[1]); }
+  });
+}
 $('#refresh').onclick = async () => { try{ await post('/api/sync'); toast('Synchroniseren…'); setTimeout(()=>{ loadAccounts(); load(); }, 4000); }catch(e){ toast(e.message); } };
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !S.thread){ loadAccounts(); load(); } });
 setInterval(()=>{ if(!document.hidden && !S.thread){ loadAccounts(); load(); } }, 60000);

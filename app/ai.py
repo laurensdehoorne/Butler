@@ -103,8 +103,9 @@ def _claude_error(e):
 
 
 class AIWorker:
-    def __init__(self, db, cfg, accounts, notifier):
+    def __init__(self, db, cfg, accounts, notifier, meter=None):
         self.db = db
+        self.meter = meter
         self.cfg = cfg
         self.accounts = accounts
         self.notifier = notifier
@@ -181,10 +182,12 @@ class AIWorker:
                 )
             except Exception as e:
                 raise _claude_error(e) from e
+            if self.meter:
+                self.meter.track_anthropic(name, r, kind)
             return "".join(getattr(b, "text", "") for b in r.content).strip()
-        return self._call_openai(name, system, user, max_tokens)
+        return self._call_openai(name, system, user, max_tokens, kind)
 
-    def _call_openai(self, name, system, user, max_tokens):
+    def _call_openai(self, name, system, user, max_tokens, kind=""):
         """Responses API, zoals CellarPeaks. store=False: OpenAI bewaart het antwoord niet als 'response' aan zijn kant."""
         import openai
 
@@ -197,6 +200,8 @@ class AIWorker:
                 kwargs.pop("reasoning", None)
             try:
                 r = self._client("openai").responses.create(**kwargs)
+                if self.meter:
+                    self.meter.track_openai(name, r, kind)
                 break
             except openai.BadRequestError as e:
                 if "reasoning" in str(e.message).lower() and "reasoning" in kwargs:

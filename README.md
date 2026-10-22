@@ -92,11 +92,28 @@ Het `app.token` is een extra laag, geen vervanging daarvoor.
 
 Butler werkt met **Claude** (Anthropic) of **ChatGPT** (OpenAI, via de Responses API), net als CellarPeaks. Vul één of beide sleutels in onder `ai` in `config.yaml` (of als `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in de omgeving). Zijn beide ingevuld, dan staat rechtsboven in de app een keuzelijst *AI-dienst*; de keuze wordt bewaard. Standaardmodellen: `claude-haiku-5-5` en `claude-sonnet-5-5`, of `gpt-6-luna` (voor allebei; `gpt-6.1-sol` is sterker). Fouten van de dienst (ongeldige sleutel, krediet op, model onbekend) verschijnen in gewone taal.
 
+### Kosten
+
+Onder **⚙︎ → AI-kosten** zie je per maand wat samenvatten en antwoorden kostte, per dienst en model, in euro. Elke aanroep wordt bijgehouden met het tokenverbruik dat de API meldt, maal de lijstprijs (dezelfde prijslijst als CellarPeaks, oktober 2026). Het is een schatting; de werkelijke factuur staat in de console van Anthropic of OpenAI. Prijzen aanpassen zonder de code te wijzigen kan in `data/prices.json`, bv. `{"openai": {"gpt-6-luna": {"input": 0.1, "output": 0.5}}}`; de koers met `USD_EUR` (standaard 0.87).
+
 ### Privacy
 
 Met `ai.enabled: true` gaat de inhoud van persoonlijke mails naar de gekozen dienst (Claude API van Anthropic of OpenAI API). Beide trainen standaard niet op API-data en verwijderen ze na hoogstens 30 dagen; bij OpenAI stuurt Butler `store: false` mee, zodat het antwoord niet als opgeslagen *response* bij OpenAI blijft staan. Zet `ai: false` op accounts met gevoelige inhoud (bv. patiënt- of klantgegevens); die worden dan nooit doorgestuurd en krijgen gewoon een melding per persoonlijke mail.
 
 ## Pushmeldingen
+
+### In de app (Web Push)
+
+Zoals in CellarPeaks stuurt Butler meldingen rechtstreeks naar de app op je beginscherm, zonder extra app:
+
+1. Open Butler in Safari, tik op Delen → **Zet op beginscherm** en open Butler via dat icoon (iOS 16.4 of nieuwer; op Android of desktop werkt het ook in de browser).
+2. **⚙︎ → Meldingen → Meldingen aanzetten**, en sta meldingen toe. Met **Testmelding** controleer je meteen of het werkt.
+
+Een tik op een melding opent de mail in Butler. De server maakt de eerste keer zelf een sleutelpaar om zijn meldingen te ondertekenen (`data/vapid.pem`); wis dat bestand niet, anders moet elk toestel de meldingen opnieuw aanzetten. Zet `notify.push_contact` op een `mailto:`-adres (Apple vraagt een contactadres). Onder **⚙︎ → Toestellen met meldingen** zie en vergeet je toestellen; een verwijderde app wordt vanzelf vergeten.
+
+De service worker toont tijdens een update of herstart een pagina *Butler wordt bijgewerkt* die zichzelf herlaadt, in plaats van de foutpagina van Tailscale, en houdt de app ook offline open.
+
+ntfy en Home Assistant hieronder zijn optioneel, bv. om meldingen via HA te routeren.
 
 ### ntfy
 
@@ -154,6 +171,15 @@ BUTLER_CONFIG=./config.yaml BUTLER_DB=./data/butler.db uvicorn app.main:app --re
 ```
 
 `BUTLER_NO_SYNC=1` start de webinterface zonder IMAP-verbindingen.
+
+### Tests
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest
+```
+
+De tests draaien met een tijdelijke config en database, zonder echte mailservers of AI-diensten (IMAP, SMTP, Claude, OpenAI en Web Push worden nagebootst). Ze dekken onder meer threading, de opvolglijst, antwoorden en concepten, de IMAP-sync, herkenning van reclame en notificaties, uitschrijven, opruimregels, beide AI-diensten, Web Push en de kostenberekening.
 
 ## Beperkingen
 

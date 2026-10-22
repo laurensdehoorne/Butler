@@ -11,11 +11,12 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from . import actions
+from . import actions, costs
 from .accounts import Account
 from .ai import PROVIDERS, AIError, AIWorker
 from .db import DB, sender_rule, thread_messages, upsert_rule
 from .notify import Notifier
+from .push import Push, device_name
 from .sync import Syncer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -27,10 +28,15 @@ with open(CFG_PATH, encoding="utf-8") as f:
 APP = CFG.get("app") or {}
 AI_CFG = CFG.get("ai") or {}
 
-db = DB(os.environ.get("BUTLER_DB", "/data/butler.db"))
+DB_PATH = os.environ.get("BUTLER_DB", "/data/butler.db")
+DATA_DIR = os.path.dirname(os.path.abspath(DB_PATH))
+db = DB(DB_PATH)
 accounts = {str(a["id"]): Account(a) for a in (CFG.get("accounts") or [])}
-notifier = Notifier(CFG.get("notify") or {}, APP)
-ai = AIWorker(db, AI_CFG, accounts, notifier)
+push = Push(db, DATA_DIR, (CFG.get("notify") or {}).get("push_contact", ""))
+notifier = Notifier(CFG.get("notify") or {}, APP, push)
+costs.load_overrides(DATA_DIR)
+meter = costs.Meter(db)
+ai = AIWorker(db, AI_CFG, accounts, notifier, meter)
 syncer = Syncer(db, APP, AI_CFG, accounts, ai, notifier)
 FOLLOWUP_DAYS = int(APP.get("followup_days", 3))
 STATIC = Path(__file__).parent / "static"
@@ -143,9 +149,15 @@ def icon():
     return FileResponse(STATIC / "icon.svg", media_type="image/svg+xml")
 
 
+@app.get("/sw.js")
+def service_worker():
+    return FileResponse(STATIC / "sw.js", media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
 @app.get("/{name}.png")
 def png_icon(name: str):
-    if name not in ("apple-touch-icon", "icon-192", "icon-512"):
+    if name not in ("apple-touch-icon", "icon-192", "icon-512", "badge-96"):
         raise HTTPException(404)
     return FileResponse(STATIC / f"{name}.png", media_type="image/png", headers={"Cache-Control": "max-age=86400"})
 
@@ -522,6 +534,62 @@ def sender_unsubscribe(body: SenderIn):
     acc = _acc(body.account)
     res = _run(lambda: actions.unsubscribe(db, acc, body.addr))
     return {"ok": True, **res}
+
+
+# --- Web Push --------------------------------------------------------------
+@app.get("/api/push/key", dependencies=[Depends(auth)])
+def push_key():
+    return {"key": push.public_key()}
+
+
+class SubscribeIn(BaseModel):
+    subscription: dict
+
+
+@app.post("/api/push/subscribe", dependencies=[Depends(auth)])
+def push_subscribe(body: SubscribeIn, request: Request):
+    try:
+        push.save(body.subscription, device_name(request.headers.get("user-agent", "")))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "devices": push.devices()}
+
+
+class EndpointIn(BaseModel):
+    endpoint: str
+
+
+@app.post("/api/push/unsubscribe", dependencies=[Depends(auth)])
+def push_unsubscribe(body: EndpointIn):
+    push.remove(body.endpoint)
+    return {"ok": True}
+
+
+@app.get("/api/push/devices", dependencies=[Depends(auth)])
+def push_devices():
+    return {"devices": push.devices()}
+
+
+@app.delete("/api/push/devices/{did}", dependencies=[Depends(auth)])
+def push_forget(did: str):
+    if not push.forget(did):
+        raise HTTPException(404, "toestel niet gevonden")
+    return {"ok": True, "devices": push.devices()}
+
+
+@app.post("/api/push/test", dependencies=[Depends(auth)])
+def push_test():
+    n = push.send({"title": "Butler", "body": "Meldingen werken. Zo ziet een melding van Butler eruit.",
+                   "url": "/", "tag": "butler-test"})
+    if not n:
+        raise HTTPException(400, "Geen toestel met meldingen aan.")
+    return {"ok": True, "sent": n}
+
+
+# --- kosten ----------------------------------------------------------------
+@app.get("/api/costs", dependencies=[Depends(auth)])
+def ai_costs():
+    return meter.summary()
 
 
 # --- ochtendsamenvatting ---------------------------------------------------

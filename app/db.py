@@ -58,6 +58,27 @@ CREATE TABLE IF NOT EXISTS sender_rules(
   PRIMARY KEY(account, addr)
 );
 
+CREATE TABLE IF NOT EXISTS push_subs(
+  endpoint TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  device TEXT,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ai_usage(
+  id INTEGER PRIMARY KEY,
+  ts TEXT NOT NULL,
+  provider TEXT,
+  model TEXT,
+  kind TEXT,
+  input_tokens INTEGER,
+  cached_tokens INTEGER,
+  cache_write_tokens INTEGER,
+  output_tokens INTEGER,
+  cost_usd REAL,
+  status TEXT
+);
+
 CREATE TABLE IF NOT EXISTS settings(
   key TEXT PRIMARY KEY,
   value TEXT

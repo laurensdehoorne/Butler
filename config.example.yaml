@@ -40,6 +40,9 @@ notify:
   quiet_hours: "22:00-07:00"
   digest_time: "07:30"   # ochtendsamenvatting van de opvolglijst; leeg = uit
   digest_days: [1, 2, 3, 4, 5]   # 1 = maandag … 7 = zondag
+  # Web Push naar de app op je beginscherm (aanzetten via ⚙︎ → Meldingen). ntfy en Home Assistant hieronder zijn optioneel.
+  webpush: true
+  push_contact: ""       # contactadres voor de pushdiensten, bv. "mailto:jij@voorbeeld.be" (Apple vraagt er één)
   # ntfy (iOS/Android-app). Gebruik een lange, geheime topicnaam.
   ntfy_server: "https://ntfy.sh"
   ntfy_topic: ""
