@@ -61,6 +61,17 @@ docker compose logs -f
 
 Open daarna `http://<host>:8088` en geef het token uit `app.token` in. Op iPhone: Delen → *Zet op beginscherm* voor een app-icoon.
 
+### Enkel via Tailscale (aanbevolen)
+
+`docker-compose.tailscale.yml` zet een Tailscale-container naast Postvak. Postvak deelt diens netwerk, opent geen poort op de host en is enkel bereikbaar op `https://postvak.<jouw-tailnet>.ts.net` (geldig certificaat via `tailscale serve`).
+
+```bash
+cp .env.example .env            # TS_AUTHKEY invullen (Tailscale-admin → Settings → Keys, met tag:postvak)
+docker compose -f docker-compose.tailscale.yml up -d --build
+```
+
+Zet daarna `app.base_url` op `https://postvak.<jouw-tailnet>.ts.net`. Voeg `tag:postvak` toe aan `tagOwners` in je tailnet policy en geef enkel jezelf toegang. HTTPS moet aanstaan in de Tailscale-admin (*DNS → HTTPS Certificates*).
+
 ### Wachtwoorden
 
 Gebruik nooit je gewone wachtwoord:
