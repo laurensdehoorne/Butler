@@ -10,6 +10,16 @@ Self-hosted mailassistent die **Gmail en iCloud** (en elke andere IMAP-mailbox) 
 
 Alles wat je in Postvak doet (archiveren, gelezen, verwijderen) gebeurt echt op de mailserver, dus je andere mailapps blijven in sync.
 
+## Samen met je gewone mailapp (bv. Spark)
+
+Postvak is bedoeld als **assistent naast** je mailapp, niet als vervanger:
+
+- **Niets verandert vanzelf.** Postvak leest met `BODY.PEEK` en in read-only-modus: mails worden niet als gelezen gemarkeerd, verplaatst of gelabeld tenzij je zelf op een knop drukt.
+- **Opvolgen is het startscherm.** "Klaar", snoozen en tags zijn lokaal in Postvak en raken je mailbox niet.
+- **Antwoorden die je in Spark verstuurt worden herkend** via de Verzonden-map: de thread verdwijnt dan vanzelf uit *Wacht op jou* en verschijnt na `followup_days` in *Wacht op antwoord* als er niets terugkomt.
+- **Concepten in plaats van versturen.** Een antwoordvoorstel kun je met *Zet als concept* in de Concepten-map van je mailbox zetten; je vindt het dan in Spark terug om na te kijken en te versturen. Rechtstreeks versturen kan ook nog.
+- **Geen dubbele meldingen.** Laat Spark gewoon elke mail melden en zet Postvak op `notify.mode: important`: dan krijg je enkel een extra (time-sensitive) melding voor wat écht dringend is, plus de ochtendsamenvatting (`digest_time`).
+
 ## Hoe het werkt
 
 ```

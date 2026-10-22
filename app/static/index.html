@@ -85,8 +85,8 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
     <button class="iconbtn" id="refresh" title="Vernieuwen">↻</button>
   </div>
   <div class="tabs">
-    <button class="tab on" data-tab="inbox">Inbox</button>
-    <button class="tab" data-tab="followup">Opvolgen</button>
+    <button class="tab on" data-tab="followup">Opvolgen</button>
+    <button class="tab" data-tab="inbox">Inbox</button>
   </div>
   <div class="row" id="accounts"></div>
   <div class="row" id="filters"></div>
@@ -110,7 +110,7 @@ h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 <div class="toast" id="toast"></div>
 
 <script>
-const S = { tab:'inbox', filter:'alle', account:'', q:'', accounts:[], ai:false, thread:null };
+const S = { tab:'followup', filter:'alle', account:'', q:'', accounts:[], ai:false, thread:null };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const FILTERS = [['alle','Alles'],['ongelezen','Ongelezen'],['belangrijk','Belangrijk'],['persoonlijk','Geen nieuwsbrieven'],['nieuwsbrieven','Nieuwsbrieven']];
@@ -244,9 +244,13 @@ function renderThread(){
       <textarea id="reply" placeholder="Je antwoord…"></textarea>
       <div class="opts">
         <label><input type="checkbox" id="replyall"> Allen beantwoorden</label>
-        <label><input type="checkbox" id="arch" ${t.in_inbox?'checked':''}> Archiveer na versturen</label>
+        <label><input type="checkbox" id="arch" ${t.in_inbox?'checked':''}> Archiveer na rechtstreeks versturen</label>
       </div>
-      <button class="act primary" data-a="send">Verstuur</button>
+      <div class="actions">
+        <button class="act primary" data-a="savedraft">Zet als concept</button>
+        <button class="act" data-a="send">Rechtstreeks versturen</button>
+      </div>
+      <div class="status">Een concept verschijnt in je Concepten-map, dus ook in Spark: daar nakijken en versturen.</div>
     </div>`;
 
   $('#s-body').innerHTML = ai + `<div class="actions">${aiBtn}</div>` + snooze + tags + msgs + compose;
@@ -270,6 +274,9 @@ async function doAction(a, btn){
     if(a==='summarize'){ btn.textContent='Bezig…'; S.thread = await post(p+'/summarize'); return renderThread(); }
     if(a==='draft'){ btn.textContent='Bezig…';
       const d = await post(p+'/draft',{instruction:$('#instr').value}); $('#reply').value = d.draft; btn.textContent='✨ Opnieuw voorstellen'; btn.disabled=false; return; }
+    if(a==='savedraft'){ const body=$('#reply').value.trim(); if(!body) return toast('Leeg bericht');
+      const r = await post(p+'/save-draft',{body, reply_all:$('#replyall').checked});
+      toast('Concept klaar in '+r.folder+' — verstuur via Spark'); $('#reply').value=''; btn.disabled=false; return; }
     if(a==='send'){ const body=$('#reply').value.trim(); if(!body) return toast('Leeg bericht');
       if(!confirm('Versturen?')) return;
       const r = await post(p+'/send',{body, reply_all:$('#replyall').checked, archive:$('#arch').checked});

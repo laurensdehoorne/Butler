@@ -41,6 +41,8 @@ async def lifespan(_):
     if os.environ.get("POSTVAK_NO_SYNC") != "1":
         ai.start()
         syncer.start()
+        import threading
+        threading.Thread(target=digest_loop, daemon=True, name="digest").start()
     yield
 
 
@@ -369,6 +371,66 @@ class SendIn(BaseModel):
     body: str
     reply_all: bool = False
     archive: bool = False
+
+
+class DraftSaveIn(BaseModel):
+    body: str
+    reply_all: bool = False
+
+
+@app.post("/api/threads/{tid}/save-draft", dependencies=[Depends(auth)])
+def save_draft(tid: int, body: DraftSaveIn):
+    t = _thread_or_404(tid)
+    if not body.body.strip():
+        raise HTTPException(400, "Leeg bericht")
+    res = _run(lambda: actions.save_draft(db, _acc(t["account"]), tid, body.body, body.reply_all))
+    return {"ok": True, **res}
+
+
+# --- ochtendsamenvatting ---------------------------------------------------
+def digest_text():
+    d = followup()
+    mine, theirs, rem = d["waiting_on_me"], d["waiting_on_them"], d["reminders"]
+    if not (mine or theirs or rem):
+        return None
+    lines = []
+    high = [c for c in mine if c["priority"] == "hoog"]
+    if mine:
+        lines.append(f"Wacht op jou: {len(mine)}" + (f" ({len(high)} belangrijk)" if high else ""))
+        for c in (high + [c for c in mine if c not in high])[:5]:
+            lines.append(f"• {c['who']}: {c['subject']}")
+    if rem:
+        lines.append(f"Herinneringen: {len(rem)}")
+        for c in rem[:3]:
+            lines.append(f"• {c['subject']}")
+    if theirs:
+        lines.append(f"Wacht op antwoord: {len(theirs)}")
+        for c in theirs[:3]:
+            lines.append(f"• {c['subject']} ({int(c['age_days'])} d)")
+    return "\n".join(lines)
+
+
+def digest_loop():
+    import time as _t
+    from zoneinfo import ZoneInfo
+
+    when = (CFG.get("notify") or {}).get("digest_time") or ""
+    days = (CFG.get("notify") or {}).get("digest_days") or [1, 2, 3, 4, 5]
+    if not when:
+        return
+    tz = ZoneInfo(APP.get("timezone", "Europe/Brussels"))
+    last = None
+    while True:
+        now = datetime.now(tz)
+        if now.strftime("%H:%M") == when and now.isoweekday() in days and last != now.date():
+            last = now.date()
+            try:
+                text = digest_text()
+                if text:
+                    notifier.send("Postvak – opvolgen", text, extra={"type": "digest"}, force=True)
+            except Exception:
+                log.exception("ochtendsamenvatting mislukt")
+        _t.sleep(20)
 
 
 @app.post("/api/threads/{tid}/send", dependencies=[Depends(auth)])

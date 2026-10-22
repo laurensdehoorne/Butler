@@ -40,8 +40,8 @@ class Notifier:
             return True
         return priority == "hoog"
 
-    def send(self, title, message, tid=None, high=False, extra=None):
-        if self.in_quiet_hours():
+    def send(self, title, message, tid=None, high=False, extra=None, force=False):
+        if not force and self.in_quiet_hours():
             log.info("stille uren, melding overgeslagen: %s", title)
             return
         url = f"{self.base_url}/#t={tid}" if (self.base_url and tid) else self.base_url

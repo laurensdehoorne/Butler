@@ -13,6 +13,7 @@ PRESETS = {
 FALLBACK = {
     "sent": ["Sent Messages", "Sent", "Sent Items", "[Gmail]/Sent Mail", "[Gmail]/Verzonden berichten", "Verzonden", "Verzonden items"],
     "archive": ["Archive", "Archief", "[Gmail]/All Mail", "[Gmail]/Alle berichten"],
+    "drafts": ["Drafts", "[Gmail]/Drafts", "[Gmail]/Concepten", "Concepten", "Draft"],
     "trash": ["Deleted Messages", "Trash", "Deleted Items", "[Gmail]/Trash", "[Gmail]/Prullenbak", "Prullenbak", "Verwijderde items"],
 }
 
@@ -68,6 +69,7 @@ class Account:
         f = {"inbox": "INBOX"}
         f["sent"] = by_flag(b"\\Sent") or by_name(FALLBACK["sent"])
         f["trash"] = by_flag(b"\\Trash") or by_name(FALLBACK["trash"])
+        f["drafts"] = by_flag(b"\\Drafts") or by_name(FALLBACK["drafts"])
         if self.gmail:
             f["archive"] = by_flag(b"\\All") or by_name(FALLBACK["archive"])
         else:

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
-from imapclient import SEEN
+from imapclient import DRAFT, SEEN
 
 from .db import thread_messages
 from .mailparse import make_snippet
@@ -72,7 +72,7 @@ def _quote(m):
     return f"\n\nOp {d} schreef {who} <{m['from_addr']}>:\n{quoted}\n"
 
 
-def send_reply(db, acc, tid, body, reply_all=False):
+def build_reply(db, acc, tid, body, reply_all=False):
     t, msgs = thread_messages(db, tid)
     if not t or not msgs:
         raise ValueError("thread niet gevonden")
@@ -115,6 +115,22 @@ def send_reply(db, acc, tid, body, reply_all=False):
     if refs:
         em["References"] = " ".join(refs[-20:])
     em.set_content(body.rstrip() + _quote(base))
+    return t, em, mid, to, cc, subject, refs
+
+
+def save_draft(db, acc, tid, body, reply_all=False):
+    """Zet het antwoord als concept in de Concepten-map: verschijnt in Spark/Apple Mail/Gmail om daar te versturen."""
+    _, em, _, to, cc, subject, _ = build_reply(db, acc, tid, body, reply_all)
+    folder = acc.folders.get("drafts")
+    if not folder:
+        raise RuntimeError(f"geen Concepten-map gevonden voor {acc.name}")
+    raw = em.as_bytes()
+    acc.run_imap(lambda c: c.append(folder, raw, flags=(DRAFT, SEEN)))
+    return {"to": to, "cc": cc, "subject": subject, "folder": folder}
+
+
+def send_reply(db, acc, tid, body, reply_all=False):
+    t, em, mid, to, cc, subject, refs = build_reply(db, acc, tid, body, reply_all)
 
     ctx = ssl.create_default_context()
     if acc.smtp_port == 465:
