@@ -1,0 +1,12 @@
+services:
+  postvak:
+    build: .
+    container_name: postvak
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - ./data:/data
+    environment:
+      - TZ=Europe/Brussels

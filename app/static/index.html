@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Postvak">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
+<title>Postvak</title>
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --ink:#1c1d21; --muted:#6c6f76; --line:#e4e2dc;
+  --accent:#2f5d50; --accent-ink:#ffffff; --hi:#c2410c; --hi-bg:#fdecdf; --chip:#efede7;
+  --out:#eef4f1; --warn:#9a6700;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#16171a; --panel:#1f2024; --ink:#ececee; --muted:#9a9ca3; --line:#2e3036;
+    --accent:#7fb8a4; --accent-ink:#10231d; --hi:#fb923c; --hi-bg:#3a2516; --chip:#2a2c31; --out:#1d2a25; --warn:#e3b341; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(env(safe-area-inset-top) + 10px) 16px 8px;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:10px}
+.top h1{font-size:20px;margin:0;flex:1;letter-spacing:-.01em}
+.iconbtn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:6px 10px}
+.tabs{display:flex;gap:6px;margin-top:10px}
+.tab{flex:1;border:0;background:var(--chip);padding:8px;border-radius:10px;font-weight:600;color:var(--muted)}
+.tab.on{background:var(--accent);color:var(--accent-ink)}
+.row{display:flex;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none}
+.row::-webkit-scrollbar{display:none}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 11px;white-space:nowrap;font-size:13px}
+.chip.on{border-color:var(--accent);color:var(--accent);font-weight:600}
+input[type=search],input[type=text],textarea{width:100%;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.search{margin-top:8px}
+main{padding:8px 16px calc(env(safe-area-inset-bottom) + 40px);max-width:820px;margin:0 auto}
+.status{font-size:12px;color:var(--muted);margin:6px 0}
+.status .err{color:var(--hi)}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 0 6px}
+.card{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:6px 0}
+.card.unread .who{font-weight:700}
+.l1{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.who{flex:1;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+.subj{font-weight:600;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card.unread .subj::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}
+.sum{color:var(--muted);font-size:13.5px;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.badge{font-size:11px;border-radius:6px;padding:1px 6px;background:var(--chip);color:var(--muted);white-space:nowrap}
+.badge.hoog{background:var(--hi-bg);color:var(--hi);font-weight:700}
+.badge.age{color:var(--warn)}
+.empty{color:var(--muted);text-align:center;padding:40px 0}
+/* thread */
+#sheet{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;display:none;-webkit-overflow-scrolling:touch}
+#sheet.open{display:block}
+.shead{position:sticky;top:0;background:var(--bg);padding:calc(env(safe-area-inset-top) + 8px) 16px 8px;border-bottom:1px solid var(--line);z-index:2}
+.shead .top h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.act{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:5px 10px;font-size:13.5px}
+.act.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.act:disabled{opacity:.5}
+.sbody{padding:10px 16px calc(env(safe-area-inset-bottom) + 60px);max-width:820px;margin:0 auto}
+.ai{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;margin:8px 0}
+.ai .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.msg{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:8px 0;overflow:hidden}
+.msg.out{background:var(--out)}
+.mh{padding:8px 12px;font-size:13px;color:var(--muted);border-bottom:1px solid var(--line);cursor:pointer}
+.mh b{color:var(--ink);font-size:14px}
+.mb{padding:10px 12px;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;font-size:14.5px}
+.msg.collapsed .mb{display:none}
+.compose{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:14px}
+.compose textarea{min-height:180px;resize:vertical;margin-top:8px}
+.opts{display:flex;gap:14px;flex-wrap:wrap;font-size:13.5px;color:var(--muted);margin:8px 0}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;z-index:20;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+.tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>Postvak</h1>
+    <button class="iconbtn" id="refresh" title="Vernieuwen">↻</button>
+  </div>
+  <div class="tabs">
+    <button class="tab on" data-tab="inbox">Inbox</button>
+    <button class="tab" data-tab="followup">Opvolgen</button>
+  </div>
+  <div class="row" id="accounts"></div>
+  <div class="row" id="filters"></div>
+  <input class="search" type="search" id="q" placeholder="Zoeken in alle mail…" autocomplete="off">
+</header>
+<main>
+  <div class="status" id="status"></div>
+  <div id="list"></div>
+</main>
+
+<div id="sheet" role="dialog" aria-modal="true">
+  <div class="shead">
+    <div class="top">
+      <button class="iconbtn" id="back">‹ Terug</button>
+      <h1 id="s-title"></h1>
+    </div>
+    <div class="actions" id="s-actions"></div>
+  </div>
+  <div class="sbody" id="s-body"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const S = { tab:'inbox', filter:'alle', account:'', q:'', accounts:[], ai:false, thread:null };
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const FILTERS = [['alle','Alles'],['ongelezen','Ongelezen'],['belangrijk','Belangrijk'],['persoonlijk','Geen nieuwsbrieven'],['nieuwsbrieven','Nieuwsbrieven']];
+
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2600); }
+
+async function api(path, opts={}){
+  let token=''; try{ token=localStorage.getItem('postvak_token')||''; }catch(e){}
+  const r = await fetch(path, {...opts, headers:{'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{})}});
+  if(r.status===401){
+    const n = prompt('Toegangstoken voor Postvak');
+    if(n){ try{ localStorage.setItem('postvak_token', n.trim()); }catch(e){} return api(path, opts); }
+    throw new Error('Niet aangemeld');
+  }
+  if(!r.ok){ let d=r.statusText; try{ d=(await r.json()).detail||d; }catch(e){} throw new Error(d); }
+  return r.json();
+}
+const post = (p, body={}) => api(p, {method:'POST', body:JSON.stringify(body)});
+
+function when(iso){
+  if(!iso) return '';
+  const d=new Date(iso), now=new Date();
+  if(d.toDateString()===now.toDateString()) return d.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+  const diff=(now-d)/864e5;
+  if(diff<6) return d.toLocaleDateString('nl-BE',{weekday:'short'});
+  return d.toLocaleDateString('nl-BE',{day:'numeric',month:'short', year: d.getFullYear()!==now.getFullYear()?'numeric':undefined});
+}
+const fullDate = iso => iso ? new Date(iso).toLocaleString('nl-BE',{dateStyle:'medium',timeStyle:'short'}) : '';
+
+function renderChips(){
+  const multi = S.accounts.length>1;
+  $('#accounts').innerHTML = multi ? [['','Alle accounts'],...S.accounts.map(a=>[a.id,a.name])]
+    .map(([id,n])=>`<button class="chip ${S.account===id?'on':''}" data-acc="${esc(id)}">${esc(n)}</button>`).join('') : '';
+  $('#accounts').style.display = multi ? '' : 'none';
+  $('#filters').innerHTML = S.tab==='inbox' ? FILTERS.map(([k,n])=>`<button class="chip ${S.filter===k?'on':''}" data-f="${k}">${n}</button>`).join('') : '';
+  $('#filters').style.display = S.tab==='inbox' ? '' : 'none';
+}
+
+function renderStatus(){
+  const bad = S.accounts.filter(a=>a.status==='fout');
+  const last = S.accounts.map(a=>a.last_sync).filter(Boolean).sort().pop();
+  $('#status').innerHTML = (bad.length ? bad.map(a=>`<span class="err">${esc(a.name)}: ${esc(a.error||'fout')}</span>`).join(' · ')+' · ' : '')
+    + (last ? 'Gesynchroniseerd '+esc(when(last)) : 'Synchroniseren…');
+}
+
+function card(c, mode){
+  const badges = [];
+  if(S.accounts.length>1) badges.push(`<span class="badge">${esc(c.account_name)}</span>`);
+  if(c.priority==='hoog') badges.push('<span class="badge hoog">Belangrijk</span>');
+  if(c.category && c.category!=='overig') badges.push(`<span class="badge">${esc(c.category)}</span>`);
+  if(c.deadline) badges.push(`<span class="badge age">⏰ ${esc(new Date(c.deadline).toLocaleDateString('nl-BE',{day:'numeric',month:'short'}))}</span>`);
+  if(mode==='them' || mode==='me'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge age">${d} d</span>`); }
+  const tags = c.tags.length ? `<div class="tags">${c.tags.map(t=>`<span class="badge">#${esc(t)}</span>`).join('')}</div>` : '';
+  const text = c.summary || c.snippet;
+  return `<button class="card ${c.unread?'unread':''}" data-tid="${c.tid}">
+    <div class="l1"><span class="who">${esc(c.who)}${c.n>1?` <span style="color:var(--muted);font-weight:400">(${c.n})</span>`:''}</span>${badges.join('')}<span>${esc(when(c.date))}</span></div>
+    <div class="subj">${esc(c.subject)}</div>
+    <div class="sum">${esc(text)}</div>${tags}
+  </button>`;
+}
+
+async function load(){
+  renderChips();
+  const acc = encodeURIComponent(S.account);
+  try{
+    if(S.tab==='inbox'){
+      const d = await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
+      $('#list').innerHTML = d.threads.length ? d.threads.map(c=>card(c)).join('') :
+        `<div class="empty">${S.q?'Niets gevonden.':'Inbox leeg 🎉'}</div>`;
+    } else {
+      const d = await api(`/api/followup?account=${acc}`);
+      const sec = (title, arr, mode, emptyTxt) => `<h2>${title} (${arr.length})</h2>` +
+        (arr.length ? arr.map(c=>card(c,mode)).join('') : `<div class="status">${emptyTxt}</div>`);
+      $('#list').innerHTML =
+        (d.reminders.length ? sec('Herinneringen', d.reminders, 'rem', '') : '') +
+        sec('Wacht op jou', d.waiting_on_me, 'me', 'Niets dat op jou wacht.') +
+        sec(`Wacht op antwoord (≥ ${d.followup_days} d)`, d.waiting_on_them, 'them', 'Geen openstaande vragen aan anderen.');
+    }
+  }catch(e){ $('#list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+async function loadAccounts(){
+  try{ const d = await api('/api/accounts'); S.accounts=d.accounts; S.ai=d.ai; renderStatus(); renderChips(); }catch(e){}
+}
+
+/* ---------- thread ---------- */
+async function openThread(tid, push=true){
+  if(push) history.pushState({tid}, '', '#t='+tid);
+  $('#sheet').classList.add('open'); document.body.style.overflow='hidden';
+  $('#s-title').textContent='…'; $('#s-body').innerHTML=''; $('#s-actions').innerHTML='';
+  try{ S.thread = await api('/api/threads/'+tid); renderThread(); }
+  catch(e){ $('#s-body').innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
+}
+function closeThread(){ $('#sheet').classList.remove('open'); document.body.style.overflow=''; S.thread=null; load(); }
+
+function renderThread(){
+  const t = S.thread;
+  $('#s-title').textContent = t.subject;
+  const A = (id, label, cls='') => `<button class="act ${cls}" data-a="${id}">${label}</button>`;
+  $('#s-actions').innerHTML = [
+    t.in_inbox ? A('archive','Archiveer','primary') : '',
+    t.unread ? A('read','Gelezen') : '',
+    t.done ? A('undone','Heropen') : A('done','✓ Klaar'),
+    A('snooze1','Morgen'), A('snooze3','+3 d'), A('snooze7','+1 week'),
+    A('tags','# Tags'),
+    t.in_inbox ? A('trash','🗑') : ''
+  ].join('');
+
+  const ai = t.summary ? `<div class="ai"><div>${esc(t.summary)}</div>
+      <div class="meta">${t.priority?`<span class="badge ${t.priority}">${esc(t.priority)}</span>`:''}${t.category?`<span class="badge">${esc(t.category)}</span>`:''}
+      ${t.action?`<span class="badge">actie: ${esc(t.action)}</span>`:''}${t.deadline?`<span class="badge age">⏰ ${esc(t.deadline)}</span>`:''}
+      ${t.summary_stale?'<span class="badge age">nieuwe berichten sinds samenvatting</span>':''}</div></div>` : '';
+  const aiBtn = t.ai_available ? `<button class="act" data-a="summarize">${t.summary?'↻ Opnieuw samenvatten':'✨ Samenvatten'}</button>` : '';
+  const snooze = t.snooze_until ? `<div class="status">Gesnoozed tot ${esc(fullDate(t.snooze_until))}</div>` : '';
+  const tags = t.tags.length ? `<div class="tags">${t.tags.map(x=>`<span class="badge">#${esc(x)}</span>`).join('')}</div>` : '';
+
+  const n = t.messages.length;
+  const msgs = t.messages.map((m,i)=>{
+    const to = m.to.map(([nm,a])=>nm||a).join(', ');
+    const collapsed = i < n-2 ? 'collapsed' : '';
+    return `<div class="msg ${m.outgoing?'out':''} ${collapsed}">
+      <div class="mh" data-toggle><b>${esc(m.outgoing?'Jij':(m.from_name||m.from_addr))}</b> ${m.outgoing?'':`&lt;${esc(m.from_addr)}&gt;`}<br>
+        aan ${esc(to)}${m.cc.length?' · cc '+esc(m.cc.map(([nm,a])=>nm||a).join(', ')):''} · ${esc(fullDate(m.date))}${m.pending?' · verzonden':''}</div>
+      <div class="mb">${esc(m.body)}</div></div>`;
+  }).join('');
+
+  const compose = `<div class="compose">
+      <b>Antwoorden</b>
+      ${t.ai_available?`<input type="text" id="instr" placeholder="Instructie voor het voorstel (optioneel), bv. 'akkoord, voorstel dinsdag 14u'" style="margin-top:8px">
+      <div class="actions"><button class="act" data-a="draft">✨ Stel antwoord voor</button></div>`:''}
+      <textarea id="reply" placeholder="Je antwoord…"></textarea>
+      <div class="opts">
+        <label><input type="checkbox" id="replyall"> Allen beantwoorden</label>
+        <label><input type="checkbox" id="arch" ${t.in_inbox?'checked':''}> Archiveer na versturen</label>
+      </div>
+      <button class="act primary" data-a="send">Verstuur</button>
+    </div>`;
+
+  $('#s-body').innerHTML = ai + `<div class="actions">${aiBtn}</div>` + snooze + tags + msgs + compose;
+}
+
+async function doAction(a, btn){
+  const t = S.thread; if(!t) return;
+  const p = '/api/threads/'+t.tid;
+  if(btn) btn.disabled = true;
+  try{
+    if(a==='archive'){ await post(p+'/archive'); toast('Gearchiveerd'); return closeThread(); }
+    if(a==='trash'){ if(!confirm('Naar de prullenbak?')) return; await post(p+'/trash'); toast('Verwijderd'); return closeThread(); }
+    if(a==='read'){ await post(p+'/read'); toast('Gelezen'); }
+    if(a==='done'){ await post(p+'/done',{done:true}); toast('Klaar — uit de opvolglijst'); return closeThread(); }
+    if(a==='undone'){ await post(p+'/done',{done:false}); toast('Heropend'); }
+    if(a.startsWith('snooze')){ const d={snooze1:1,snooze3:3,snooze7:7}[a];
+      const until = new Date(Date.now()+d*864e5).toISOString().slice(0,10);
+      await post(p+'/snooze',{until}); toast(`Komt terug op ${new Date(until).toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'short'})}`); return closeThread(); }
+    if(a==='tags'){ const v = prompt('Tags (komma-gescheiden)', t.tags.join(', ')); if(v===null) return;
+      await post(p+'/tags',{tags:v.split(',')}); }
+    if(a==='summarize'){ btn.textContent='Bezig…'; S.thread = await post(p+'/summarize'); return renderThread(); }
+    if(a==='draft'){ btn.textContent='Bezig…';
+      const d = await post(p+'/draft',{instruction:$('#instr').value}); $('#reply').value = d.draft; btn.textContent='✨ Opnieuw voorstellen'; btn.disabled=false; return; }
+    if(a==='send'){ const body=$('#reply').value.trim(); if(!body) return toast('Leeg bericht');
+      if(!confirm('Versturen?')) return;
+      const r = await post(p+'/send',{body, reply_all:$('#replyall').checked, archive:$('#arch').checked});
+      toast('Verstuurd naar '+r.to.join(', ')); return closeThread(); }
+    S.thread = await api(p); renderThread();
+  }catch(e){ toast('Mislukt: '+e.message); if(btn){ btn.disabled=false; } }
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e=>{
+  const el = e.target.closest('[data-tab],[data-acc],[data-f],[data-tid],[data-a],[data-toggle]');
+  if(!el) return;
+  if(el.dataset.tab){ S.tab=el.dataset.tab; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on', b===el)); load(); }
+  else if(el.dataset.acc!==undefined){ S.account=el.dataset.acc; load(); }
+  else if(el.dataset.f){ S.filter=el.dataset.f; load(); }
+  else if(el.dataset.tid){ openThread(+el.dataset.tid); }
+  else if(el.dataset.a){ doAction(el.dataset.a, el); }
+  else if(el.hasAttribute('data-toggle')){ el.parentElement.classList.toggle('collapsed'); }
+});
+$('#back').onclick = () => history.length>1 && location.hash.startsWith('#t=') ? history.back() : closeThread();
+window.addEventListener('popstate', ()=>{ const m=location.hash.match(/^#t=(\d+)/); m ? openThread(+m[1], false) : ($('#sheet').classList.contains('open') && closeThread()); });
+let qh; $('#q').addEventListener('input', e=>{ clearTimeout(qh); qh=setTimeout(()=>{ S.q=e.target.value; if(S.tab!=='inbox'){ S.tab='inbox'; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on', b.dataset.tab==='inbox')); } load(); }, 300); });
+$('#refresh').onclick = async () => { try{ await post('/api/sync'); toast('Synchroniseren…'); setTimeout(()=>{ loadAccounts(); load(); }, 4000); }catch(e){ toast(e.message); } };
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !S.thread){ loadAccounts(); load(); } });
+setInterval(()=>{ if(!document.hidden && !S.thread){ loadAccounts(); load(); } }, 60000);
+
+(async ()=>{
+  await loadAccounts(); await load();
+  const m = location.hash.match(/^#t=(\d+)/); if(m) openThread(+m[1], false);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+# Kopieer naar config.yaml en vul aan. Dit bestand bevat wachtwoorden: chmod 600.
+
+app:
+  # Toegangstoken voor de webinterface (lang en willekeurig, bv. `openssl rand -hex 24`).
+  # Leeg laten = geen login (enkel doen als de app uitsluitend via Tailscale bereikbaar is).
+  token: "verander-mij"
+  # Adres waarop je de app opent; wordt gebruikt in de link van pushmeldingen.
+  base_url: "http://postvak.jouw-tailnet.ts.net:8088"
+  sync_days: 60          # hoeveel dagen mail lokaal bijgehouden wordt
+  followup_days: 3       # na hoeveel dagen zonder antwoord een thread in "Wacht op antwoord" komt
+  poll_seconds: 300      # max. tijd tussen syncs (IDLE meldt nieuwe mail meestal binnen enkele seconden)
+  timezone: Europe/Brussels
+
+ai:
+  enabled: true
+  api_key: "sk-ant-..."
+  triage_model: claude-haiku-5-5     # samenvatting + prioriteit per thread (goedkoop)
+  draft_model: claude-sonnet-5-5     # antwoordvoorstellen
+  initial_days: 7                    # bij de eerste sync enkel threads van de laatste X dagen samenvatten
+  name: "Jan"
+  owner: "Jan Peeters, zelfstandige in Gent"
+  signature: |
+    Met vriendelijke groeten,
+    Jan
+
+notify:
+  mode: important        # all = elke niet-nieuwsbrief | important = enkel prioriteit hoog | off
+  quiet_hours: "22:00-07:00"
+  # ntfy (iOS/Android-app). Gebruik een lange, geheime topicnaam.
+  ntfy_server: "https://ntfy.sh"
+  ntfy_topic: ""
+  ntfy_token: ""         # enkel nodig bij een eigen ntfy-server met auth
+  # Home Assistant-webhook (zie README voor de automatisering)
+  ha_webhook: ""         # bv. http://homeassistant.local:8123/api/webhook/postvak_nieuwe_mail
+
+accounts:
+  - id: gmail
+    name: Gmail
+    provider: gmail
+    email: jouwnaam@gmail.com
+    display_name: "Jan Peeters"
+    password: "app-wachtwoord-van-google"
+    aliases: []          # extra afzenderadressen die ook "jij" zijn
+    ai: true             # false = deze mailbox nooit naar de Claude API sturen
+
+  - id: icloud
+    name: iCloud
+    provider: icloud
+    email: jouwnaam@icloud.com
+    display_name: "Jan Peeters"
+    # IMAP-gebruikersnaam: het deel vóór @icloud.com (volledig adres werkt meestal ook)
+    username: jouwnaam
+    smtp_username: jouwnaam@icloud.com
+    password: "app-specifiek-wachtwoord-van-apple"
+    aliases: []
+    ai: true
+
+  # Voorbeeld van een andere IMAP-provider:
+  # - id: praktijk
+  #   name: Praktijk
+  #   provider: custom
+  #   email: info@voorbeeld.be
+  #   imap_host: imap.voorbeeld.be
+  #   imap_port: 993
+  #   smtp_host: smtp.voorbeeld.be
+  #   smtp_port: 587
+  #   append_sent: true
+  #   password: "..."
+  #   ai: false

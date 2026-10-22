@@ -1,0 +1,123 @@
+# Postvak
+
+Self-hosted mailassistent die **Gmail en iCloud** (en elke andere IMAP-mailbox) samenbrengt in één webapp:
+
+- **Gecombineerde inbox** – lezen, archiveren, verwijderen, als gelezen markeren, eigen tags, zoeken in alle mail.
+- **Opvolglijst** – *Wacht op jou* (ontvangen mail die nog actie vraagt) en *Wacht op antwoord* (jij stuurde als laatste, al X dagen niets terug). Snoozen ("morgen", "+3 d", "+1 week") en "klaar"-markering.
+- **AI via de Claude API** – per thread een korte samenvatting, prioriteit, categorie, verwachte actie en deadline; antwoordvoorstellen op basis van een korte instructie ("akkoord, voorstel dinsdag 14u").
+- **Pushmeldingen** – via [ntfy](https://ntfy.sh) en/of een Home Assistant-webhook, enkel voor belangrijke mail of voor alles, met stille uren.
+- **Antwoorden** – via SMTP met correcte threading (`In-Reply-To`/`References`), zodat het antwoord ook in Gmail, Apple Mail en Spark netjes in de conversatie staat.
+
+Alles wat je in Postvak doet (archiveren, gelezen, verwijderen) gebeurt echt op de mailserver, dus je andere mailapps blijven in sync.
+
+## Hoe het werkt
+
+```
+Gmail  ─┐ IMAP IDLE                         ┌─ Claude API (samenvatting, antwoord)
+iCloud ─┼──────────► Postvak (FastAPI) ─────┼─ ntfy / Home Assistant (push)
+andere ─┘ SMTP ◄──── SQLite-cache /data ────┘─ Webinterface (browser / PWA)
+```
+
+- Per account een IMAP-verbinding die met **IDLE** op nieuwe mail wacht (meestal binnen enkele seconden), met een volledige sync minstens elke `poll_seconds`.
+- INBOX en Verzonden van de laatste `sync_days` dagen worden lokaal gecachet in SQLite (`/data/postvak.db`). Threads worden opgebouwd via `X-GM-THRID` (Gmail) of `References`/`In-Reply-To` (iCloud en andere).
+- Grote berichten (> 5 MB) worden enkel met headers opgehaald.
+- Bij de eerste sync worden geen meldingen verstuurd en enkel threads van de laatste `ai.initial_days` dagen samengevat, om kosten te beperken. Nieuwsbrieven (herkend aan `List-Unsubscribe` e.d.) gaan nooit naar de AI.
+
+## Installatie (Docker)
+
+```bash
+git clone https://github.com/laurensdehoorne/postvak.git
+cd postvak
+cp config.example.yaml config.yaml && chmod 600 config.yaml
+mkdir -p data && sudo chown 1000:1000 data     # container draait als uid 1000
+nano config.yaml
+docker compose up -d --build
+docker compose logs -f
+```
+
+Open daarna `http://<host>:8088` en geef het token uit `app.token` in. Op iPhone: Delen → *Zet op beginscherm* voor een app-icoon.
+
+### Wachtwoorden
+
+Gebruik nooit je gewone wachtwoord:
+
+- **Gmail**: zet tweestapsverificatie aan en maak een app-wachtwoord via <https://myaccount.google.com/apppasswords>.
+- **iCloud**: maak een app-specifiek wachtwoord via <https://account.apple.com> → *Inloggen en beveiliging* → *App-specifieke wachtwoorden*. De IMAP-gebruikersnaam is het deel vóór `@icloud.com`; SMTP gebruikt het volledige adres (`smtp_username`).
+
+### Bereikbaarheid
+
+Postvak heeft volledige toegang tot je mail. Zet hem **niet rechtstreeks op internet**. Aanbevolen:
+
+- enkel via **Tailscale** (eventueel `tailscale serve` voor HTTPS), of
+- achter een **Cloudflare Tunnel met Cloudflare Access** (e-mail-OTP of SSO) ervoor.
+
+Het `app.token` is een extra laag, geen vervanging daarvoor.
+
+### Privacy
+
+Met `ai.enabled: true` gaat de inhoud van (niet-nieuwsbrief-)mails naar de Claude API van Anthropic. Zet `ai: false` op accounts met gevoelige inhoud (bv. patiënt- of klantgegevens); die worden dan nooit doorgestuurd en krijgen gewoon een melding per persoonlijke mail.
+
+## Pushmeldingen
+
+### ntfy
+
+1. Installeer de ntfy-app (iOS/Android) en abonneer je op een lange, willekeurige topicnaam.
+2. Zet in `config.yaml`: `ntfy_topic: "die-naam"`.
+
+Met een eigen ntfy-server op iOS: zet `upstream-base-url: "https://ntfy.sh"` in de serverconfig, anders komen meldingen niet direct binnen.
+
+Een tik op de melding opent de thread in Postvak (via `app.base_url`).
+
+### Home Assistant
+
+Zet `ha_webhook` op `http://<ha>:8123/api/webhook/postvak_nieuwe_mail` en voeg deze automatisering toe:
+
+```yaml
+alias: Postvak – nieuwe mail
+triggers:
+  - trigger: webhook
+    webhook_id: postvak_nieuwe_mail
+    allowed_methods: [POST]
+    local_only: true
+actions:
+  - action: notify.mobile_app_iphone
+    data:
+      title: "{{ trigger.json.title }}"
+      message: "{{ trigger.json.message }}"
+      data:
+        url: "{{ trigger.json.url }}"
+        push:
+          interruption-level: "{{ 'time-sensitive' if trigger.json.high else 'active' }}"
+```
+
+De payload bevat ook `account`, `from`, `subject`, `priority` en `summary`, handig om bv. enkel mail van bepaalde afzenders te melden of 's avonds anders te routeren.
+
+## Configuratie
+
+Zie [`config.example.yaml`](config.example.yaml). Belangrijkste opties:
+
+| Sleutel | Betekenis |
+|---|---|
+| `app.followup_days` | Na hoeveel dagen zonder antwoord een verstuurde mail in *Wacht op antwoord* verschijnt |
+| `app.sync_days` | Hoeveel dagen mail lokaal bijgehouden wordt |
+| `ai.triage_model` / `ai.draft_model` | Claude-modellen voor samenvatten en antwoordvoorstellen |
+| `ai.owner`, `ai.name`, `ai.signature` | Context voor de AI: wie je bent en hoe je ondertekent |
+| `notify.mode` | `all`, `important` (enkel prioriteit *hoog*) of `off` |
+| `accounts[].ai` | `false` = deze mailbox nooit naar de AI sturen |
+| `accounts[].aliases` | Extra adressen die ook als "jij" gelden |
+| `accounts[].provider` | `gmail`, `icloud` of `custom` (dan `imap_host`, `smtp_host`, … zelf invullen) |
+
+## Ontwikkelen
+
+```bash
+pip install -r requirements.txt
+POSTVAK_CONFIG=./config.yaml POSTVAK_DB=./data/postvak.db uvicorn app.main:app --reload --port 8088
+```
+
+`POSTVAK_NO_SYNC=1` start de webinterface zonder IMAP-verbindingen.
+
+## Beperkingen
+
+- Bijlagen worden niet getoond of gedownload; open die in je gewone mailapp.
+- Nieuwe mails opstellen (zonder bestaande thread) zit er nog niet in, enkel antwoorden.
+- Gmail-labels worden niet gesynchroniseerd; tags in Postvak zijn lokaal.
