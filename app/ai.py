@@ -23,6 +23,7 @@ Je krijgt een e-mailthread. Antwoord met uitsluitend één JSON-object, zonder u
 - "categorie": één kort woord, bv. praktijk, patiënt, verwijzer, leverancier, factuur, reis, familie, bestelling, nieuwsbrief, systeem, overig.
 - "actie": "antwoorden" (er wordt een antwoord van {name} verwacht), "actie" (iets doen, maar niet per se antwoorden), "lezen", "wachten" ({name} wacht op de ander) of "geen".
 - "deadline": een datum "JJJJ-MM-DD" als er een duidelijke deadline of afspraakdatum is, met het uur erbij ("JJJJ-MM-DDTUU:MM", lokale tijd) als dat in de mail staat (bv. een afspraak); anders null.
+- "wacht_op_antwoord": true als het laatste bericht van {name} zelf is en {name} daarop nog een antwoord of reactie van de ander verwacht (een vraag, een verzoek, een offerteaanvraag, iets dat nog bevestigd of geregeld moet worden). false als dat laatste bericht een bedanking, bevestiging, afzegging, test of louter een mededeling is, of als de zaak rond is; ook false als het laatste bericht niet van {name} is.
 Berichten gemarkeerd met [JIJ] zijn door {name} zelf verstuurd."""
 
 DRAFT_SYSTEM = """Je schrijft een e-mailantwoord namens {owner}. Vandaag is {today}.
@@ -31,6 +32,15 @@ Verzin geen feiten, afspraken, bedragen of data. Waar informatie ontbreekt, zet 
 Geef enkel de tekst van de mail (aanhef, inhoud, afsluiting), zonder onderwerpregel en zonder het geciteerde origineel.
 Sluit af met:
 {signature}"""
+
+
+def _bool(v):
+    """true/false uit een AI-antwoord als 1/0; ontbreekt het, dan None (onbekend)."""
+    if isinstance(v, bool):
+        return int(v)
+    if isinstance(v, str) and v.strip().lower() in ("true", "false", "ja", "nee"):
+        return int(v.strip().lower() in ("true", "ja"))
+    return None
 
 
 def _fmt_people(lst):
@@ -291,7 +301,7 @@ class AIWorker:
             return None
         if all(m["bulk"] for m in msgs) and not (t.get("context") or "").strip():
             res = {"summary": msgs[-1]["snippet"][:200], "priority": "laag", "category": msgs[-1].get("kind") or "reclame",
-                   "action": "geen", "deadline": None}
+                   "action": "geen", "deadline": None, "awaits": 0}
         elif not self.active_for(t["account"]):
             return None
         else:
@@ -312,11 +322,12 @@ class AIWorker:
                 "category": str(data.get("categorie", "overig")).lower()[:30],
                 "action": act if act in ACTIONS else "lezen",
                 "deadline": dl if isinstance(dl, str) and re.match(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$", dl) else None,
+                "awaits": _bool(data.get("wacht_op_antwoord")),
             }
             dossiers.assign(self.db, tid, dossiers.extract(raw))
         self.db.x(
-            "UPDATE threads SET summary=?, priority=?, category=?, action=?, deadline=?, ai_count=? WHERE tid=?",
-            (res["summary"], res["priority"], res["category"], res["action"], res["deadline"], len(msgs), tid),
+            "UPDATE threads SET summary=?, priority=?, category=?, action=?, deadline=?, awaits=?, ai_count=? WHERE tid=?",
+            (res["summary"], res["priority"], res["category"], res["action"], res["deadline"], res["awaits"], len(msgs), tid),
         )
         return res
 

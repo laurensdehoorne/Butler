@@ -16,6 +16,7 @@ MAX_FULL_SIZE = 5 * 1024 * 1024  # groter → enkel headers
 CHUNK = 40
 MOMENT_DAYS = 365  # gemarkeerde mails ouder dan dit gaan niet meer naar de AI voor momenten
 CATCH_UP_DAYS = 120  # persoonlijke mail van zo lang geleden krijgt alsnog een samenvatting en dossier
+AWAITS_DAYS = 60  # zo ver kijkt "wacht op antwoord" terug (FOLLOWUP_WINDOW)
 HEADER_COST = 20_000  # een bericht boven MAX_FULL_SIZE kost enkel zijn headers
 
 
@@ -260,6 +261,8 @@ class Syncer:
             if arrival:
                 # nieuwe activiteit: thread terug openzetten
                 self.db.x("UPDATE threads SET done=0, snooze_until=NULL WHERE tid=?", (tid,))
+            if outgoing and initialized and uid > last_uid and self.ai.active_for(acc.id):
+                triage.setdefault(tid, False)  # je antwoordde: wacht je nu op iets, of is het rond?
             if role != "inbox" or outgoing or p["bulk"]:
                 continue
             if arrival and not seen:
@@ -372,6 +375,14 @@ class Syncer:
                HAVING (SUM(m.in_inbox) > 0 OR MAX(m.date) >= ?) AND MIN(m.bulk) = 0
                ORDER BY SUM(m.in_inbox) > 0 DESC, MAX(m.date) DESC LIMIT 1000""",
             (acc.id, since),
+        )
+        # waar jij het laatst schreef en de AI nog niet zei of je op antwoord wacht ("wacht op antwoord")
+        rows += self.db.q(
+            """SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+               WHERE t.account=? AND (t.awaits IS NULL OR t.ai_count=0) GROUP BY t.tid
+               HAVING MAX(m.date) >= ? AND MAX(CASE WHEN m.outgoing=1 THEN m.date END) = MAX(m.date) AND MIN(m.bulk) = 0
+               ORDER BY MAX(m.date) DESC LIMIT 300""",
+            (acc.id, (datetime.now(timezone.utc) - timedelta(days=AWAITS_DAYS)).isoformat()),
         )
         for r in rows:
             if r["tid"] not in self._triage_tried:

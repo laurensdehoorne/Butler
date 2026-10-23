@@ -137,3 +137,29 @@ def test_mail_with_a_coming_moment_waits_until_it_matters(app, client, acc):
     app.db.x("UPDATE threads SET deadline=?, action='antwoorden' WHERE tid=?", (far, reply))  # antwoord gevraagd: blijft
     mine = {c["tid"] for c in client.get("/api/followup", headers=H).json()["waiting_on_me"]}
     assert mine == {todo, reply}
+
+
+def test_ai_decides_whether_your_last_mail_waits(app, client, acc):
+    from tests.test_ai import claude_reply
+    q, _ = put(acc, "INBOX", 1, raw("Hilton <p@hilton.com>", "New Year's Eve", "<h1@x>", days=12))
+    put(acc, "Sent Messages", 2, raw("Me <me@icloud.com>", "Re: New Year's Eve", "<h2@me>", to="p@hilton.com", days=10, irt="<h1@x>"))
+    ask, _ = put(acc, "Sent Messages", 3, raw("Me <me@icloud.com>", "Offerte Borneo", "<b1@me>", to="info@borneo.com", days=10))
+    test, _ = put(acc, "Sent Messages", 4, raw("Me <me@icloud.com>", "Test", "<t1@me>", to="tandarts@t.be", days=10))
+    app.syncer._triage_tried.clear()
+    with mock.patch.object(app.ai, "enqueue") as enqueue:
+        app.syncer.queue_triage(acc)  # nog niet bekeken: de AI moet het zeggen
+    assert {c.args[0] for c in enqueue.call_args_list} >= {q, ask, test}
+    assert len(client.get("/api/followup", headers=H).json()["waiting_on_them"]) == 3  # tot dan: zoals vroeger
+
+    fake = mock.MagicMock()
+    app.ai._clients["claude"] = fake
+    for tid, awaits in ((q, "false"), (ask, "true"), (test, "false")):
+        fake.messages.create.return_value = claude_reply(
+            '{"samenvatting":"x","prioriteit":"normaal","categorie":"reis","actie":"wachten","deadline":null,'
+            f'"wacht_op_antwoord":{awaits},"dossiers":[]}}')
+        app.ai.triage(tid)
+    assert "wacht_op_antwoord" in fake.messages.create.call_args.kwargs["system"]
+    assert [c["subject"] for c in client.get("/api/followup", headers=H).json()["waiting_on_them"]] == ["Offerte Borneo"]
+    # je schrijft opnieuw: dan telt het oordeel over de vorige mail niet meer
+    put(acc, "Sent Messages", 5, raw("Me <me@icloud.com>", "Re: Test", "<t2@me>", to="tandarts@t.be", days=9, irt="<t1@me>"))
+    assert len(client.get("/api/followup", headers=H).json()["waiting_on_them"]) == 2

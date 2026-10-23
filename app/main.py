@@ -420,6 +420,9 @@ def followup(account: str = ""):
         else:
             if _age_days(last["date"]) < FOLLOWUP_DAYS:
                 continue
+            # de AI las je laatste mail: een bedanking, bevestiging, afzegging of test wacht op niemand
+            if t["awaits"] == 0 and t["ai_count"] == len(msgs):
+                continue
             to = [a for _, a in json.loads(last["to_addrs"] or "[]")]
             waiting = [a for a in to if not is_me(a) and a.lower() not in quiet]
             if not waiting or CALENDAR_REPLY.match(last["subject"] or ""):

@@ -154,7 +154,7 @@ class DB:
             for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0"),
                                ("messages", "html TEXT"), ("threads", "context TEXT"), ("sender_rules", "context TEXT"),
                                ("threads", "dossier_id INTEGER"), ("threads", "dossier_ai INTEGER DEFAULT 0"),
-                               ("messages", "attachments TEXT")):
+                               ("messages", "attachments TEXT"), ("threads", "awaits INTEGER")):
                 if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
             # dossiers v2 (meerdere per mail, geen verzamelnamen, referentienummers): eenmalig opnieuw laten indelen,
