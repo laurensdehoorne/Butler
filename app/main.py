@@ -95,6 +95,32 @@ def is_me(addr):
     return any(a.is_me(addr) for a in accounts.values())
 
 
+QUIET_MIN = 3  # zoveel threads naar een adres zonder ooit antwoord: daar wacht je niet op
+_quiet = {"at": 0.0, "addrs": set()}
+
+
+def quiet_recipients():
+    """Adressen waar je vaak naar stuurt zonder dat er ooit iets terugkomt (Billit, een scanner, een ticketsysteem).
+
+    Butler leert dat uit je eigen mail: QUIET_MIN of meer threads in het voorbije jaar en in geen enkele daarvan een
+    bericht van dat adres. Eén keer per tien minuten berekend."""
+    if time.time() - _quiet["at"] < 600:
+        return _quiet["addrs"]
+    since = (_now() - timedelta(days=365)).isoformat()
+    sent = {}
+    for r in db.q("SELECT account, thread_key, to_addrs FROM messages WHERE outgoing=1 AND date >= ?", (since,)):
+        for _, a in json.loads(r["to_addrs"] or "[]"):
+            a = (a or "").lower()
+            if a and not is_me(a):
+                sent.setdefault(a, set()).add((r["account"], r["thread_key"]))
+    heard = {(r["account"], r["thread_key"], r["from_addr"])
+             for r in db.q("SELECT DISTINCT account, thread_key, from_addr FROM messages WHERE outgoing=0 AND date >= ?", (since,))}
+    _quiet["addrs"] = {a for a, threads in sent.items()
+                       if len(threads) >= QUIET_MIN and not any((acc, key, a) in heard for acc, key in threads)}
+    _quiet["at"] = time.time()
+    return _quiet["addrs"]
+
+
 def _snoozed(t):
     return bool(t["snooze_until"]) and t["snooze_until"] > _now().isoformat()
 
@@ -290,6 +316,7 @@ def followup(account: str = ""):
         (account, account, (_now() - timedelta(days=FOLLOWUP_WINDOW)).isoformat()),
     )
     mine, theirs, reminders = [], [], []
+    quiet = quiet_recipients()
     now = _now().isoformat()
     for r in rows:
         t, msgs = thread_messages(db, r["tid"])
@@ -310,7 +337,8 @@ def followup(account: str = ""):
             if _age_days(last["date"]) < FOLLOWUP_DAYS:
                 continue
             to = [a for _, a in json.loads(last["to_addrs"] or "[]")]
-            if not [a for a in to if not is_me(a)] or CALENDAR_REPLY.match(last["subject"] or ""):
+            waiting = [a for a in to if not is_me(a) and a.lower() not in quiet]
+            if not waiting or CALENDAR_REPLY.match(last["subject"] or ""):
                 continue
             theirs.append(_card(t, msgs))
     mine.sort(key=lambda c: (c["priority"] != "hoog", c["date"] or ""))

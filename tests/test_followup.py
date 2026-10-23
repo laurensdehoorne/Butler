@@ -48,3 +48,19 @@ def test_calendar_replies_wait_on_nobody(client, acc, subject):
 def test_normal_question_still_waits(client, acc):
     put(acc, "Sent Messages", 1, raw("Me <me@icloud.com>", "Accepteer je de offerte?", "<q1@me>", to="sarah@y.be", days=10))
     assert [c["subject"] for c in client.get("/api/followup", headers=H).json()["waiting_on_them"]] == ["Accepteer je de offerte?"]
+
+
+def test_learns_recipients_that_never_answer(app, client, acc):
+    # facturen naar Billit: drie keer verstuurd, nooit antwoord → daar wacht je niet op
+    for i in range(3):
+        put(acc, "Sent Messages", 10 + i, raw("Me <me@icloud.com>", "", f"<b{i}@me>", to="facturen@billit.be", days=10 + i))
+    # Ann antwoordde wel eens: dan blijft een nieuwe vraag aan haar wachten
+    for i in range(3):
+        put(acc, "Sent Messages", 20 + i, raw("Me <me@icloud.com>", f"Vraag {i}", f"<a{i}@me>", to="ann@y.be", days=20 + i))
+    put(acc, "INBOX", 30, raw("Ann <ann@y.be>", "Re: Vraag 2", "<r2@y>", irt="<a2@me>", refs="<a2@me>", days=21))
+    # twee keer naar een nieuw adres is nog te weinig om iets te leren
+    for i in range(2):
+        put(acc, "Sent Messages", 40 + i, raw("Me <me@icloud.com>", f"Offerte {i}", f"<n{i}@me>", to="nieuw@z.be", days=5 + i))
+    assert app.quiet_recipients() == {"facturen@billit.be"}
+    subjects = {c["subject"] for c in client.get("/api/followup", headers=H).json()["waiting_on_them"]}
+    assert subjects == {"Vraag 0", "Vraag 1", "Offerte 0", "Offerte 1"}

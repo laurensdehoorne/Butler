@@ -40,6 +40,7 @@ def clean():
     acc.folders = {"inbox": "INBOX", "sent": "Sent Messages", "archive": "Archive", "trash": "Deleted Messages",
                    "drafts": "Drafts"}
     M.ai._clients.clear()
+    M._quiet["at"] = 0  # geleerde stille adressen niet tussen tests delen
     M.ai._no_reasoning.clear()
     yield
 

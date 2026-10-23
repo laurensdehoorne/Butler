@@ -157,6 +157,21 @@ a.item:hover::before,a.item:hover + .item::before{opacity:0}
 .now .item + .item::before{left:54px;right:4px}
 .moment .who{white-space:normal}
 .moment .m-detail{white-space:normal;color:var(--ink)}
+/* naar beneden trekken en vegen */
+#ptr{display:grid;place-items:center;height:0;overflow:hidden;color:var(--muted);margin-top:-14px}
+#ptr .i{width:22px;height:22px}
+#ptr.ready{color:var(--lapel)}
+#ptr.spinning .i{animation:spin 1s linear infinite}
+#ptr.settle{transition:height .22s ease}
+a.item{touch-action:pan-y}
+.item.swiping{background:var(--paper);z-index:1}
+.item.swiping::before{opacity:0}
+.item.settle{transition:translate .2s ease}
+.item.gone{display:none}
+.swipe-bg{position:absolute;z-index:0;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-right:20px;
+  border-radius:12px;background:color-mix(in oklab,var(--danger) 55%,var(--paper));color:#fff;font-weight:600;transition:background .15s}
+.swipe-bg.ready{background:var(--danger)}
+.now .item.swiping{background:var(--raised)}
 .m-when{display:block;font-size:0.8125rem;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums}
 .info .tie{width:18px;height:9px}
 @container list (min-width:620px){
@@ -397,6 +412,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   </div>
 </header>
 <main class="wrap">
+  <div id="ptr" aria-hidden="true"><svg class="i"><use href="#i-refresh"/></svg></div>
   <label class="searchbox">
     <span class="visually-hidden">Zoeken in alle mail</span>
     <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
@@ -447,7 +463,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
 <div class="toast" id="toast" role="status"></div>
 
 <script>
-const S = { tab:'followup', filter:'alle', cfilter:'reclame', account:'', q:'', accounts:[], ai:false, thread:null, loaded:{}, seq:0 };
+const S = { tab:'followup', filter:'alle', cfilter:'reclame', account:'', q:'', accounts:[], ai:false, thread:null, loaded:{}, seq:0, hidden:new Set() };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const I = n => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
@@ -614,6 +630,16 @@ function momentCard(c, active){
 const empty = (title, sub='', mark=I('inbox')) => `<div class="empty"><span class="mark">${mark}</span><b>${title}</b>${sub?`<span>${sub}</span>`:''}</div>`;
 const placeholder = () => '<div style="margin-top:22px">' + '<div class="ph"></div>'.repeat(5) + '</div>';
 
+// wat op de achtergrond gearchiveerd of verwijderd wordt, staat al niet meer in de lijst
+const vis = arr => (arr || []).filter(c => !S.hidden.has(c.tid));
+
+// archiveren en verwijderen gaan via IMAP en duren soms even: meteen weg, de server werkt op de achtergrond verder
+function inBackground(tid, path, done, failed){
+  S.hidden.add(tid);
+  toast(done);
+  post(path).catch(e => toast(`${failed}: ${e.message}`)).finally(() => { S.hidden.delete(tid); load(); });
+}
+
 function swapList(html, animate){
   const run = () => { $('#list').innerHTML = html; };
   if(animate && document.startViewTransition && !reduceMotion.matches) document.startViewTransition(run);
@@ -629,6 +655,7 @@ async function load(animate=false){
   try{
     if(S.tab==='inbox'){
       const d = await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
+      d.threads = vis(d.threads);
       html = d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c)).join('')}</div>`
         : S.q ? empty('Niets gevonden', `Geen mail met “${esc(S.q)}”. Zoeken gaat over onderwerp, afzender en tekst.`, I('search'))
         : empty('Inbox leeg', 'Nieuwe mail verschijnt hier vanzelf.');
@@ -644,6 +671,7 @@ async function load(animate=false){
           : empty('Niets op te ruimen', 'Geen afzenders in deze categorie.', I('check')));
     } else {
       const d = await api(`/api/followup?account=${acc}`);
+      for(const k of ['waiting_on_me', 'waiting_on_them', 'reminders', 'moments_now', 'moments_soon']) d[k] = vis(d[k]);
       const sec = (title, arr, mode, emptyTxt, hint='') => `<section><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</div>` +
         (arr.length ? `<div class="items">${arr.map(c=>card(c,mode)).join('')}</div>` : `<div class="quiet">${emptyTxt}</div>`) + '</section>';
       const now = d.moments_now || [], soon = d.moments_soon || [];
@@ -832,9 +860,9 @@ async function doAction(a, btn){
   if(btn) btn.disabled = true;
   const label = btn?.innerHTML;
   try{
-    if(a==='archive'){ await post(p+'/archive'); toast('Gearchiveerd'); return closeThread(); }
+    if(a==='archive'){ inBackground(t.tid, p+'/archive', 'Gearchiveerd', 'Archiveren mislukt'); return closeThread(); }
     if(a==='trash'){ if(!await ask({title:'Naar de prullenbak?', msg:t.subject, ok:'Verwijderen', danger:true})) return;
-      await post(p+'/trash'); toast('Verwijderd'); return closeThread(); }
+      inBackground(t.tid, p+'/trash', 'Verwijderd', 'Verwijderen mislukt'); return closeThread(); }
     if(a==='read'){ await post(p+'/read'); toast('Gemarkeerd als gelezen'); }
     if(a==='done'){ await post(p+'/done',{done:true}); toast('Klaar, uit de opvolglijst'); return closeThread(); }
     if(a==='undone'){ await post(p+'/done',{done:false}); toast('Heropend'); }
@@ -869,7 +897,7 @@ document.addEventListener('click', e=>{
   else if(el.dataset.f){ S.filter=el.dataset.f; load(true); }
   else if(el.dataset.cf){ S.cfilter=el.dataset.cf; load(true); }
   else if(el.dataset.s){ senderAction(el.dataset.s, +el.dataset.i, el); }
-  else if(el.dataset.tid){ if(e.metaKey||e.ctrlKey||e.shiftKey) return; e.preventDefault(); openThread(+el.dataset.tid); }
+  else if(el.dataset.tid){ if(e.metaKey||e.ctrlKey||e.shiftKey) return; e.preventDefault(); if(Date.now() - (S.swipedAt || 0) < 400) return; openThread(+el.dataset.tid); }
   else if(el.dataset.a){ doAction(el.dataset.a, el); }
   else if(el.hasAttribute('data-toggle')){ const m=el.parentElement; m.classList.toggle('collapsed'); el.setAttribute('aria-expanded', !m.classList.contains('collapsed')); }
 });
@@ -1142,12 +1170,86 @@ if('serviceWorker' in navigator){
     const m = (e.data && e.data.open || '').match(/^#t=(\d+)/); if(m){ closeSettings(); openThread(+m[1]); }
   });
 }
-$('#refresh').onclick = async () => {
+async function refreshNow(){
   const b = $('#refresh');
   try{ await post('/api/sync'); b.classList.add('spinning'); renderStatus(true);
-    setTimeout(async ()=>{ await loadAccounts(); await load(); b.classList.remove('spinning'); }, 4000); }
+    await new Promise(r => setTimeout(r, 2500)); await loadAccounts(); await load(); }
   catch(e){ toast(e.message); }
-};
+  finally{ b.classList.remove('spinning'); }
+}
+$('#refresh').onclick = refreshNow;
+
+/* ---------- aanraken: naar beneden trekken = vernieuwen, rij naar links vegen = verwijderen ---------- */
+(() => {
+  let g = null;  // lopend gebaar
+  const PULL = 64;
+  document.addEventListener('touchstart', e => {
+    if(e.touches.length !== 1 || document.querySelector('dialog[open]') || !e.target.closest('main')) return;
+    const t = e.touches[0];
+    g = {x: t.clientX, y: t.clientY, row: e.target.closest('a.item[data-tid]:not(.moment)'), mode: null, dx: 0, dy: 0};
+  }, {passive: true});
+  document.addEventListener('touchmove', e => {
+    if(!g) return;
+    const t = e.touches[0];
+    g.dx = t.clientX - g.x; g.dy = t.clientY - g.y;
+    if(!g.mode){
+      if(Math.abs(g.dx) < 8 && Math.abs(g.dy) < 8) return;
+      g.mode = Math.abs(g.dx) > Math.abs(g.dy) ? (g.row && g.dx < 0 ? 'swipe' : 'none') : (g.dy > 0 && scrollY <= 0 ? 'pull' : 'none');
+      if(g.mode === 'swipe') startSwipe(g);
+    }
+    if(g.mode === 'pull'){
+      const h = Math.min(g.dy * 0.45, PULL + 16);
+      const ptr = $('#ptr');
+      ptr.style.height = h + 'px';
+      ptr.classList.toggle('ready', h >= PULL);
+      ptr.querySelector('.i').style.rotate = (g.dy * 1.5) + 'deg';
+    }
+    if(g.mode === 'swipe'){
+      const dx = Math.min(0, g.dx);
+      g.row.style.translate = dx + 'px 0';
+      g.bg.classList.toggle('ready', -dx > threshold(g.row));
+    }
+  }, {passive: true});
+  document.addEventListener('touchend', () => {
+    if(!g) return;
+    const cur = g; g = null;
+    if(cur.mode === 'pull') endPull();
+    if(cur.mode === 'swipe') endSwipe(cur);
+  });
+  document.addEventListener('touchcancel', () => { if(g?.mode === 'swipe') snapBack(g); if(g?.mode === 'pull') collapsePull(); g = null; });
+
+  const threshold = row => Math.max(90, row.offsetWidth * 0.35);
+  function startSwipe(g){
+    g.row.classList.add('swiping');
+    g.bg = document.createElement('div');
+    g.bg.className = 'swipe-bg';
+    g.bg.innerHTML = `${I('trash')}<span>Verwijder</span>`;
+    g.row.parentElement.style.position = 'relative';  // eerst: daarna meten de offsets t.o.v. de lijst
+    Object.assign(g.bg.style, {top: g.row.offsetTop + 'px', height: g.row.offsetHeight + 'px',
+                               left: g.row.offsetLeft + 'px', width: g.row.offsetWidth + 'px'});
+    g.row.parentElement.insertBefore(g.bg, g.row);
+  }
+  function snapBack(g){
+    g.row.classList.add('settle'); g.row.style.translate = '0 0';
+    setTimeout(() => { g.bg.remove(); g.row.classList.remove('swiping', 'settle'); }, 220);
+  }
+  function endSwipe(g){
+    S.swipedAt = Date.now();  // de tik die op het vegen volgt, opent de mail niet
+    if(-g.dx <= threshold(g.row)) return snapBack(g);
+    const tid = +g.row.dataset.tid;
+    g.row.classList.add('settle'); g.row.style.translate = '-100% 0';
+    setTimeout(() => { g.bg.remove(); g.row.classList.add('gone'); }, 200);
+    inBackground(tid, `/api/threads/${tid}/trash`, 'Verwijderd', 'Verwijderen mislukt');
+  }
+  function collapsePull(){ const ptr = $('#ptr'); ptr.classList.add('settle'); ptr.style.height = '0px'; setTimeout(() => ptr.classList.remove('settle', 'ready', 'spinning'), 250); }
+  async function endPull(){
+    const ptr = $('#ptr');
+    if(!ptr.classList.contains('ready')) return collapsePull();
+    ptr.classList.add('settle', 'spinning'); ptr.style.height = '48px';
+    await refreshNow();
+    collapsePull();
+  }
+})();
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !S.thread){ loadAccounts(); load(); } });
 setInterval(()=>{ if(!document.hidden && !S.thread){ loadAccounts(); load(); } }, 60000);
 
