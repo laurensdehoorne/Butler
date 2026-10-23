@@ -15,6 +15,12 @@ app:
   cleanup:
     notificatie_days: 0
     reclame_days: 0
+  # Afzenderfoto's. De server haalt ze op en bewaart ze in /data/avatars; je toestel laadt niets van buiten.
+  # logos: een logo per afzenderdomein (BIMI of favicon); enkel de domeinnaam gaat naar buiten.
+  # gravatar: profielfoto's van personen; stuurt een SHA-256-hash van elk afzenderadres naar Gravatar.
+  avatars:
+    logos: true
+    gravatar: true
 
 ai:
   enabled: true
