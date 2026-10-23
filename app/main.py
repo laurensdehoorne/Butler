@@ -696,6 +696,25 @@ def get_dossier(did: int):
     return {"dossier": d, "threads": cards, "moments": [{**by_tid[r["tid"]], "moment": _moment(r)} for r in upcoming]}
 
 
+class DossierIn(BaseModel):
+    name: str
+
+
+@app.post("/api/threads/{tid}/dossier", dependencies=[Depends(auth)])
+def choose_dossier(tid: int, body: DossierIn):
+    """Zelf een dossier kiezen (bestaand of nieuw); de AI verandert dat niet meer."""
+    _thread_or_404(tid)
+    if not body.name.strip():
+        raise HTTPException(400, "Geef een naam voor het dossier.")
+    dossiers.choose(db, tid, body.name)
+    return get_thread(tid)
+
+
+@app.get("/api/dossier-names", dependencies=[Depends(auth)])
+def dossier_names():
+    return {"names": [r["name"] for r in db.q("SELECT name FROM dossiers ORDER BY last_at DESC LIMIT 200")]}
+
+
 @app.post("/api/threads/{tid}/dossier/remove", dependencies=[Depends(auth)])
 def remove_from_dossier(tid: int):
     _thread_or_404(tid)

@@ -1,35 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2f6455"/>
-      <stop offset="1" stop-color="#1c4237"/>
+      <stop offset="0" stop-color="#1fa2ff"/>
+      <stop offset="1" stop-color="#0a5fe0"/>
     </linearGradient>
     <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fbf7ee"/>
-      <stop offset="1" stop-color="#ece4d3"/>
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e9eef6"/>
     </linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#e8bd62"/>
-      <stop offset="1" stop-color="#c48f2e"/>
+    <linearGradient id="flap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef2f8"/>
+      <stop offset="1" stop-color="#cfd9e7"/>
+    </linearGradient>
+    <linearGradient id="tie" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3a3e"/>
+      <stop offset="1" stop-color="#121214"/>
     </linearGradient>
   </defs>
 
-  <!-- achtergrond -->
+  <!-- achtergrond: het blauw van Mail -->
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
 
   <!-- envelop (schaduw + papier) -->
-  <rect x="100" y="152" width="312" height="226" rx="30" fill="#0f2a22" opacity=".28" transform="translate(0 10)"/>
-  <rect x="100" y="152" width="312" height="226" rx="30" fill="url(#paper)"/>
+  <rect x="88" y="146" width="336" height="236" rx="30" fill="#063f9c" opacity=".3" transform="translate(0 10)"/>
+  <rect x="88" y="146" width="336" height="236" rx="30" fill="url(#paper)"/>
 
-  <!-- klep = revers van een smoking -->
-  <path d="M100 182 Q100 152 130 152 H382 Q412 152 412 182 L256 296 Z" fill="#1f463b"/>
-  <path d="M132 152 L256 262 L380 152 Z" fill="url(#paper)"/>
+  <!-- klep -->
+  <path d="M100 156 Q256 300 412 156 Q256 268 100 156 Z" fill="#c9d4e3" opacity=".55"/>
+  <path d="M104 152 L256 272 L408 152 Z" fill="url(#flap)"/>
 
   <!-- vlinderdas op de punt -->
-  <g transform="translate(256 288)">
-    <path d="M-10 -6 L-74 -38 Q-88 0 -74 38 L-10 6 Z" fill="url(#gold)"/>
-    <path d="M10 -6 L74 -38 Q88 0 74 38 L10 6 Z" fill="url(#gold)"/>
-    <rect x="-17" y="-17" width="34" height="34" rx="10" fill="#b07d24"/>
-    <rect x="-17" y="-17" width="34" height="34" rx="10" fill="none" stroke="#f3d38a" stroke-width="3" opacity=".6"/>
+  <g transform="translate(256 278)">
+    <path d="M-10 -6 L-74 -38 Q-88 0 -74 38 L-10 6 Z" fill="url(#tie)"/>
+    <path d="M10 -6 L74 -38 Q88 0 74 38 L10 6 Z" fill="url(#tie)"/>
+    <rect x="-17" y="-17" width="34" height="34" rx="10" fill="#0e0e10"/>
+    <rect x="-17" y="-17" width="34" height="34" rx="10" fill="none" stroke="#5a5a60" stroke-width="3" opacity=".7"/>
   </g>
 </svg>

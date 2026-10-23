@@ -17,7 +17,9 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 
-PROMPT = """- "dossiers": over welke lopende zaken gaat deze mail? Een zaak is iets waar meerdere mails over gaan: een reis, een verbouwing, een aankoop, een schadegeval, een project, een evenement, een zaak met een instantie. Geef een lijst met per zaak een korte, specifieke naam van hoogstens 5 woorden, bv. ["Aanrijding brievenbus", "Schade aan ramen"]. Gaat de mail over meerdere zaken (zoals een overzicht van lopende dossiers), noem ze dan allemaal; gebruik nooit een verzamelnaam. Past een bestaand dossier, gebruik dan exact die naam: {names}. Een losse mail (een vraag, een nieuwsbrief, een melding die op zichzelf staat): []."""
+PROMPT = """- "dossiers": over welke lopende zaken gaat deze mail? Een zaak is iets waar meerdere mails over gaan: een reis, een verbouwing, een aankoop, een schadegeval, een project, een evenement, een zaak met een instantie. Geef een lijst met per zaak een korte naam van hoogstens 5 woorden die zegt waarover het gaat, bv. ["Reis Borneo juli 2027", "Huurwagen Málaga november", "Aanrijding brievenbus"]: bij een reis de bestemming en de maand, nooit enkel een boekings- of dossiernummer. Gaat de mail over meerdere zaken (zoals een overzicht van lopende dossiers), noem ze dan allemaal; gebruik nooit een verzamelnaam. Kies een bestaand dossier enkel als de mail over exact dezelfde zaak gaat (bij een reis: dezelfde bestemming en dezelfde periode); gebruik dan exact die naam. Bestaande dossiers:
+{names}
+Een losse mail (een vraag, een nieuwsbrief, een melding die op zichzelf staat): []."""
 
 MAX_NAME = 60
 MAX_PER_MAIL = 4
@@ -38,8 +40,15 @@ def names(db, days=365, limit=50):
 
 
 def prompt(db):
-    existing = names(db)
-    return PROMPT.format(names=json.dumps(existing, ensure_ascii=False) if existing else "(nog geen)")
+    """De bestaande dossiers met een voorbeeldonderwerp en de periode, zodat de AI ziet waarover elk dossier gaat."""
+    lines = []
+    for name in names(db):
+        r = db.one("""SELECT MIN(m.subject) AS subj, MIN(m.date) AS first, MAX(m.date) AS last
+                      FROM dossiers d JOIN thread_dossiers td ON td.dossier_id=d.id JOIN threads t ON t.tid=td.tid
+                      JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key WHERE d.name=?""", (name,))
+        hint = f' (bv. "{r["subj"][:70]}", mails van {r["first"][:7]} tot {r["last"][:7]})' if r and r["subj"] else ""
+        lines.append(f"- {json.dumps(name, ensure_ascii=False)}{hint}")
+    return PROMPT.format(names="\n".join(lines) if lines else "(nog geen)")
 
 
 def extract(raw):
@@ -123,6 +132,17 @@ def link_by_reference(db, tid, ids):
             if db.one("SELECT dossier_ai FROM threads WHERE tid=?", (r["tid"],))["dossier_ai"] == 0:
                 for did in ids:
                     db.x("INSERT OR IGNORE INTO thread_dossiers(tid, dossier_id, source) VALUES(?,?,'ref')", (r["tid"], did))
+
+
+def choose(db, tid, name):
+    """Door jou gekozen: de thread zit enkel in dit dossier, en de AI en de nummers veranderen dat niet meer."""
+    now = datetime.now(timezone.utc).isoformat()
+    db.x("DELETE FROM thread_dossiers WHERE tid=?", (tid,))
+    did = _id(db, name.strip()[:MAX_NAME], now)
+    db.x("INSERT OR IGNORE INTO thread_dossiers(tid, dossier_id, source) VALUES(?,?,'manual')", (tid, did))
+    db.x("UPDATE threads SET dossier_ai=-1 WHERE tid=?", (tid,))
+    _prune(db)
+    return did
 
 
 def remove(db, tid):

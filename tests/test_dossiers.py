@@ -91,3 +91,21 @@ def test_legal_footer_numbers_do_not_link_and_ai_has_final_say(app, acc):
     assert [d["name"] for d in D.of_thread(app.db, other)] == ["Aanrijding brievenbus"]
     D.assign(app.db, other, ["Schade aan ramen"])
     assert [d["name"] for d in D.of_thread(app.db, other)] == ["Schade aan ramen"]
+
+
+def test_ai_sees_what_each_dossier_is_about(app, acc):
+    a, _ = put(acc, "INBOX", 1, raw("Amex <t@amex.com>", "Booking Confirmation 1480945", "<a1@x>"))
+    D.assign(app.db, a, ["Reis Borneo juli 2027"])
+    p = D.prompt(app.db)
+    assert '"Reis Borneo juli 2027" (bv. "Booking Confirmation 1480945"' in p
+    assert "nooit enkel een boekings- of dossiernummer" in p
+
+
+def test_chosen_dossier_sticks(app, client, acc):
+    car, _ = put(acc, "INBOX", 1, raw("Goldcar <g@goldcar.es>", "Car hire Málaga", "<c1@x>"))
+    D.assign(app.db, car, ["Reisboeking 1480945"])
+    t = client.post(f"/api/threads/{car}/dossier", headers=H, json={"name": "Huurwagen Málaga november"}).json()
+    assert [d["name"] for d in t["dossiers"]] == ["Huurwagen Málaga november"]
+    assert "Reisboeking 1480945" not in client.get("/api/dossier-names", headers=H).json()["names"]  # leeg: weg
+    assert D.assign(app.db, car, ["Iets anders"]) == []  # de AI verandert je keuze niet
+    assert client.post(f"/api/threads/{car}/dossier", headers=H, json={"name": " "}).status_code == 400

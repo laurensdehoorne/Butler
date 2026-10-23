@@ -169,6 +169,13 @@ class DB:
                 self.conn.execute("DELETE FROM thread_dossiers WHERE source='ref'")
                 self.conn.execute("DELETE FROM dossiers WHERE id NOT IN (SELECT dossier_id FROM thread_dossiers)")
                 self.conn.execute("INSERT INTO settings(key, value) VALUES('dossiers_v3', '1')")
+            # v4: namen die zeggen waarover het gaat (geen "Reisboeking 1480945" meer als verzamelbak voor elke reis):
+            # wat de AI en de nummers indeelden opnieuw; wat je zelf koos, blijft
+            if not self.conn.execute("SELECT 1 FROM settings WHERE key='dossiers_v4'").fetchone():
+                self.conn.execute("DELETE FROM thread_dossiers WHERE source IN ('ai', 'ref')")
+                self.conn.execute("DELETE FROM dossiers WHERE id NOT IN (SELECT dossier_id FROM thread_dossiers)")
+                self.conn.execute("UPDATE threads SET dossier_ai=0 WHERE dossier_ai=1")
+                self.conn.execute("INSERT INTO settings(key, value) VALUES('dossiers_v4', '1')")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")
 
     def q(self, sql, args=()):
