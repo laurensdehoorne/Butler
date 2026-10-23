@@ -309,6 +309,18 @@ details.month summary span{flex:1}
 .muted{color:var(--muted);font-size:0.8438rem}
 .group > .muted{padding:12px 0}
 .fine{color:var(--muted);font-size:0.8125rem;margin:10px 2px 0}
+/* instellingen: navigatierijen en formulieren */
+button.line.nav{width:100%;border:0;border-top:1px solid var(--rule);background:transparent;text-align:left;color:inherit}
+button.line.nav:first-child{border-top:0}
+button.line.nav .i{color:var(--muted);width:16px;height:16px}
+.fld{display:block;padding:12px 0;border-top:1px solid var(--rule)}
+.fld:first-child,.line + .fld:first-child{border-top:0}
+.fld .lbl{display:block;font-weight:500;font-size:0.9062rem;margin-bottom:6px}
+.fld .sub,.line .sub{display:block;color:var(--muted);font-size:0.8125rem;margin-top:4px}
+.err-msg{display:block;color:var(--danger);font-size:0.8125rem;margin-top:4px}
+textarea.field.short{min-height:90px;min-block-size:3lh}
+.days{display:flex;gap:6px;flex-wrap:wrap}
+#set-body > .backbtn{margin-bottom:8px}
 
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);translate:-50% 14px;background:var(--jacket);color:var(--on-jacket);padding:10px 16px;border-radius:12px;z-index:20;font-size:0.9062rem;
   opacity:0;transition:opacity .2s,translate .25s cubic-bezier(.2,.8,.2,1);pointer-events:none;max-width:min(92vw,520px);box-shadow:var(--elev)}
@@ -362,6 +374,8 @@ details.month summary span{flex:1}
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/></symbol>
   <symbol id="i-broom" viewBox="0 0 24 24"><path d="M15 3l-3.5 7.5"/><path d="M7.5 11h8l2 10h-12z"/><path d="M9.5 15.5V21M13.5 15.5V21"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
 </svg>
 
@@ -505,7 +519,8 @@ async function api(path, opts={}){
     if(n){ try{ localStorage.setItem('butler_token', n.trim()); }catch(e){} return api(path, opts); }
     throw new Error('Niet aangemeld');
   }
-  if(!r.ok){ let d=r.statusText; try{ d=(await r.json()).detail||d; }catch(e){} throw new Error(d); }
+  if(!r.ok){ let d=r.statusText; try{ d=(await r.json()).detail||d; }catch(e){}
+    const err = new Error(typeof d === 'string' ? d : d.message || r.statusText); err.errors = d.errors; throw err; }
   return r.json();
 }
 const post = (p, body={}) => api(p, {method:'POST', body:JSON.stringify(body)});
@@ -549,6 +564,7 @@ function renderStatus(syncing=false){
   const last = S.accounts.map(a=>a.last_sync).filter(Boolean).sort().pop();
   const backlog = S.accounts.reduce((n,a)=>n+(a.backlog||0), 0);
   const errs = bad.map(a=>`<span class="err">${esc(a.name)}: ${esc(a.error||'fout')}</span>`).join(', ');
+  if(S.accountsLoaded && !S.accounts.length){ $('#status').textContent = 'Nog geen mailaccount'; return; }
   $('#status').innerHTML = errs ? errs
     : (syncing || !last) ? '<span class="busy">Synchroniseren…</span>' : 'Bijgewerkt om '+esc(new Date(last).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}))
       + (backlog ? `, nog ${backlog.toLocaleString('nl-BE')} oude mails te halen` : '');
@@ -644,6 +660,9 @@ async function load(animate=false){
     }
   }catch(e){ html = empty('Laden mislukt', esc(e.message) + '. Probeer opnieuw met de vernieuwknop bovenaan.', I('x')); }
   if(seq!==S.seq) return;
+  if(S.accountsLoaded && !S.accounts.length)  // nog niets ingesteld: meteen naar het eerste account
+    html = empty('Nog geen mailaccount', 'Voeg je Gmail- of iCloud-account toe; daarna haalt Butler je mail op.', I('inbox'))
+      + `<div class="actions" style="justify-content:center"><button class="btn primary" id="add-first">${I('plus')}Account toevoegen</button></div>`;
   S.loaded[key] = true;
   swapList(html, animate);
 }
@@ -700,7 +719,7 @@ async function senderAction(a, i, btn){
 async function loadAccounts(){
   try{
     const d = await api('/api/accounts'); S.accounts=d.accounts; S.ai=d.ai;
-    S.ai_provider = d.ai_provider; S.ai_providers = d.ai_providers;
+    S.ai_provider = d.ai_provider; S.ai_providers = d.ai_providers; S.accountsLoaded = true;
     renderStatus(); renderChips();
   }catch(e){}
 }
@@ -878,7 +897,7 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Enter' && e.target.id==='instr'){ e.preventDefault(); $('[data-a=draft]')?.click(); }
 });
 
-/* ---------- instellingen: meldingen, AI-dienst, kosten ---------- */
+/* ---------- instellingen: meldingen, AI-dienst, kosten en de volledige configuratie ---------- */
 const settings = $('#settings');
 const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const onIOS = () => /iPhone|iPad/.test(navigator.userAgent);
@@ -892,18 +911,32 @@ async function mySub(){
 }
 const eur = v => new Intl.NumberFormat('nl-BE',{style:'currency',currency:'EUR',minimumFractionDigits: v<1?3:2}).format(v||0);
 const monthName = m => new Date(m+'-01').toLocaleDateString('nl-BE',{month:'long',year:'numeric'});
+const DAYS = ['ma','di','wo','do','vr','za','zo'];
 
-async function openSettings(){
+async function openSettings(view='root'){
+  S.view = view; S.cfgErrors = {};
   $('#set-body').innerHTML = placeholder();
   openDialog(settings);
-  const [dev, cost, sub] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})), mySub().catch(()=>null)]);
+  const [dev, cost, sub, cfg] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})),
+    mySub().catch(()=>null), api('/api/config').catch(()=>null)]);
   S.set = {devices: dev.devices, costs: cost.months, here: !!sub};
+  S.cfg = cfg;
+  if(view === 'account:new') S.view = newAccount();
   renderSettings();
 }
 const closeSettings = () => closeTopLayer(settings);
 wireDialog(settings, closeSettings);
 
 function renderSettings(){
+  const v = S.view || 'root';
+  $('#set-title').textContent = v === 'root' ? 'Instellingen' : v === 'accounts' ? 'Accounts'
+    : v.startsWith('account:') ? (S.cfg.accounts[+v.split(':')[1]]?.name || 'Nieuw account')
+    : (S.cfg.sections.find(s => s.id === v) || {}).title || 'Instellingen';
+  $('#set-body').innerHTML = v === 'root' ? rootSettings() : v === 'accounts' ? accountsView()
+    : v.startsWith('account:') ? accountView(+v.split(':')[1]) : sectionView(v);
+}
+
+function rootSettings(){
   const st = S.set;
   let push;
   if(!pushSupported()) push = `<div class="muted">${onIOS() && !standalone() ? 'Meldingen werken enkel vanuit de app op je beginscherm: tik in Safari op Delen, dan <b>Zet op beginscherm</b>, en open Butler daar (iOS 16.4 of nieuwer).' : 'Deze browser ondersteunt geen pushmeldingen.'}</div>`;
@@ -912,7 +945,7 @@ function renderSettings(){
   const devs = st.devices.length ? st.devices.map(d=>`<div class="line"><span>${esc(d.device)}<span class="sub">sinds ${esc(when(d.created_at))}</span></span><button class="btn" data-set="push-forget" data-id="${esc(d.id)}">Vergeet</button></div>`).join('') : '<div class="muted">Nog geen toestellen.</div>';
 
   const provs = S.ai_providers || [];
-  const ai = !provs.length ? '<div class="muted">Geen AI-sleutel ingesteld in config.yaml.</div>'
+  const ai = !provs.length ? '<div class="muted">Nog geen AI-sleutel. Vul er een in bij AI hieronder.</div>'
     : provs.map(p=>`<label class="line"><input type="radio" name="prov" value="${esc(p.id)}" ${p.id===S.ai_provider?'checked':''} ${provs.length<2?'disabled':''}><span><b>${esc(p.name)}</b>
         <span class="sub">Samenvatten met ${esc(p.triage_model)}, antwoorden met ${esc(p.draft_model)}</span></span></label>`).join('');
 
@@ -923,17 +956,148 @@ function renderSettings(){
       ${m.uncertain?`<div class="muted" style="padding-bottom:12px">${m.uncertain} aanroep(en) zonder volledige prijs: het werkelijke bedrag kan hoger liggen.</div>`:''}
     </details>`).join('');
 
-  $('#set-body').innerHTML = `
+  const c = S.cfg;
+  const nav = (view, title, sub) => `<button class="line nav" data-set="open" data-view="${view}"><span>${esc(title)}${sub?`<span class="sub">${esc(sub)}</span>`:''}</span>${I('chev')}</button>`;
+  const config = !c ? '<div class="muted">De instellingen konden niet geladen worden.</div>'
+    : nav('accounts', 'Accounts', c.accounts.length ? c.accounts.map(a => a.name || a.email).join(', ') : 'Nog geen mailaccount')
+      + c.sections.map(s => nav(s.id, s.title, sectionSummary(s))).join('');
+
+  return `
     <h3 class="group-h">Meldingen</h3><div class="group">${push}</div>
     <h3 class="group-h">Toestellen met meldingen</h3><div class="group">${devs}</div>
     <h3 class="group-h">AI-dienst</h3><div class="group">${ai}</div>
+    <h3 class="group-h">Configuratie</h3><div class="group">${config}</div>
+    ${c && !c.saved_in_app ? '<p class="fine">Je instellingen komen nu uit config.yaml. Zodra je hier iets bewaart, bewaart Butler alles in /data/config.yaml, en dat gaat dan voor.</p>' : ''}
     <h3 class="group-h">AI-kosten</h3><div class="group">${costs}</div>
     <p class="fine">Een schatting: verbruik maal lijstprijs, omgerekend naar euro. Wat je echt betaalt, staat in de console van Anthropic of OpenAI.</p>`;
 }
 
+function sectionSummary(s){
+  const v = S.cfg.values;
+  if(s.id === 'sync') return (v['app.sync_days'] ? `Laatste ${v['app.sync_days']} dagen` : 'Alle mail') + (v['app.sync_archive'] ? ', met archief' : ', zonder archief');
+  if(s.id === 'ai') return !v['ai.enabled'] ? 'Uit' : (v['ai.provider'] === 'openai' ? 'ChatGPT' : 'Claude');
+  if(s.id === 'notify') return (s.fields.find(f => f.key === 'notify.mode').options.find(o => o[0] === v['notify.mode']) || [, ''])[1];
+  if(s.id === 'general') return v['app.timezone'] || '';
+  return '';
+}
+
+/* een veld uit de spec van de server; path is de sleutel (app.sync_days) of accounts-veld */
+function fieldHtml(f, value, path, secretSet){
+  const err = S.cfgErrors[path] ? `<span class="err-msg">${esc(S.cfgErrors[path])}</span>` : '';
+  const help = f.help ? `<span class="sub">${esc(f.help)}</span>` : '';
+  const id = 'f-' + path.replace(/[^\w]/g, '_');
+  if(f.kind === 'bool') return `<label class="line"><span>${esc(f.label)}${help}${err}</span><input type="checkbox" switch data-path="${esc(path)}" ${value ? 'checked' : ''}></label>`;
+  let input;
+  if(f.kind === 'select') input = `<select class="field" id="${id}" data-path="${esc(path)}">${f.options.map(([k, n]) => `<option value="${esc(k)}" ${k === value ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  else if(f.kind === 'textarea') input = `<textarea class="field short" id="${id}" data-path="${esc(path)}">${esc(value)}</textarea>`;
+  else if(f.kind === 'days') input = `<div class="days" data-path="${esc(path)}" data-kind="days">${DAYS.map((d, i) => `<button type="button" class="chip" aria-pressed="${(value || []).includes(i + 1)}" data-day="${i + 1}">${d}</button>`).join('')}</div>`;
+  else if(f.kind === 'secret') input = `<input class="field" type="password" id="${id}" data-path="${esc(path)}" autocomplete="new-password" placeholder="${secretSet ? '•••••••• (leeg = behouden)' : 'Nog niet ingevuld'}">`;
+  else if(f.kind === 'number') input = `<input class="field" type="number" inputmode="numeric" id="${id}" data-path="${esc(path)}" value="${esc(value ?? '')}" ${f.min !== undefined ? `min="${f.min}"` : ''}>`;
+  else if(f.kind === 'list') input = `<input class="field" type="text" id="${id}" data-path="${esc(path)}" data-kind="list" value="${esc((value || []).join(', '))}" autocapitalize="off">`;
+  else input = `<input class="field" type="text" id="${id}" data-path="${esc(path)}" value="${esc(value ?? '')}" autocapitalize="off" autocorrect="off" spellcheck="false">`;
+  return `<div class="fld"><label class="lbl" for="${id}">${esc(f.label)}</label>${input}${help}${err}</div>`;
+}
+
+function collect(root){
+  const out = {};
+  root.querySelectorAll('[data-path]').forEach(el => {
+    const p = el.dataset.path;
+    if(el.dataset.kind === 'days') out[p] = [...el.querySelectorAll('[aria-pressed=true]')].map(b => +b.dataset.day);
+    else if(el.type === 'checkbox') out[p] = el.checked;
+    else if(el.type === 'number') out[p] = el.value === '' ? '' : +el.value;
+    else out[p] = el.value;
+  });
+  return out;
+}
+
+const backRow = (to='root', label='Instellingen') => `<button class="backbtn" data-set="open" data-view="${to}">${I('back')}<span>${esc(label)}</span></button>`;
+const saveNote = () => `<p class="fine">${S.cfg.restarts ? 'Bewaren herstart Butler; dat duurt enkele seconden.' : 'Herstart Butler na het bewaren om de wijzigingen toe te passen.'}</p>`;
+
+function sectionView(id){
+  const s = S.cfg.sections.find(x => x.id === id);
+  const v = S.cfg.values, set = S.cfg.secrets_set;
+  return backRow() + `<div class="group" id="cfg-form">${s.fields.map(f => fieldHtml(f, v[f.key], f.key, set[f.key])).join('')}</div>`
+    + `<div class="actions"><button class="btn primary" data-set="save-section" data-section="${esc(id)}">Bewaren</button></div>` + saveNote();
+}
+
+function accountsView(){
+  const list = S.cfg.accounts.map((a, i) => `<button class="line nav" data-set="open" data-view="account:${i}">
+      <span>${esc(a.name || a.email || 'Account')}<span class="sub">${esc(a.email || '')}</span></span>${I('chev')}</button>`).join('');
+  return backRow() + `<div class="group">${list || '<div class="muted">Nog geen mailaccount.</div>'}</div>
+    <div class="actions"><button class="btn" data-set="add-account">${I('plus')}Account toevoegen</button></div>`;
+}
+
+function newAccount(){
+  const a = Object.fromEntries(S.cfg.account_fields.map(f => [f.key, f.default]));
+  a.id = ''; a.password_set = false; a.isNew = true;
+  S.cfg.accounts.push(a);
+  return 'account:' + (S.cfg.accounts.length - 1);
+}
+
+function accountView(i){
+  const a = S.cfg.accounts[i];
+  const fields = S.cfg.account_fields.filter(f => !f.providers || f.providers.includes(a.provider));
+  return backRow('accounts', 'Accounts') + `<div class="group" id="cfg-form" data-account="${i}">
+      ${fields.map(f => fieldHtml(f, a[f.key], `accounts.${i}.${f.key}`, a.password_set)).join('')}</div>
+    <div class="actions">
+      <button class="btn primary" data-set="save-account" data-i="${i}">Bewaren</button>
+      <button class="btn" data-set="test-account" data-i="${i}">Test verbinding</button>
+      ${a.isNew ? '' : `<button class="btn danger" data-set="remove-account" data-i="${i}">${I('trash')}Verwijderen</button>`}
+    </div>` + saveNote();
+}
+
+function readAccount(i){
+  const a = S.cfg.accounts[i], vals = collect($('#cfg-form'));
+  for(const [p, v] of Object.entries(vals)) a[p.split('.').slice(2).join('.')] = v;
+  return a;
+}
+const accountsPayload = () => S.cfg.accounts.map(({isNew, password_set, ...a}) => a);
+
+async function saveConfig(body, btn){
+  btn.disabled = true; S.cfgErrors = {};
+  try{
+    const r = await api('/api/config', {method:'PUT', body:JSON.stringify(body)});
+    const token = body.values?.['app.token'];
+    if(token){ try{ localStorage.setItem('butler_token', token.trim()); }catch(e){} }
+    if(!r.restarting){ toast('Bewaard. Herstart Butler om de wijzigingen toe te passen.'); return openSettings(S.view); }
+    $('#set-body').innerHTML = empty('Butler herstart', 'Met je nieuwe instellingen. Dit duurt enkele seconden.', TIE());
+    await waitForRestart();
+    location.reload();
+  }catch(e){
+    S.cfgErrors = e.errors || {};
+    if(body.values) Object.assign(S.cfg.values, body.values);  // wat je typte blijft staan om te verbeteren
+    toast(e.message);
+    renderSettings();
+  }finally{ if(btn.isConnected) btn.disabled = false; }
+}
+
+async function waitForRestart(){
+  await new Promise(r => setTimeout(r, 2500));
+  for(let i = 0; i < 60; i++){
+    try{ const r = await fetch('/health', {cache:'no-store'}); if(r.ok) return; }catch(e){}
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+
 async function settingAction(a, el){
+  if(a === 'open'){ S.view = el.dataset.view; S.cfgErrors = {}; S.cfg.accounts = S.cfg.accounts.filter(x => !x.isNew || S.view.startsWith('account:')); renderSettings(); settings.scrollTop = 0; return; }
+  if(a === 'add-account'){ S.view = newAccount(); renderSettings(); return; }
+  if(a === 'save-section') return saveConfig({values: collect($('#cfg-form'))}, el);
+  if(a === 'save-account'){ readAccount(+el.dataset.i); return saveConfig({accounts: accountsPayload()}, el); }
+  if(a === 'remove-account'){
+    const acc = S.cfg.accounts[+el.dataset.i];
+    if(!await ask({title:`${acc.name || acc.email} verwijderen?`, msg:'Butler synchroniseert dit account niet meer. Je mail op de server blijft gewoon staan.', ok:'Verwijderen', danger:true})) return;
+    S.cfg.accounts.splice(+el.dataset.i, 1); S.view = 'accounts';
+    return saveConfig({accounts: accountsPayload()}, el);
+  }
   el.disabled = true;
   try{
+    if(a === 'test-account'){
+      const {isNew, password_set, ...acc} = readAccount(+el.dataset.i);
+      const r = await post('/api/config/test-account', {account: acc});
+      toast(`Verbonden: ${r.folders} mappen gevonden`);
+      return;
+    }
     if(a==='push-on'){
       const perm = await Notification.requestPermission(); // iOS vraagt enkel na een tik
       if(perm !== 'granted') throw new Error(onIOS() ? 'Meldingen zijn niet toegestaan. Zet ze aan bij Instellingen op je iPhone, Meldingen, Butler.' : 'Meldingen zijn niet toegestaan in deze browser.');
@@ -951,12 +1115,20 @@ async function settingAction(a, el){
     if(a==='push-test'){ await post('/api/push/test'); toast('Testmelding verstuurd'); }
     if(a==='push-forget'){ const r = await api('/api/push/devices/'+el.dataset.id, {method:'DELETE'}); S.set.devices = r.devices; toast('Toestel vergeten'); }
   }catch(e){ toast(e.message); }
-  renderSettings();
+  finally{ if(el.isConnected) el.disabled = false; }
+  if(a !== 'test-account') renderSettings();
 }
-$('#gear').onclick = openSettings;
+$('#gear').onclick = () => openSettings();
+document.addEventListener('click', e => { if(e.target.closest('#add-first')) openSettings('account:new'); });
 $('#s-close').onclick = closeSettings;
-$('#set-body').addEventListener('click', e=>{ const el=e.target.closest('[data-set]'); if(el) settingAction(el.dataset.set, el); });
+$('#set-body').addEventListener('click', e=>{
+  const day = e.target.closest('[data-day]');
+  if(day){ day.setAttribute('aria-pressed', day.getAttribute('aria-pressed') !== 'true'); return; }
+  const el=e.target.closest('[data-set]'); if(el) settingAction(el.dataset.set, el);
+});
 $('#set-body').addEventListener('change', async e=>{
+  // een ander soort account toont andere velden
+  if(e.target.dataset.path?.endsWith('.provider') && S.view.startsWith('account:')){ readAccount(+S.view.split(':')[1]); renderSettings(); return; }
   if(e.target.name!=='prov') return;
   try{ await post('/api/settings/ai', {provider:e.target.value}); await loadAccounts(); toast('AI-dienst: '+(S.ai_providers.find(p=>p.id===S.ai_provider)||{}).name); }
   catch(err){ toast('Mislukt: '+err.message); }

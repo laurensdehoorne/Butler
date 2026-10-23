@@ -10,7 +10,8 @@ log = logging.getLogger("butler.notify")
 class Notifier:
     def __init__(self, cfg, app_cfg, push=None):
         self.push = push if cfg.get("webpush", True) else None
-        self.mode = cfg.get("mode", "important")
+        mode = cfg.get("mode", "important")
+        self.mode = "off" if mode is False else str(mode)  # YAML leest een kaal off als false
         self.ntfy_server = (cfg.get("ntfy_server") or "https://ntfy.sh").rstrip("/")
         self.ntfy_topic = cfg.get("ntfy_topic") or ""
         self.ntfy_token = cfg.get("ntfy_token") or ""

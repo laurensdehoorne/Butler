@@ -62,14 +62,15 @@ andere ─┘ SMTP ◄──── SQLite-cache /data ────┘─ Webinte
 ```bash
 git clone https://github.com/laurensdehoorne/butler.git
 cd butler
-cp config.example.yaml config.yaml && chmod 600 config.yaml
 mkdir -p data && sudo chown 1000:1000 data     # container draait als uid 1000
-nano config.yaml
+touch config.yaml                               # mag leeg blijven: alles kan in de app
 docker compose up -d --build
 docker compose logs -f
 ```
 
-Open daarna `http://<host>:8088` en geef het token uit `app.token` in. Op iPhone: Delen → *Zet op beginscherm* voor een app-icoon.
+Open daarna `http://<host>:8088` en voeg in de app je eerste account toe; zet bij *Instellingen → Algemeen* meteen een toegangstoken als Butler niet enkel via Tailscale bereikbaar is. Op iPhone: Delen → *Zet op beginscherm* voor een app-icoon.
+
+Liever alles in een bestand? Kopieer `config.example.yaml` naar `config.yaml`, vul aan en `chmod 600 config.yaml`.
 
 ### Enkel via Tailscale (aanbevolen)
 
@@ -162,7 +163,12 @@ De payload bevat ook `account`, `from`, `subject`, `priority` en `summary`, hand
 
 ## Configuratie
 
-Zie [`config.example.yaml`](config.example.yaml). Belangrijkste opties:
+Alles kan in de app, via **Instellingen → Configuratie**: accounts (met *Test verbinding*), synchroniseren, opvolgen en opruimen, AI, meldingen en algemeen. Wachtwoorden en API-sleutels gaan nooit naar de browser; een leeg veld behoudt de bewaarde waarde.
+
+- Wat je in de app bewaart, staat in `/data/config.yaml` (chmod 600) en gaat voor op het meegegeven `config.yaml`. Dat laatste wordt enkel nog gelezen zolang er niets in de app bewaard is.
+- Na bewaren herstart Butler zichzelf; Docker (`restart: unless-stopped`) zet hem meteen terug op. Buiten Docker zet je `BUTLER_RESTART=0` en herstart je zelf.
+
+De sleutels zijn dezelfde als in [`config.example.yaml`](config.example.yaml). Belangrijkste opties:
 
 | Sleutel | Betekenis |
 |---|---|
@@ -184,7 +190,7 @@ pip install -r requirements.txt
 BUTLER_CONFIG=./config.yaml BUTLER_DB=./data/butler.db uvicorn app.main:app --reload --port 8088
 ```
 
-`BUTLER_NO_SYNC=1` start de webinterface zonder IMAP-verbindingen.
+`BUTLER_NO_SYNC=1` start de webinterface zonder IMAP-verbindingen; `BUTLER_RESTART=0` laat Butler na het bewaren van instellingen niet zichzelf stoppen (handig met `--reload`).
 
 ### Tests
 
