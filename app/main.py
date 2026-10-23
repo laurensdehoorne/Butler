@@ -378,6 +378,34 @@ def followup(account: str = ""):
             "followup_days": FOLLOWUP_DAYS, **moment_cards(account)}
 
 
+@app.get("/api/agenda", dependencies=[Depends(auth)])
+def agenda(account: str = ""):
+    """Alles wat aan een datum hangt, in volgorde: momenten uit gemarkeerde mail en deadlines die de AI vond.
+    Een thread met momenten krijgt geen aparte deadline-regel (dat zou hetzelfde twee keer zijn)."""
+    now = _now().isoformat()
+    today = datetime.now(notifier.tz).date().isoformat()
+    cards, items = {}, []
+
+    def card_for(tid):
+        if tid not in cards:
+            t, msgs = thread_messages(db, tid)
+            cards[tid] = _card(t, msgs) if msgs and (not account or t["account"] == account) else None
+        return cards[tid]
+
+    with_moments = set()
+    for r in moments.unique([dict(r) for r in db.q("SELECT * FROM moments WHERE until > ? ORDER BY at, id", (now,))]):
+        c = card_for(r["tid"])
+        if c:
+            with_moments.add(r["tid"])
+            items.append({**c, "moment": _moment(r), "sort": r["at"], "allday": False})
+    for r in db.q("SELECT tid, deadline FROM threads WHERE done=0 AND deadline >= ? ORDER BY deadline", (today,)):
+        c = None if r["tid"] in with_moments else card_for(r["tid"])
+        if c:
+            items.append({**c, "moment": None, "sort": r["deadline"], "allday": True})
+    items.sort(key=lambda x: x["sort"])
+    return {"items": items[:300]}
+
+
 def _moment(r):
     return {"id": r["id"], "kind": r["kind"], "title": r["title"], "detail": r["detail"], "at": r["at"], "until": r["until"]}
 

@@ -133,3 +133,20 @@ def test_same_appointment_from_two_threads_counts_once(app, acc):
         assert MO.due(app.db, app.notifier, now) == 2
         assert MO.due(app.db, app.notifier, now) == 0
     assert app.db.one("SELECT COUNT(*) n FROM moments WHERE notified=0")["n"] == 0
+
+
+def test_agenda_lists_moments_and_deadlines_in_order(app, client, acc):
+    now = datetime.now(timezone.utc)
+    flight, _ = put(acc, "INBOX", 1, raw("TAP <noreply@flytap.com>", "Boeking", "<f@x>"), flagged=True)
+    offer, _ = put(acc, "INBOX", 2, raw("Sofie <s@arch.be>", "Offerte", "<o@x>"))
+    old, _ = put(acc, "INBOX", 3, raw("Oud <o@x.be>", "Voorbij", "<v@x>"))
+    done, _ = put(acc, "INBOX", 4, raw("Klaar <k@x.be>", "Afgehandeld", "<k@x>"))
+    MO.save(app.db, flight, [{"kind": "vlucht", "title": "Vertrek TP643", "detail": "", "at": (now + timedelta(days=5)).isoformat(),
+                              "until": (now + timedelta(days=5, hours=3)).isoformat()}])
+    soon = (now + timedelta(days=2)).date().isoformat()
+    app.db.x("UPDATE threads SET deadline=? WHERE tid IN (?, ?)", (soon, offer, flight))  # vlucht heeft al een moment
+    app.db.x("UPDATE threads SET deadline='2020-01-01' WHERE tid=?", (old,))
+    app.db.x("UPDATE threads SET deadline=?, done=1 WHERE tid=?", (soon, done))
+    items = client.get("/api/agenda", headers=H).json()["items"]
+    assert [(i["tid"], i["allday"]) for i in items] == [(offer, True), (flight, False)]
+    assert items[1]["moment"]["title"] == "Vertrek TP643"

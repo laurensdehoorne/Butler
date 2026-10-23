@@ -194,6 +194,10 @@ a.item{touch-action:pan-y}
 .rel:first-of-type{border-top:0}
 .rel span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rel time{color:var(--muted);font-size:0.8125rem;white-space:nowrap}
+.item.agenda .ag-time{flex:none;width:52px;padding-top:2px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--gold)}
+.item.agenda .ag-time.allday{font-weight:500;font-size:0.8125rem;color:var(--muted)}
+.item.agenda .who{white-space:normal}
+.item.agenda + .item.agenda::before{left:64px}
 .m-when{display:block;font-size:0.8125rem;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums}
 .info .tie{width:18px;height:9px}
 @container list (min-width:620px){
@@ -417,6 +421,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
 </svg>
 
@@ -432,6 +437,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     </div>
     <div class="tabs" role="tablist" aria-label="Weergave">
       <button class="tab" role="tab" aria-selected="true" data-tab="followup"><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg>Opvolgen <span class="count" id="count-followup"></span></button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="agenda"><svg class="i" aria-hidden="true"><use href="#i-cal"/></svg>Agenda</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="inbox"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg>Inbox</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="cleanup"><svg class="i" aria-hidden="true"><use href="#i-broom"/></svg>Opruimen</button>
     </div>
@@ -496,7 +502,7 @@ const I = n => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const TIE = label => `<svg class="tie" ${label?`role="img" aria-label="${label}"`:'aria-hidden="true"'}><use href="#tie"/></svg>`;
 const FILTERS = [['alle','Alles'],['ongelezen','Ongelezen'],['belangrijk','Belangrijk'],['persoonlijk','Persoonlijk'],['reclame','Reclame'],['notificaties','Notificaties']];
 const CFILTERS = [['reclame','Reclame'],['notificatie','Notificaties'],['alle','Alles']];
-const TAB_NAMES = {followup:'Opvolgen', inbox:'Inbox', cleanup:'Opruimen'};
+const TAB_NAMES = {followup:'Opvolgen', agenda:'Agenda', inbox:'Inbox', cleanup:'Opruimen'};
 const RULES = [['none','Geen regel'],['archive_after','Archiveren na … dagen'],['archive','Altijd meteen archiveren'],['trash','Altijd meteen verwijderen'],['keep','Nooit automatisch opruimen']];
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -641,6 +647,34 @@ function momentWhen(m, active){
     : d.toDateString()===tomorrow.toDateString() ? 'morgen ' : d.toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short'})+' ';
   return (active ? 'tot ' : '') + day + t;
 }
+/* agenda: alles wat aan een datum hangt, per dag */
+function dayLabel(key){
+  const d = new Date(key + 'T12:00:00'), today = new Date(), tomorrow = new Date(Date.now() + 864e5);
+  if(d.toDateString() === today.toDateString()) return 'Vandaag';
+  if(d.toDateString() === tomorrow.toDateString()) return 'Morgen';
+  return d.toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long', year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined});
+}
+const localDay = iso => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+function agendaView(items){
+  if(!items.length) return empty('Niets gepland', 'Markeer een mail met een vlucht, concert of afspraak; Butler zet het hier op de juiste dag.', I('cal'));
+  const days = {};
+  for(const c of items){
+    const key = c.allday ? c.sort.slice(0, 10) : localDay(c.moment.at);
+    (days[key] ||= []).push(c);
+  }
+  return Object.entries(days).map(([key, list]) => `<section><div class="sec-h"><h2>${esc(dayLabel(key))}</h2></div><div class="items">${list.map(c => {
+    const m = c.moment, time = m ? new Date(m.at).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : 'hele dag';
+    return `<a class="item agenda" href="#t=${c.tid}" data-tid="${c.tid}">
+      <time class="ag-time ${m ? '' : 'allday'}">${esc(time)}</time>
+      <div class="c-main">
+        <div class="c-top"><span class="who"><b>${esc(m ? m.title : (c.subject || '(geen onderwerp)'))}</b></span></div>
+        ${m?.detail ? `<div class="subj m-detail">${esc(m.detail)}</div>` : ''}
+        <div class="sum">${m ? TIE() + esc(c.who) + ': ' + esc(c.subject || '') : esc(m ? '' : 'Deadline, ' + c.who)}</div>
+        ${c.dossier ? `<div class="meta"><span class="badge dossier" data-dossier="${c.dossier.id}">${I('folder')}${esc(c.dossier.name)}</span></div>` : ''}
+      </div></a>`;
+  }).join('')}</div></section>`).join('');
+}
+
 function momentCard(c, active){
   const m = c.moment;
   return `<a class="item moment" href="#t=${c.tid}" data-tid="${c.tid}">
@@ -688,6 +722,9 @@ async function load(animate=false){
         + (due.length ? `<section class="now"><div class="items">${due.map(c => momentCard(c, true)).join('')}</div></section>` : '')
         + (later.length ? `<div class="items">${later.map(c => momentCard(c, false)).join('')}</div>` : '')
         + `<div class="items">${vis(d.threads).map(c => card(c, 'dossier')).join('')}</div>`;
+    } else if(S.tab==='agenda'){
+      const d = await api(`/api/agenda?account=${acc}`);
+      html = agendaView(vis(d.items));
     } else if(S.tab==='inbox'){
       const d = await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
       d.threads = vis(d.threads);
@@ -1318,7 +1355,7 @@ $('#refresh').onclick = refreshNow;
   document.addEventListener('touchstart', e => {
     if(e.touches.length !== 1 || document.querySelector('dialog[open]') || !e.target.closest('main')) return;
     const t = e.touches[0];
-    g = {x: t.clientX, y: t.clientY, row: e.target.closest('a.item[data-tid]:not(.moment)'), mode: null, dx: 0, dy: 0};
+    g = {x: t.clientX, y: t.clientY, row: e.target.closest('a.item[data-tid]:not(.moment):not(.agenda)'), mode: null, dx: 0, dy: 0};
   }, {passive: true});
   document.addEventListener('touchmove', e => {
     if(!g) return;
