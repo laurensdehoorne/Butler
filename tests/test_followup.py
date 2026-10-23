@@ -182,6 +182,6 @@ def test_trash_archived_advertising(app, client, acc):
 
 def test_context_saying_notification_sorts_the_sender(app, client, acc):
     tid, _ = put(acc, "INBOX", 1, raw("AliExpress <transaction@notice.aliexpress.com>", "Pakket onderweg", "<a1@x>"))
-    client.post(f"/api/threads/{tid}/context", headers=H, json={"text": "Label als notificatie", "sender": True})
+    client.post(f"/api/threads/{tid}/context", headers=H, json={"text": "Label als notificatie"})
     assert app.db.one("SELECT kind FROM messages")["kind"] == "notificatie"
     assert client.get(f"/api/threads/{tid}", headers=H).json()["kind"] == "notificatie"

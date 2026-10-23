@@ -737,15 +737,14 @@ def set_context(tid: int, body: ContextIn):
     if body.sender:
         if not incoming:
             raise HTTPException(400, "Deze mail heeft geen afzender behalve jezelf.")
-        addr = incoming[-1]["from_addr"]
-        upsert_rule(db, t["account"], addr, context=text)
-        # "dit is reclame" of "label als notificatie": dan ook zo sorteren, niet enkel in de samenvatting
-        kind = KIND_HINTS.search(text or "")
-        if kind:
-            kind = "reclame" if kind.group(0).lower().startswith(("reclame", "nieuwsbrief", "promo")) else "notificatie"
-            sender_set_rule(RuleIn(account=t["account"], addr=addr, kind=kind))
+        upsert_rule(db, t["account"], incoming[-1]["from_addr"], context=text)
     else:
         db.x("UPDATE threads SET context=? WHERE tid=?", (text, tid))
+    # "dit is reclame" of "label als notificatie": dan ook zo sorteren (de afzender), niet enkel in de samenvatting
+    kind = KIND_HINTS.search(text or "")
+    if kind and incoming:
+        kind = "reclame" if kind.group(0).lower().startswith(("reclame", "nieuwsbrief", "promo")) else "notificatie"
+        sender_set_rule(RuleIn(account=t["account"], addr=incoming[-1]["from_addr"], kind=kind))
     if ai.active_for(t["account"]):
         _run(lambda: ai.triage(tid))
         if any(m.get("flagged") for m in msgs):
