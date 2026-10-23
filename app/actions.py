@@ -241,7 +241,7 @@ def save_draft(db, acc, tid, body, reply_all=False):
         raise RuntimeError(f"geen Concepten-map gevonden voor {acc.name}")
     raw = em.as_bytes()
     acc.run_imap(lambda c: c.append(folder, raw, flags=(DRAFT, SEEN)))
-    return {"to": to, "cc": cc, "subject": subject, "folder": folder}
+    return {"to": to, "cc": cc, "subject": subject, "folder": folder, "message_id": em["Message-ID"]}
 
 
 def append_sent(acc, em):

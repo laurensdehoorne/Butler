@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import actions, config, costs, dossiers, forward, moments, shared, tone
+from . import actions, autopilot, config, costs, dossiers, forward, moments, shared, tone
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
@@ -49,6 +49,8 @@ meter = costs.Meter(db)
 images = MailImages(avatars.key, bool(APP.get("remote_images", True)))
 ai = AIWorker(db, AI_CFG, accounts, notifier, meter)
 syncer = Syncer(db, APP, AI_CFG, accounts, ai, notifier)
+autopilot.mark_enabled(db, APP)  # vanaf nu: enkel nieuwe mail
+ai.after_triage.append(lambda tid: autopilot.after_triage(db, APP, ai, accounts, actions, tid, quiet_recipients() | _quiet_senders()))
 FOLLOWUP_DAYS = int(APP.get("followup_days", 3))
 FOLLOWUP_WINDOW = 60  # "wacht op antwoord" kijkt niet verder terug, ook al staat alle mail in de cache
 # antwoorden op agenda-uitnodigingen: daar komt geen antwoord meer op
@@ -127,6 +129,11 @@ def quiet_recipients():
                        if len(threads) >= QUIET_MIN and not any((acc, key, a) in heard for acc, key in threads)}
     _quiet["at"] = time.time()
     return _quiet["addrs"]
+
+
+def _quiet_senders():
+    """Afzenders die jou nooit een antwoord vragen (no-reply): daar zet Butler geen concept voor klaar."""
+    return {r["addr"] for r in db.q("SELECT addr FROM sender_rules WHERE kind IN ('reclame', 'notificatie')")}
 
 
 def _snoozed(t):
@@ -309,6 +316,21 @@ def attachment(sig: str, mid: int, idx: int, e: int = 0):
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, max-age=3600",
     })
+
+
+# --- wat Butler zelf deed --------------------------------------------------------
+@app.get("/api/activity", dependencies=[Depends(auth)])
+def activity():
+    return {"entries": autopilot.entries(db), "enabled": {k: autopilot.enabled(APP, k) for k in autopilot.KINDS}}
+
+
+@app.post("/api/activity/{eid}/undo", dependencies=[Depends(auth)])
+def activity_undo(eid: int):
+    try:
+        _run(lambda: autopilot.undo(db, accounts, eid))
+    except HTTPException as e:
+        raise HTTPException(400, e.detail)
+    return {"ok": True}
 
 
 # --- gedeeld tussen gebruikers (via de gateway) -----------------------------------
@@ -681,6 +703,7 @@ def get_thread(tid: int):
     card["moments"] = [_moment(r) for r in db.q("SELECT * FROM moments WHERE tid=? AND until > ? ORDER BY at",
                                                   (tid, _now().isoformat()))]
     card["invoice"] = forward.suggestion(db, APP, t, msgs)  # factuur: met één tik naar je boekhouding
+    card["auto"] = [dict(r) for r in db.q("SELECT id, at, kind, detail, can_undo, undone_at FROM auto_log WHERE tid=? ORDER BY at", (tid,))]
     return card
 
 

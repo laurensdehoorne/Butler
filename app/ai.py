@@ -131,6 +131,7 @@ class AIWorker:
         self._no_reasoning = set()  # OpenAI-modellen die de reasoning-instelling weigeren
         self.q = queue.Queue()
         self.pending = set()
+        self.after_triage = []  # haken na een samenvatting (autopilot.py): fn(tid)
         self.lock = threading.Lock()
 
     # --- dienst kiezen --------------------------------------------------
@@ -273,6 +274,11 @@ class AIWorker:
                 res = self.triage(tid)
                 if notify:
                     self._maybe_notify(tid, res)
+                for hook in self.after_triage:
+                    try:
+                        hook(tid)
+                    except Exception:
+                        log.exception("automatische taak mislukt voor thread %s", tid)
             except Exception:
                 log.exception("%s mislukt voor thread %s", kind, tid)
 

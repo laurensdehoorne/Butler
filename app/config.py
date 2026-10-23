@@ -76,6 +76,13 @@ SECTIONS = [
         F("notify.ntfy_token", "ntfy-token", "secret", "Enkel voor een eigen ntfy-server met aanmelding.", ""),
         F("notify.ha_webhook", "Home Assistant-webhook", "secret", "Bv. http://homeassistant.local:8123/api/webhook/butler. Leeg = uit.", ""),
     ]},
+    {"id": "auto", "title": "Automatisch", "fields": [
+        F("app.auto.invoices", "Facturen doorsturen naar je boekhouding", "bool",
+          "Een nieuwe mail met een factuur (pdf) gaat meteen naar het adres bij Algemeen, bv. Billit.", False),
+        F("app.auto.ads", "Reclame opruimen", "bool", "Reclame die een dag in je inbox staat, gaat naar het archief.", False),
+        F("app.auto.drafts", "Antwoordconcepten klaarzetten", "bool",
+          "Verwacht een nieuwe mail een antwoord, dan schrijft Butler een concept in je Concepten-map. Versturen doe jij.", False),
+    ]},
     {"id": "general", "title": "Algemeen", "fields": [
         F("app.base_url", "Adres van Butler", "text", "Voor de link in meldingen, bv. https://butler.jouw-tailnet.ts.net", ""),
         F("app.timezone", "Tijdzone", "text", "Bv. Europe/Brussels.", "Europe/Brussels"),

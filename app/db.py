@@ -55,6 +55,21 @@ CREATE TABLE IF NOT EXISTS threads(
   UNIQUE(account, thread_key)
 );
 
+-- wat Butler zelf deed (zie autopilot.py): facturen doorgestuurd, reclame opgeruimd, concepten klaargezet
+CREATE TABLE IF NOT EXISTS auto_log(
+  id INTEGER PRIMARY KEY,
+  at TEXT,
+  kind TEXT,          -- factuur | opruimen | concept
+  account TEXT,
+  tid INTEGER,
+  title TEXT,
+  detail TEXT,
+  data TEXT,
+  can_undo INTEGER DEFAULT 0,
+  undone_at TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_auto_at ON auto_log(at);
+
 -- gedeeld door een andere gebruiker (zie shared.py): een kopie, los van je eigen mail
 CREATE TABLE IF NOT EXISTS shared(
   id INTEGER PRIMARY KEY,

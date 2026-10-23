@@ -339,6 +339,11 @@ dialog.sheet.center .shead{padding-top:14px}
 #fwd .flabel{font-size:.875rem;color:var(--muted);margin-top:6px}
 #fwd .actions{margin-top:14px}
 #fwd .actions .btn{flex:1;justify-content:center;min-height:44px}
+.act-row{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:12px 0 4px;padding:10px 14px;border:0;border-radius:14px;background:var(--tint);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.act-row span{flex:1}
+.act-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.act-btns .btn{width:auto;min-height:36px}
+.item.act.undone{opacity:.6}
 .invoice{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border-radius:14px;background:var(--tint)}
 .invoice span{flex:1;min-width:12em}
 .invoice .btn{width:auto}
@@ -770,6 +775,30 @@ function momentWhen(m, active){
   return (active ? 'tot ' : '') + day + t;
 }
 /* agenda: alles wat aan een datum hangt, per dag */
+/* ---------- wat Butler zelf deed (Instellingen → Automatisch) ---------- */
+const ACT = {factuur: ['fwd', 'factuur doorgestuurd', 'facturen doorgestuurd'], opruimen: ['archive', 'keer opgeruimd', 'keer opgeruimd'],
+             concept: ['draft', 'concept klaargezet', 'concepten klaargezet']};
+function activitySummary(list){
+  const n = {}; for(const x of list) n[x.kind] = (n[x.kind] || 0) + 1;
+  const parts = Object.entries(n).map(([k, c]) => `${c} ${c > 1 ? ACT[k][2] : ACT[k][1]}`);
+  return parts.length > 1 ? parts.slice(0, -1).join(', ') + ' en ' + parts[parts.length - 1] : parts[0];
+}
+function activityView(d){
+  const on = Object.entries(d.enabled).filter(([, v]) => v).map(([k]) => ({invoices: 'facturen naar je boekhouding', ads: 'reclame opruimen', drafts: 'antwoordconcepten'})[k]);
+  const head = `<button class="backbtn" data-activity-back>${I('back')}<span>${TAB_NAMES[S.tab]}</span></button>
+    <div class="sec-h"><h2>Wat Butler deed</h2></div>
+    <div class="note">${on.length ? `Aan: ${esc(on.join(', '))}. Enkel nieuwe mail; versturen doet Butler enkel met facturen.` : 'Butler doet nu niets zelf.'}
+      <button class="linkbtn" data-activity-settings>Instellingen</button></div>`;
+  if(!d.entries.length) return head + empty('Nog niets gedaan', 'Wat Butler zelf doet, verschijnt hier: met de mail erbij en, waar het kan, een knop om het terug te draaien.', TIE());
+  const rows = d.entries.map(x => `<div class="item act ${x.undone_at ? 'undone' : ''}">
+      <span class="av me" aria-hidden="true">${I(ACT[x.kind]?.[0] || 'check')}</span>
+      <div class="c-main"><div class="c-top"><span class="who"><b>${esc(x.title)}</b></span><time>${esc(when(x.at))}</time></div>
+        <div class="sum">${esc(x.detail)}${x.undone_at ? ' (teruggedraaid)' : ''}</div>
+        <div class="act-btns">${x.tid ? `<button class="btn ghost" data-tid="${x.tid}">Open de mail</button>` : ''}
+          ${x.can_undo && !x.undone_at ? `<button class="btn" data-undo="${x.id}">${I('undo')}Terugdraaien</button>` : ''}</div></div></div>`).join('');
+  return head + `<div class="items">${rows}</div>`;
+}
+
 /* ---------- gedeeld door een andere gebruiker: een kopie, met de bijlagen ---------- */
 const sharedCard = x => `<a class="item" href="#" data-shared="${x.id}">
     ${avatar(x.from_name)}
@@ -912,12 +941,14 @@ function swapList(html, animate){
 
 async function load(animate=false){
   renderChips();
-  const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q+'|'+(S.dossier||'')+(S.quick?'|q':'')+(S.shared?'|s'+S.shared:''), seq = ++S.seq;
+  const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q+'|'+(S.dossier||'')+(S.quick?'|q':'')+(S.shared?'|s'+S.shared:'')+(S.activity?'|a':''), seq = ++S.seq;
   if(!S.loaded[key]) $('#list').innerHTML = placeholder();
   const acc = encodeURIComponent(S.account);
   let html;
   try{
-    if(S.shared){  // gedeeld door een andere gebruiker: een kopie om te lezen
+    if(S.activity){  // wat Butler zelf deed
+      html = activityView(await api('/api/activity'));
+    } else if(S.shared){  // gedeeld door een andere gebruiker: een kopie om te lezen
       html = await sharedView(S.shared);
     } else if(S.quick){  // snel antwoorden: per mail een paar woorden, Butler schrijft het uit als concept
       const d = await api(`/api/followup?account=${acc}`);
@@ -967,10 +998,14 @@ async function load(animate=false){
         + (d.senders.length ? `<div class="items">${d.senders.map((x,i)=>senderCard(x,i)).join('')}</div>`
           : empty('Niets op te ruimen', 'Geen afzenders in deze categorie.', I('check')));
     } else {
-      const [d, sh] = await Promise.all([api(`/api/followup?account=${acc}`), api('/api/shared').catch(() => ({shared: []}))]);
+      const [d, sh, act] = await Promise.all([api(`/api/followup?account=${acc}`), api('/api/shared').catch(() => ({shared: []})),
+        api('/api/activity').catch(() => ({entries: []}))]);
+      const recent = act.entries.filter(x => !x.undone_at && Date.now() - new Date(x.at) < 864e5);
       const fresh = sh.shared.filter(x => !x.done);
-      const sharedSec = S.sharedSec = !fresh.length ? '' : `<section><div class="sec-h"><h2>Gedeeld met jou</h2><span class="num">${fresh.length}</span></div>
-        <div class="items">${fresh.map(sharedCard).join('')}</div></section>`;
+      const actRow = !act.entries.length ? '' : `<button class="act-row" data-activity>${TIE()}<span>${recent.length
+        ? `Butler deed vandaag ${activitySummary(recent)}` : 'Wat Butler deed'}</span>${I('chev')}</button>`;
+      const sharedSec = S.sharedSec = actRow + (!fresh.length ? '' : `<section><div class="sec-h"><h2>Gedeeld met jou</h2><span class="num">${fresh.length}</span></div>
+        <div class="items">${fresh.map(sharedCard).join('')}</div></section>`);
       for(const k of ['waiting_on_me', 'waiting_on_them', 'reminders', 'moments_now', 'moments_soon']) d[k] = vis(d[k]);
       // een vlak verschijnt pas als er iets in staat
       const sec = (title, arr, mode, hint='') => !arr.length ? '' : `<section><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</div>`
@@ -1216,7 +1251,9 @@ function renderThread(){
     ? `<div class="info">${I('check')}Factuur doorgestuurd naar ${esc(inv.to)}</div>`
     : `<div class="invoice">${I('file')}<span>Factuur? Stuur ze door naar <b>${esc(inv.to)}</b>.</span>
         <button class="btn primary" data-a="invoice">${I('fwd')}Doorsturen</button></div>`;
-  $('#s-body').innerHTML = note + invoice + context + upcoming + snooze + tags + msgs + related + compose;
+  const AUTO = {factuur: ['fwd', 'Butler stuurde deze factuur door'], concept: ['draft', 'Butler zette een antwoordconcept klaar']};
+  const autoInfo = (t.auto || []).filter(x => AUTO[x.kind]).map(x => `<div class="info">${I(AUTO[x.kind][0])}<span>${AUTO[x.kind][1]}${x.undone_at ? ' (teruggedraaid)' : ''}<span class="sub">${esc(x.detail)}, ${esc(when(x.at))}</span></span></div>`).join('');
+  $('#s-body').innerHTML = note + autoInfo + invoice + context + upcoming + snooze + tags + msgs + related + compose;
   if(keep) $('#reply').value = keep;
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
   showHtmlMessages();
@@ -1409,7 +1446,7 @@ async function doAction(a, btn){
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e=>{
-  const el = e.target.closest('[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
+  const el = e.target.closest('[data-activity],[data-activity-back],[data-activity-settings],[data-undo],[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
   if(el.hasAttribute('data-quick-open')){ S.quick = true; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-quick-go')) return quickGo(el);
@@ -1420,6 +1457,16 @@ document.addEventListener('click', async e=>{
     return load(true);
   }
   if(el.dataset.dossier){ e.preventDefault(); if(S.thread) closeThread(); S.dossier = +el.dataset.dossier; scrollTo(0, 0); return load(true); }
+  if(el.hasAttribute('data-activity')){ S.activity = true; scrollTo(0, 0); return load(true); }
+  if(el.hasAttribute('data-activity-back')){ S.activity = false; return load(true); }
+  if(el.hasAttribute('data-activity-settings')) return openSettings('auto');
+  if(el.dataset.undo){
+    const what = el.closest('.act')?.querySelector('b')?.textContent || '';
+    if(!await ask({title: 'Terugdraaien?', msg: what, ok: 'Terugdraaien'})) return;
+    el.disabled = true;
+    try{ await post(`/api/activity/${el.dataset.undo}/undo`); toast('Teruggedraaid'); }catch(err){ toast(err.message); }
+    return load();
+  }
   if(el.dataset.shared){ e.preventDefault(); S.shared = +el.dataset.shared; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-shared-back')){ S.shared = null; return load(true); }
   if(el.dataset.sharedDone){
@@ -1431,7 +1478,7 @@ document.addEventListener('click', async e=>{
     await api(`/api/shared/${S.shared}`, {method: 'DELETE'}); toast('Verwijderd'); S.shared = null; return load(true);
   }
   if(el.hasAttribute('data-dossier-back')){ S.dossier = null; S.quick = false; return load(true); }
-  if(el.dataset.tab){ if(S.tab!==el.dataset.tab || S.dossier || S.quick || S.shared){ S.tab=el.dataset.tab; S.dossier = null; S.quick = false; S.shared = null; load(true); } }
+  if(el.dataset.tab){ if(S.tab!==el.dataset.tab || S.dossier || S.quick || S.shared || S.activity){ S.tab=el.dataset.tab; S.dossier = null; S.quick = false; S.shared = null; S.activity = false; load(true); } }
   else if(el.dataset.acc!==undefined){ S.account=el.dataset.acc; load(true); }
   else if(el.dataset.f){ S.filter=el.dataset.f; load(true); }
   else if(el.dataset.cf){ S.cfilter=el.dataset.cf; load(true); }

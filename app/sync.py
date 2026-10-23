@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from imapclient import FLAGGED, SEEN
 
+from . import autopilot
 from .db import sender_rule
 from .mailparse import parse
 
@@ -51,6 +52,8 @@ class Syncer:
         # standaard voor afzenders zonder eigen regel: na X dagen archiveren (0 = uit)
         self.cleanup = {"notificatie": int(cl.get("notificatie_days", 0) or 0),
                         "reclame": int(cl.get("reclame_days", 0) or 0)}
+        if autopilot.enabled(app_cfg, "ads"):  # Automatisch → reclame opruimen: na een dag naar het archief
+            self.cleanup["reclame"] = min(self.cleanup["reclame"] or autopilot.ADS_AFTER_DAYS, autopilot.ADS_AFTER_DAYS)
 
     def start(self):
         for acc in self.accounts.values():
@@ -114,10 +117,13 @@ class Syncer:
         now = datetime.now(timezone.utc)
         plan = {"archive": [], "trash": []}
         rows = self.db.q(
-            "SELECT id, uid, from_addr, kind, date FROM messages WHERE account=? AND folder='INBOX' AND uid>0 AND outgoing=0",
+            "SELECT id, uid, from_addr, kind, date, message_id FROM messages WHERE account=? AND folder='INBOX' AND uid>0 AND outgoing=0",
             (acc.id,),
         )
+        kept = autopilot.restored(self.db)  # wat je terugzette, laat Butler voortaan staan
         for m in rows:
+            if m["message_id"] and m["message_id"] in kept:
+                continue
             try:
                 age = (now - datetime.fromisoformat(m["date"])).total_seconds() / 86400
             except Exception:
@@ -152,7 +158,10 @@ class Syncer:
                 c.copy(uids, dest)
                 c.delete_messages(uids)
                 c.expunge(uids)
-            self.db.xm("UPDATE messages SET in_inbox=0, folder='_weg', uid=-id WHERE id=?", [(i,) for i, _ in items])
+            ids = [i for i, _ in items]
+            rows = self.db.q(f"SELECT subject, message_id FROM messages WHERE id IN ({','.join('?' * len(ids))})", ids)
+            self.db.xm("UPDATE messages SET in_inbox=0, folder='_weg', uid=-id WHERE id=?", [(i,) for i in ids])
+            autopilot.record_cleanup(self.db, acc, rows, role, dest)
             log.info("%s: %d berichten automatisch naar %s (opruimregels)", acc.id, len(items), dest)
 
     # --- map synchroniseren ---------------------------------------------

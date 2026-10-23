@@ -26,7 +26,7 @@ def test_secrets_never_reach_the_browser(client):
     acc = d["accounts"][0]
     assert (acc["id"], acc["email"], acc["password"], acc["password_set"]) == ("icloud", "me@icloud.com", "", True)
     assert "sk-ant-test" not in str(d) and "t0k" not in str(d)
-    assert {s["id"] for s in d["sections"]} == {"sync", "followup", "ai", "notify", "general"}
+    assert {s["id"] for s in d["sections"]} == {"sync", "followup", "ai", "notify", "auto", "general"}
 
 
 def test_save_section_keeps_secrets_and_does_not_restart_in_tests(app, client, saved):
