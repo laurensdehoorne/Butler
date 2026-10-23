@@ -82,7 +82,8 @@ def test_waiting_on_me_most_important_first(app, client, acc):
         MO.save(app.db, tid, [{"kind": "x", "title": "t", "detail": "", "at": (now + timedelta(days=days)).isoformat(),
                                "until": (now + timedelta(days=days, hours=2)).isoformat()}])
     order = [c["tid"] for c in client.get("/api/followup", headers=H).json()["waiting_on_me"]]
-    assert order == [flight, concert, flagged_only, urgent, plain]
+    # vlucht en concert hebben een moment dat nog komt: die wachten tot het zover is (Binnenkort, Nu nodig, agenda)
+    assert order == [flagged_only, urgent, plain]
 
 
 def test_flag_and_unflag_reach_the_server(app, client, acc):
@@ -117,3 +118,22 @@ def test_archive_all_advertising_in_one_move(app, client, acc):
     left = [m["subject"] for m in app.db.q("SELECT subject FROM messages WHERE folder='INBOX'")]
     assert left == ["Vraag"]
     assert client.post("/api/senders/archive-kind", headers=H, json={"kind": "persoonlijk"}).status_code == 400
+
+
+def test_mail_with_a_coming_moment_waits_until_it_matters(app, client, acc):
+    from datetime import datetime, timedelta, timezone
+
+    from app import moments as MO
+
+    booking, _ = put(acc, "INBOX", 1, raw("Air France <af@airfrance.fr>", "Booking Paris < > Manchester", "<b1@af>"), flagged=True)
+    todo, _ = put(acc, "INBOX", 2, raw("Ann <ann@y.be>", "Formulier invullen", "<t1@y>"), flagged=True)  # vlag zonder datum
+    appt, _ = put(acc, "INBOX", 3, raw("Dr. V <dr@v.be>", "Afspraak", "<a1@v>"))
+    reply, _ = put(acc, "INBOX", 4, raw("Piet <p@x.be>", "Past 10 nov?", "<r1@x>"))
+    now = datetime.now(timezone.utc)
+    MO.save(app.db, booking, [{"kind": "vlucht", "title": "Vertrek", "detail": "", "at": (now + timedelta(days=200)).isoformat(),
+                               "until": (now + timedelta(days=200, hours=3)).isoformat()}])
+    far = (now + timedelta(days=30)).strftime("%Y-%m-%dT10:00")
+    app.db.x("UPDATE threads SET deadline=?, action='actie' WHERE tid=?", (far, appt))
+    app.db.x("UPDATE threads SET deadline=?, action='antwoorden' WHERE tid=?", (far, reply))  # antwoord gevraagd: blijft
+    mine = {c["tid"] for c in client.get("/api/followup", headers=H).json()["waiting_on_me"]}
+    assert mine == {todo, reply}

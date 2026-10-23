@@ -347,6 +347,10 @@ def followup(account: str = ""):
     )
     mine, theirs, reminders = [], [], []
     quiet = quiet_recipients()
+    # mail met een moment dat nog komt (een geboekte reis, tickets) staat niet in "wacht op jou": die komt vanzelf
+    # terug in Binnenkort en Nu nodig wanneer het zover is, en staat altijd in de agenda en het dossier
+    later = {r["tid"] for r in db.q("SELECT DISTINCT tid FROM moments WHERE until > ?", (_now().isoformat(),))}
+    week = (datetime.now(notifier.tz) + timedelta(days=7)).date().isoformat()
     now = _now().isoformat()
     for r in rows:
         t, msgs = thread_messages(db, r["tid"])
@@ -360,6 +364,11 @@ def followup(account: str = ""):
         last = msgs[-1]
         if not last["outgoing"]:
             if last["bulk"] or not any(m["in_inbox"] for m in msgs):
+                continue
+            if t["tid"] in later:
+                continue
+            # een afspraak (deadline met uur) verder dan een week weg, waar niets van je verwacht wordt: wacht ook
+            if t["deadline"] and len(t["deadline"]) > 10 and t["deadline"][:10] > week and t["action"] != "antwoorden":
                 continue
             if t["action"] in (None, "antwoorden", "actie"):
                 mine.append(_card(t, msgs))
