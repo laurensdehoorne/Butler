@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Butler">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Aanmelden bij Butler</title>
+<style>
+@font-face{font-family:"Bodoni Moda";src:url(/fonts/bodoni-moda-latin.woff2) format("woff2");font-weight:400 900;font-display:swap}
+:root{color-scheme:light dark;--bg:#f2f2f7;--card:#ffffff;--ink:#000000;--muted:#6e6e73;--rule:#d1d1d6;--blue:#007aff;--red:#ff3b30;--field:#ffffff}
+@media (prefers-color-scheme:dark){:root{--bg:#000000;--card:#1c1c1e;--ink:#ffffff;--muted:#98989d;--rule:#38383a;--blue:#0a84ff;--red:#ff453a;--field:#2c2c2e}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom));
+  background:var(--bg);color:var(--ink);font:17px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;-webkit-text-size-adjust:100%}
+main{width:min(380px,100%)}
+.brand{display:flex;flex-direction:column;align-items:center;gap:14px;margin-bottom:28px;text-align:center}
+.brand img{width:76px;height:76px;filter:drop-shadow(0 4px 10px rgb(0 60 160/.25))}
+h1{margin:0;font:600 2.25rem/1 "Bodoni Moda",Didot,serif;letter-spacing:.005em}
+.brand p{margin:0;color:var(--muted);font-size:.9375rem}
+form{background:var(--card);border-radius:16px;padding:6px 16px 16px}
+label{display:block;font-size:.8125rem;color:var(--muted);margin:14px 0 6px}
+input{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--rule);border-radius:10px;background:var(--field);
+  color:var(--ink);font:inherit}
+input:focus-visible{outline:2px solid var(--blue);outline-offset:1px;border-color:transparent}
+button{width:100%;min-height:50px;margin-top:20px;border:0;border-radius:12px;background:var(--blue);color:#fff;
+  font:600 1.0625rem/1 inherit;font-family:inherit;cursor:pointer}
+button:disabled{opacity:.6}
+.err{min-height:1.4em;margin:12px 2px 0;color:var(--red);font-size:.9375rem}
+.hint{margin:16px 4px 0;color:var(--muted);font-size:.8125rem;text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <img src="/icon.svg" alt="" width="76" height="76">
+    <h1>Butler</h1>
+    <p id="lead">Meld je aan om je mail te zien.</p>
+  </div>
+  <form id="f" novalidate>
+    <label for="name">Naam</label>
+    <input id="name" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    <label for="pw">Wachtwoord</label>
+    <input id="pw" name="password" type="password" autocomplete="current-password" required>
+    <button id="go">Aanmelden</button>
+    <p class="err" id="err" role="alert"></p>
+  </form>
+  <p class="hint" id="hint">Wachtwoord vergeten? De beheerder van Butler kan een nieuw instellen.</p>
+</main>
+<script>
+const setup = "{{SETUP}}" === "1";
+if (setup) {
+  document.getElementById("lead").textContent = "Maak het eerste account aan: dat wordt de beheerder.";
+  document.getElementById("go").textContent = "Account aanmaken";
+  document.getElementById("pw").autocomplete = "new-password";
+  document.getElementById("hint").textContent = "Minstens 8 tekens. Andere gebruikers voeg je daarna toe in Instellingen.";
+}
+document.getElementById("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("go"), err = document.getElementById("err");
+  const name = document.getElementById("name").value.trim(), password = document.getElementById("pw").value;
+  if (!name || !password) { err.textContent = "Vul je naam en wachtwoord in."; return; }
+  btn.disabled = true; err.textContent = "";
+  try {
+    const r = await fetch("/login", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name, password})});
+    if (r.ok) { location.replace("/"); return; }
+    err.textContent = (await r.json().catch(() => ({}))).detail || "Aanmelden lukte niet.";
+  } catch { err.textContent = "Geen verbinding met Butler."; }
+  btn.disabled = false;
+});
+document.getElementById("name").focus();
+</script>
+</body>
+</html>

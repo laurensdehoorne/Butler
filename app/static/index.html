@@ -680,6 +680,7 @@ let login = null;
 async function api(path, opts={}){
   let token=''; try{ token=localStorage.getItem('butler_token')||''; }catch(e){}
   const r = await fetch(path, {...opts, headers:{'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{})}});
+  if(r.status===401 && r.headers.get('X-Butler-Login')){ location.replace(r.headers.get('X-Butler-Login')); throw new Error('Niet aangemeld'); }
   if(r.status===401){
     login ??= ask({title:'Aanmelden bij Butler', msg:'Om je mail te tonen heeft Butler het toegangstoken nodig. Je vindt het in config.yaml onder app.token.', input:true, type:'password', ok:'Aanmelden'})
       .finally(() => setTimeout(() => { login = null; }));
@@ -1400,7 +1401,8 @@ async function openSettings(view='root'){
   openDialog(settings);
   const [dev, cost, sub, cfg, tn] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})),
     mySub().catch(()=>null), api('/api/config').catch(()=>null), api('/api/tone').catch(()=>null)]);
-  S.set = {devices: dev.devices, costs: cost.months, here: !!sub, tone: tn};
+  const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null);  // enkel achter de gateway
+  S.set = {devices: dev.devices, costs: cost.months, here: !!sub, tone: tn, me};
   S.cfg = cfg;
   if(view === 'account:new') S.view = newAccount();
   renderSettings();
@@ -1443,7 +1445,16 @@ function rootSettings(){
     : nav('accounts', 'Accounts', c.accounts.length ? c.accounts.map(a => a.name || a.email).join(', ') : 'Nog geen mailaccount')
       + c.sections.map(s => nav(s.id, s.title, sectionSummary(s))).join('');
 
-  return `
+  const me = st.me;
+  const who = !me ? '' : `<h3 class="group-h">Aangemeld</h3><div class="group">
+      <div class="line"><span><b>${esc(me.name)}</b><span class="sub">${me.admin ? 'Beheerder' : 'Je eigen mail en instellingen'}</span></span>
+        <span class="group-actions"><button class="btn" data-set="pw-change">Wachtwoord</button><button class="btn" data-set="logout">Afmelden</button></span></div></div>`
+    + (!me.admin ? '' : `<h3 class="group-h">Gebruikers</h3><div class="group">
+      ${me.users.map(u => `<div class="line"><span>${esc(u.name)}<span class="sub">${u.admin ? 'Beheerder' : 'Eigen database en mailaccounts'}</span></span>
+        ${u.id !== me.id ? `<button class="btn" data-set="pw-reset" data-id="${esc(u.id)}" data-name="${esc(u.name)}">Nieuw wachtwoord</button>` : ''}</div>`).join('')}
+      <div class="line"><span class="sub">Elke gebruiker heeft eigen mail, dossiers en instellingen; niemand ziet de mail van een ander.</span>
+        <button class="btn primary" data-set="user-add">${I('plus')}Gebruiker toevoegen</button></div></div>`);
+  return who + `
     <h3 class="group-h">Meldingen</h3><div class="group">${push}</div>
     <h3 class="group-h">Toestellen met meldingen</h3><div class="group">${devs}</div>
     <h3 class="group-h">AI-dienst</h3><div class="group">${ai}</div>
@@ -1576,6 +1587,24 @@ async function waitForRestart(){
 async function settingAction(a, el){
   if(a === 'open'){ S.view = el.dataset.view; S.cfgErrors = {}; S.cfg.accounts = S.cfg.accounts.filter(x => !x.isNew || S.view.startsWith('account:')); renderSettings(); settings.scrollTop = 0; return; }
   if(a === 'add-account'){ S.view = newAccount(); renderSettings(); return; }
+  if(a === 'logout'){ await fetch('/logout', {method: 'POST'}); location.replace('/login'); return; }
+  if(a === 'pw-change' || a === 'pw-reset'){
+    const uid = a === 'pw-change' ? S.set.me.id : el.dataset.id;
+    const pw = await ask({title: a === 'pw-change' ? 'Nieuw wachtwoord' : `Nieuw wachtwoord voor ${el.dataset.name}`, msg: 'Minstens 8 tekens.', input: true, type: 'password', ok: 'Bewaren'});
+    if(!pw) return;
+    try{ await api(`/api/users/${uid}/password`, {method: 'PUT', body: JSON.stringify({password: pw})}); toast('Wachtwoord bewaard'); }
+    catch(err){ toast(err.message); }
+    return;
+  }
+  if(a === 'user-add'){
+    const name = await ask({title: 'Gebruiker toevoegen', msg: 'Bv. Marie-Elisabeth. Ze krijgt een eigen database; haar mailaccounts voegt ze zelf toe in Instellingen.', input: true, ok: 'Verder'});
+    if(!name?.trim()) return;
+    const pw = await ask({title: `Wachtwoord voor ${name.trim()}`, msg: 'Minstens 8 tekens. Ze kan het daarna zelf wijzigen.', input: true, type: 'password', ok: 'Toevoegen'});
+    if(!pw) return;
+    try{ const u = await post('/api/users', {name: name.trim(), password: pw}); toast(`${u.name} toegevoegd: ze meldt zich aan met "${u.name}"`); S.set.me = await api('/api/me'); renderSettings(); }
+    catch(err){ toast(err.message); }
+    return;
+  }
   if(a === 'tone-edit'){
     $('#tone-group').innerHTML = `<div class="fld"><textarea class="field" id="tone-text">${esc(S.set.tone.tone.text)}</textarea></div>
       <div class="actions" style="margin-bottom:12px"><button class="btn primary" data-set="tone-save">Bewaren</button><button class="btn ghost" data-set="tone-cancel">Annuleren</button></div>`;

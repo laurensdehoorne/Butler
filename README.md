@@ -113,6 +113,19 @@ Met `ai.enabled: true` gaat de inhoud van persoonlijke mails naar de gekozen die
 
 Afzenderfoto's (`app.avatars`) haalt de server op en bewaart ze in `/data/avatars`; je toestel laadt niets van buiten. Voor een **logo** (`logos: true`) gaat enkel de domeinnaam van de afzender naar buiten: Butler zoekt het BIMI-logo in de DNS en anders het pictogram van de website. Gratis mailboxen (gmail.com, icloud.com, …) krijgen geen logo. Voor een **profielfoto** (`gravatar: true`) stuurt Butler een SHA-256-hash van het afzenderadres naar Gravatar; zo weet Gravatar welke adressen je mail sturen. Zet `gravatar: false` als je dat niet wilt. Butler haalt enkel iets op bij publieke adressen, nooit in je eigen netwerk, en wat niet gevonden wordt, probeert hij pas na 14 dagen opnieuw.
 
+## Aanmelden en meerdere gebruikers
+
+Butler vraagt een naam en wachtwoord. Bij de eerste keer maak je zelf het eerste account aan: dat is de beheerder, en
+die houdt de bestaande mail in `/data`. Had je al een `app.token`, dan wordt dat het wachtwoord van de beheerder.
+
+In **Instellingen → Gebruikers** voegt de beheerder anderen toe. Elke gebruiker krijgt een eigen Butler met een eigen
+database, mailaccounts, dossiers en instellingen in `/data/users/<naam>`; niemand ziet de mail van een ander. Een nieuwe
+gebruiker neemt de AI-sleutels van de beheerder over (aan te passen in haar eigen instellingen) en voegt zelf haar
+mailaccounts toe.
+
+Achter de schermen start `app/gateway.py` per gebruiker een Butler op 127.0.0.1 en stuurt elk verzoek door naar die van
+wie aangemeld is. De gebruikers staan in `/data/users.json` (wachtwoorden als scrypt-hash).
+
 ## Pushmeldingen
 
 ### In de app (Web Push)

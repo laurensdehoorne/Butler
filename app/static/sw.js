@@ -1,7 +1,7 @@
 // Butler-service worker (zoals in CellarPeaks): houdt de app-schil offline beschikbaar, toont een nette
 // "wordt bijgewerkt"-pagina wanneer Tailscale tijdens een herstart 502–504 geeft, en toont Web Push-meldingen.
 // De API wordt nooit gecachet: die gaat altijd naar de server.
-const CACHE = "butler-v5"; // een nieuwe versie wist de oudere caches
+const CACHE = "butler-v6"; // een nieuwe versie wist de oudere caches
 const SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/apple-touch-icon.png", "/icon-192.png", "/badge-96.png", "/fonts/bodoni-moda-latin.woff2"];
 
 self.addEventListener("install", (event) => {
@@ -36,9 +36,10 @@ self.addEventListener("fetch", (event) => {
   if (event.request.mode === "navigate") {
     event.respondWith(fetch(event.request, { cache: "no-cache" }).then((response) => {
       if (restarting(response)) return wait();
-      if (response.ok) { const copy = response.clone(); caches.open(CACHE).then((cache) => cache.put("/", copy)); }
+      // enkel de app zelf bewaren, niet de aanmeldpagina (een omleiding naar /login)
+      if (response.ok && !response.redirected && url.pathname === "/") { const copy = response.clone(); caches.open(CACHE).then((cache) => cache.put("/", copy)); }
       return response;
-    }).catch(() => caches.match("/").then((hit) => hit || wait())));
+    }).catch(() => caches.match(url.pathname === "/login" ? "/login" : "/").then((hit) => hit || wait())));
     return;
   }
   event.respondWith(

@@ -72,7 +72,12 @@ async def lifespan(_):
 app = FastAPI(title="Butler", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
+GATEWAY_SECRET = os.environ.get("BUTLER_GATEWAY_SECRET", "")  # achter de gateway (app.gateway): die meldt aan
+
+
 def auth(request: Request):
+    if GATEWAY_SECRET and hmac.compare_digest(request.headers.get("x-butler-gateway", "").encode(), GATEWAY_SECRET.encode()):
+        return
     token = APP.get("token") or ""
     if not token:
         return

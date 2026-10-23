@@ -17,4 +17,5 @@ USER butler
 
 EXPOSE 8088
 HEALTHCHECK --interval=60s --timeout=5s CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8088/health')" || exit 1
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8088", "--proxy-headers"]
+# de gateway: aanmelden, en per gebruiker een eigen Butler (app.main) op 127.0.0.1
+CMD ["python", "-m", "app.gateway"]
