@@ -462,6 +462,8 @@ textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto
 .line .sub{display:block;color:var(--muted);font-size:var(--fs-footnote)}
 .line .group-actions{display:flex;gap:6px;flex-wrap:wrap}
 label.line{cursor:pointer;justify-content:flex-start}
+label.line > span{flex:1;min-width:0}
+label.line > input[switch]{flex:none}
 details.month{border-top:1px solid var(--rule)}
 details.month:first-child{border-top:0}
 details.month summary{display:flex;gap:8px;padding:12px 0;cursor:pointer;list-style:none}
