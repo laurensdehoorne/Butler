@@ -1,8 +1,8 @@
 // Butler-service worker (zoals in CellarPeaks): houdt de app-schil offline beschikbaar, toont een nette
 // "wordt bijgewerkt"-pagina wanneer Tailscale tijdens een herstart 502–504 geeft, en toont Web Push-meldingen.
 // De API wordt nooit gecachet: die gaat altijd naar de server.
-const CACHE = "butler-v1"; // een nieuwe versie wist de oudere caches
-const SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/apple-touch-icon.png", "/icon-192.png", "/badge-96.png"];
+const CACHE = "butler-v2"; // een nieuwe versie wist de oudere caches
+const SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/apple-touch-icon.png", "/icon-192.png", "/badge-96.png", "/fonts/bodoni-moda-latin.woff2"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
@@ -22,8 +22,8 @@ const WAIT = `<!doctype html><html lang="nl"><head><meta charset="utf-8">
 <style>
   :root { color-scheme: light dark; }
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 17px/1.5 -apple-system, system-ui, sans-serif;
-         background: #f6f5f2; color: #1c1d21; text-align: center; padding: 24px; box-sizing: border-box; }
-  @media (prefers-color-scheme: dark) { body { background: #16171a; color: #ececee; } }
+         background: #f4efe4; color: #1b2320; text-align: center; padding: 24px; box-sizing: border-box; }
+  @media (prefers-color-scheme: dark) { body { background: #0f1513; color: #e8ece9; } }
   img { width: 72px; height: 72px; border-radius: 16px; } p { margin: 4px 0; } small { opacity: .6; }
 </style></head><body><div><img src="/apple-touch-icon.png" alt=""><p><b>Butler wordt bijgewerkt</b></p>
 <p>Een ogenblik: deze pagina herlaadt vanzelf.</p><small>Meestal duurt dit minder dan een minuut.</small></div></body></html>`;

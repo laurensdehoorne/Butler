@@ -162,6 +162,14 @@ def png_icon(name: str):
     return FileResponse(STATIC / f"{name}.png", media_type="image/png", headers={"Cache-Control": "max-age=86400"})
 
 
+@app.get("/fonts/{name}.woff2")
+def font(name: str):
+    if name != "bodoni-moda-latin":
+        raise HTTPException(404)
+    return FileResponse(STATIC / "fonts" / f"{name}.woff2", media_type="font/woff2",
+                        headers={"Cache-Control": "max-age=31536000, immutable"})
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
