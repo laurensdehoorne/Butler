@@ -210,6 +210,14 @@ def _body(msg):
     content = _content(part)
     if part.get_content_type() == "text/html":
         content = html_to_text(content)
+    elif len(re.sub(r"[\s\u034f\u200b-\u200d\ufeff]", "", content)) < 20:
+        # een lege tekstversie naast een volledige HTML-versie (veel nieuwsbrieven): de tekst uit de HTML halen
+        try:
+            h = msg.get_body(preferencelist=("html",))
+            if h is not None:
+                content = html_to_text(_content(h)) or content
+        except Exception:
+            pass
     return content.replace("\r\n", "\n").strip()
 
 

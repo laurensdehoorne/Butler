@@ -1533,7 +1533,8 @@ function mountHtml(el, html){
       body.style.zoom = 1;
       const z = Math.min(1, f.clientWidth / Math.max(doc.documentElement.scrollWidth, 1));
       body.style.zoom = z;
-      f.style.height = Math.ceil(body.getBoundingClientRect().height + 2) + 'px';
+      // sommige nieuwsbrieven zetten hun inhoud buiten de hoogte van <body> (floats, tabellen): de inhoud meten
+      f.style.height = Math.ceil(Math.max(body.getBoundingClientRect().height, body.scrollHeight * z) + 2) + 'px';
     };
     fit();
     doc.addEventListener('load', fit, true);  // afbeeldingen die later binnenkomen

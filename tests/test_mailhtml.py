@@ -77,3 +77,14 @@ def test_thread_html_inbox_now_archive_on_demand(app, client, acc):
     assert "<p>Archief</p>" in r["html"] and again == r
     imap.select_folder.assert_called_once_with("Archive", readonly=True)
     assert client.get(f"/api/threads/{tid2}", headers=H).json()["messages"][0]["html"].startswith("<p>Archief")
+
+
+def test_empty_text_part_falls_back_to_html():
+    from email.message import EmailMessage
+
+    from app.mailparse import parse
+    m = EmailMessage()
+    m["From"], m["To"], m["Subject"], m["Message-ID"] = "Home Connect <info@hc.com>", "me@x.be", "Migration", "<m@hc>"
+    m.set_content("͏͏  \n")
+    m.add_alternative("<html><body><p>Your Home Connect account requires migration by 26.11.2026.</p></body></html>", subtype="html")
+    assert "requires migration" in parse(m.as_bytes())["body"]
