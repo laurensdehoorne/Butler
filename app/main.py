@@ -831,6 +831,9 @@ def set_context(tid: int, body: ContextIn):
     return get_thread(tid)
 
 
+DOSSIER_SOON_DAYS = 14
+
+
 def _dossier_avatar(did):
     """Het logo of de foto van de afzender die het vaakst in dit dossier schrijft (en waarvan er een is); anders None."""
     senders = db.q("""SELECT m.from_addr, COUNT(*) AS n FROM thread_dossiers td JOIN threads t ON t.tid=td.tid
@@ -846,7 +849,8 @@ def _dossier_avatar(did):
 
 @app.get("/api/dossiers", dependencies=[Depends(auth)])
 def list_dossiers():
-    """Alle dossiers, met de meest recente activiteit eerst: hoeveel mails, wanneer de laatste, wat eraan komt."""
+    """Alle dossiers: open voor afgehandeld, wat de komende 14 dagen iets heeft eerst, de rest met de meest recente
+    activiteit eerst. Per dossier: hoeveel mails, wanneer de laatste, wat eraan komt."""
     now = _now().isoformat()
     rows = db.q("""SELECT d.id, d.name, d.closed_at, COUNT(DISTINCT td.tid) AS n, MAX(m.date) AS last
                    FROM dossiers d JOIN thread_dossiers td ON td.dossier_id=d.id JOIN threads t ON t.tid=td.tid
@@ -859,6 +863,13 @@ def list_dossiers():
                         ORDER BY at LIMIT 1""", (r["id"], now))
         out.append({"id": r["id"], "name": r["name"], "n": r["n"], "last": r["last"], "closed": bool(r["closed_at"]),
                     "next": dict(nxt) if nxt else None, "avatar": _dossier_avatar(r["id"])})
+    # open dossiers met iets in de komende dagen eerst (het dichtstbijzijnde bovenaan), de rest op laatste activiteit
+    soon = (_now() + timedelta(days=DOSSIER_SOON_DAYS)).isoformat()
+
+    def key(d):
+        coming = bool(d["next"]) and d["next"]["at"] <= soon
+        return (d["closed"], not coming, d["next"]["at"] if coming else "")
+    out.sort(key=key)  # stabiel: binnen een groep blijft de volgorde van laatste activiteit
     return {"dossiers": out}
 
 

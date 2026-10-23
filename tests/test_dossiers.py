@@ -135,3 +135,22 @@ def test_dossier_gets_logo_of_most_frequent_sender(app, client, acc):
     assert client.get("/api/dossiers", headers=H).json()["dossiers"][0]["avatar"] is None  # nog niets in de cache
     with mock.patch.object(app.avatars, "url", side_effect=lambda addr: "/avatars/x-logo.png" if "goldcar" in addr else None):
         assert client.get("/api/dossiers", headers=H).json()["dossiers"][0]["avatar"] == "/avatars/x-logo.png"
+
+
+def test_dossiers_with_something_coming_up_come_first(app, client, acc):
+    from datetime import datetime, timedelta, timezone
+
+    ids = {}
+    for i, name in enumerate(("Oud", "Nieuw", "Reis ver", "Reis nabij")):
+        tid, _ = put(acc, "INBOX", 10 + i, raw("A <a@x.be>", name, f"<d{i}@x>", days=10 - i))
+        D.assign(app.db, tid, [name])
+        ids[name] = tid
+    now = datetime.now(timezone.utc)
+    for name, days in (("Reis ver", 60), ("Reis nabij", 3)):
+        app.db.x("INSERT INTO moments(tid, kind, title, detail, at, until, event_at) VALUES(?,?,?,?,?,?,?)",
+                 (ids[name], "x", "Vertrek", "", (now + timedelta(days=days - 1)).isoformat(),
+                  (now + timedelta(days=days)).isoformat(), (now + timedelta(days=days)).isoformat()))
+    names = [d["name"] for d in client.get("/api/dossiers", headers=H).json()["dossiers"]]
+    assert names[0] == "Reis nabij"  # komt over 3 dagen: bovenaan, ook al is er recentere mail
+    assert names.index("Nieuw") < names.index("Oud")  # de rest op laatste activiteit
+    assert "Reis ver" in names[1:]  # over 60 dagen telt niet als "binnenkort"
