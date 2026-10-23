@@ -214,6 +214,10 @@ class DB:
                 self.conn.execute("DELETE FROM dossiers WHERE id NOT IN (SELECT dossier_id FROM thread_dossiers)")
                 self.conn.execute("UPDATE threads SET dossier_ai=0 WHERE dossier_ai=1")
                 self.conn.execute("INSERT INTO settings(key, value) VALUES('dossiers_v4', '1')")
+            # lege HTML kon ook een mislukte download zijn die als "geen HTML" bewaard werd: eenmalig opnieuw ophalen
+            if not self.conn.execute("SELECT 1 FROM settings WHERE key='html_v2'").fetchone():
+                self.conn.execute("UPDATE messages SET html=NULL, attachments=NULL WHERE html=''")
+                self.conn.execute("INSERT INTO settings(key, value) VALUES('html_v2', '1')")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")
             from .search import setup as search_setup
             self.fts = search_setup(self.conn)  # slim zoeken (FTS5); zonder FTS5 zoekt Butler met LIKE

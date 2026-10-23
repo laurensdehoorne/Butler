@@ -91,3 +91,14 @@ def test_attachment_links_fix_old_octet_stream_lists():
 
     a = M.attachment_links(1, [{"name": "offerte.PDF", "type": "application/octet-stream", "size": 10}])[0]
     assert a["type"] == "application/pdf" and a["inline"]
+
+
+def test_failed_html_fetch_is_not_cached_as_no_html(app, acc):
+    from app import actions
+    tid, _ = put(acc, "Archive", 7, mail_with_attachments())
+    mid = app.db.one("SELECT id FROM messages ORDER BY id DESC")["id"]
+    app.db.x("UPDATE messages SET html=NULL, attachments=NULL WHERE id=?", (mid,))
+    with mock.patch("app.actions._raw", return_value=None):
+        assert actions.fetch_html(app.db, acc, mid) == ("", [])
+    row = app.db.one("SELECT html, attachments FROM messages WHERE id=?", (mid,))
+    assert row["html"] is None and row["attachments"] is None  # volgende keer opnieuw proberen

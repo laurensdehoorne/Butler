@@ -86,12 +86,14 @@ def fetch_html(db, acc, mid):
     if html is not None and atts is not None:
         return html, atts
     data = _raw(acc, rows)
-    p = parse(data) if data else None
-    html = html if html is not None else (p["html"] if p else "")
-    atts = atts if atts is not None else (p["attachments"] if p else [])
+    if not data:  # ophalen mislukte (bericht verplaatst, te groot, server traag): niet als "geen HTML" bewaren
+        return html or "", atts or []
+    p = parse(data)
+    html = html if html is not None else p["html"]
+    atts = atts if atts is not None else p["attachments"]
     db.x("UPDATE messages SET html=?, attachments=?, att_text=COALESCE(att_text, ?) WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
-         (html, json.dumps(atts), p.get("att_text") if p else None, mid, row["account"], row["message_id"] or ""))
-    if p and p.get("body") and not (row["body"] or "").strip():  # lege tekstversie: nu met de tekst uit de HTML
+         (html, json.dumps(atts), p.get("att_text"), mid, row["account"], row["message_id"] or ""))
+    if p.get("body") and not (row["body"] or "").strip():  # lege tekstversie: nu met de tekst uit de HTML
         db.x("UPDATE messages SET body=?, snippet=? WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
              (p["body"][:50000], make_snippet(p["body"]), mid, row["account"], row["message_id"] or ""))
         db.x("UPDATE threads SET ai_count=0 WHERE account=? AND thread_key=?", (row["account"], row["thread_key"]))
