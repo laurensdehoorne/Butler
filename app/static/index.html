@@ -1051,7 +1051,7 @@ async function load(animate=false){
         : [d.dossiers.filter(x => !x.closed), d.dossiers.filter(x => x.closed)].map((list, closed) => !list.length ? ''
           : (closed ? `<div class="sec-h"><h2>Afgehandeld</h2><span class="num">${list.length}</span></div>` : '')
           + `<div class="items${closed ? ' closed' : ''}" style="margin-top:12px">${list.map(x => `<a class="item" href="#" data-dossier="${x.id}">
-            <span class="av me" aria-hidden="true">${I('folder')}</span>
+            <span class="av me" aria-hidden="true">${I('folder')}${x.avatar ? `<img src="${esc(x.avatar)}" alt="" loading="lazy" decoding="async" class="${x.avatar.includes('-logo.') ? 'logo' : 'face'}">` : ''}</span>
             <div class="c-main"><div class="c-top"><span class="who"><b>${esc(x.name)}</b></span><time>${esc(when(x.last))}</time></div>
               <div class="sum">${x.n} mail${x.n > 1 ? 's' : ''}</div>
               ${x.next ? `<div class="m-when">${esc(x.next.title)}, ${esc(new Date(x.next.at).toLocaleDateString('nl-BE', {weekday:'short', day:'numeric', month:'short'}))}</div>` : ''}

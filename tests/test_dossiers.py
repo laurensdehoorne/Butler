@@ -123,3 +123,15 @@ def test_close_dossier_and_reopen_on_news(app, client, acc):
     b, _ = put(acc, "INBOX", 2, raw("KBC <k@kbc.be>", "Brievenbus: uitbetaling", "<b2@x>", days=-1))
     D.assign(app.db, b, ["Aanrijding brievenbus"])
     assert not D.get(app.db, did)["closed_at"]
+
+
+def test_dossier_gets_logo_of_most_frequent_sender(app, client, acc):
+    from unittest import mock
+
+    a, _ = put(acc, "INBOX", 1, raw("Goldcar <g@goldcar.es>", "Car hire Málaga", "<g1@x>"))
+    b, _ = put(acc, "INBOX", 2, raw("Goldcar <g@goldcar.es>", "Car hire Málaga 2", "<g2@x>"))
+    D.assign(app.db, a, ["Huurwagen Málaga"])
+    D.assign(app.db, b, ["Huurwagen Málaga"])
+    assert client.get("/api/dossiers", headers=H).json()["dossiers"][0]["avatar"] is None  # nog niets in de cache
+    with mock.patch.object(app.avatars, "url", side_effect=lambda addr: "/avatars/x-logo.png" if "goldcar" in addr else None):
+        assert client.get("/api/dossiers", headers=H).json()["dossiers"][0]["avatar"] == "/avatars/x-logo.png"

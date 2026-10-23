@@ -831,6 +831,19 @@ def set_context(tid: int, body: ContextIn):
     return get_thread(tid)
 
 
+def _dossier_avatar(did):
+    """Het logo of de foto van de afzender die het vaakst in dit dossier schrijft (en waarvan er een is); anders None."""
+    senders = db.q("""SELECT m.from_addr, COUNT(*) AS n FROM thread_dossiers td JOIN threads t ON t.tid=td.tid
+                      JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                      WHERE td.dossier_id=? AND m.outgoing=0 AND m.from_addr!='' GROUP BY m.from_addr
+                      ORDER BY n DESC LIMIT 8""", (did,))
+    for r in senders:
+        url = avatars.url(r["from_addr"])
+        if url:
+            return url
+    return None
+
+
 @app.get("/api/dossiers", dependencies=[Depends(auth)])
 def list_dossiers():
     """Alle dossiers, met de meest recente activiteit eerst: hoeveel mails, wanneer de laatste, wat eraan komt."""
@@ -845,7 +858,7 @@ def list_dossiers():
                         JOIN thread_dossiers td ON td.tid=mo.tid WHERE td.dossier_id=? AND mo.until > ?
                         ORDER BY at LIMIT 1""", (r["id"], now))
         out.append({"id": r["id"], "name": r["name"], "n": r["n"], "last": r["last"], "closed": bool(r["closed_at"]),
-                    "next": dict(nxt) if nxt else None})
+                    "next": dict(nxt) if nxt else None, "avatar": _dossier_avatar(r["id"])})
     return {"dossiers": out}
 
 
