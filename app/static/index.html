@@ -550,7 +550,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     </div>
     <div class="tabs" role="tablist" aria-label="Weergave">
       <button class="tab" role="tab" aria-selected="true" data-tab="followup"><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg>Opvolgen <span class="count" id="count-followup"></span></button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="inbox"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg>Inbox</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="inbox"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg>Inbox <span class="count" id="count-inbox"></span></button>
       <button class="tab" role="tab" aria-selected="false" data-tab="agenda"><svg class="i" aria-hidden="true"><use href="#i-cal"/></svg>Agenda</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="dossiers"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg>Dossiers</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="cleanup"><svg class="i" aria-hidden="true"><use href="#i-broom"/></svg>Opruimen</button>
@@ -1016,11 +1016,12 @@ async function load(animate=false){
             </div></a>`).join('')}</div>`).join('');
     } else if(S.tab==='agenda'){
       const d = await api(`/api/agenda?account=${acc}`);
-      html = agendaView(vis(d.items));
+      html = `<button class="act-row" data-subscribe>${I('cal')}<span>In de Agenda-app van je iPhone of Mac</span>${I('chev')}</button>` + agendaView(vis(d.items));
     } else if(S.tab==='inbox'){
       const answered = S.ask?.q === S.q && (S.ask.res || S.ask.loading);  // een vraag: enkel wat Butler vond
       const d = answered ? {threads: []} : await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
       d.threads = vis(d.threads);
+      if(d.unread !== undefined) $('#count-inbox').textContent = d.unread || '';
       html = askBlock() + (d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c)).join('')}</div>`
         : S.q ? (S.ask?.q === S.q ? '' : empty('Niets gevonden', `Geen mail met “${esc(S.q)}”. Probeer minder woorden, van:naam, na:2026-03 of pdf, of stel een vraag.`, I('search')))
         : empty('Inbox leeg', 'Nieuwe mail verschijnt hier vanzelf.'));
@@ -1056,6 +1057,7 @@ async function load(animate=false){
         + `<div class="items">${arr.map(c=>momentCard(c, active)).join('')}</div></section>` : '';
       const waiting = d.waiting_on_me.length + d.reminders.length + now.length;
       $('#count-followup').textContent = waiting || '';
+      $('#count-inbox').textContent = d.inbox_unread || '';
       setBadge(waiting);
       html = sharedSec + ((!d.waiting_on_me.length && !d.waiting_on_them.length && !d.reminders.length && !now.length && !soon.length)
         ? (sharedSec ? '' : empty('Alles afgehandeld', 'Er wacht niets op jou, en jij wacht op niemand.', TIE()))
@@ -1580,7 +1582,7 @@ async function doAction(a, btn){
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e=>{
-  const el = e.target.closest('[data-ask],[data-activity],[data-activity-back],[data-activity-settings],[data-undo],[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
+  const el = e.target.closest('[data-subscribe],[data-ask],[data-activity],[data-activity-back],[data-activity-settings],[data-undo],[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
   if(el.hasAttribute('data-quick-open')){ S.quick = true; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-quick-go')) return quickGo(el);
@@ -1592,6 +1594,12 @@ document.addEventListener('click', async e=>{
   }
   if(el.dataset.dossier){ e.preventDefault(); if(S.thread) closeThread(); S.dossier = +el.dataset.dossier; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-ask')) return askButler();
+  if(el.hasAttribute('data-subscribe')){  // agenda-abonnement: de Agenda-app vraagt zelf om te bevestigen
+    const {path} = await api('/api/calendar');
+    const ok = await ask({title: 'Butler in je agenda', msg: 'Je Agenda-app krijgt een agenda "Butler" met de afspraken en boekingen uit je mail, en houdt die zelf bij. Wie de link heeft, ziet je afspraken (geen mail).', ok: 'Toevoegen'});
+    if(ok) location.href = 'webcal://' + location.host + path;
+    return;
+  }
   if(el.hasAttribute('data-activity')){ S.activity = true; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-activity-back')){ S.activity = false; return load(true); }
   if(el.hasAttribute('data-activity-settings')) return openSettings('auto');

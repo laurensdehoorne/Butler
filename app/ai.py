@@ -24,6 +24,7 @@ Je krijgt een e-mailthread. Antwoord met uitsluitend één JSON-object, zonder u
 - "actie": "antwoorden" (er wordt een antwoord van {name} verwacht), "actie" (iets doen, maar niet per se antwoorden), "lezen", "wachten" ({name} wacht op de ander) of "geen".
 - "deadline": een datum "JJJJ-MM-DD" als er een duidelijke deadline of afspraakdatum is, met het uur erbij ("JJJJ-MM-DDTUU:MM", lokale tijd) als dat in de mail staat (bv. een afspraak); anders null.
 - "wacht_op_antwoord": true als het laatste bericht van {name} zelf is en {name} daarop nog een antwoord of reactie van de ander verwacht (een vraag, een verzoek, een offerteaanvraag, iets dat nog bevestigd of geregeld moet worden). false als dat laatste bericht een bedanking, bevestiging, afzegging, test of louter een mededeling is, of als de zaak rond is; ook false als het laatste bericht niet van {name} is.
+- "gebeurtenis": true als de mail (of een bijlage) een boeking, reservatie, ticket of afspraak met een datum bevestigt: een hotel, vlucht, trein, huurwagen, concert, restaurant, afspraak bij iemand. Anders false.
 Berichten gemarkeerd met [JIJ] zijn door {name} zelf verstuurd."""
 
 DRAFT_SYSTEM = """Je schrijft een e-mailantwoord namens {owner}. Vandaag is {today}.
@@ -53,9 +54,11 @@ def thread_text(msgs, max_msgs=8, per_msg=3500):
         to = _fmt_people(json.loads(m["to_addrs"] or "[]"))
         who = "[JIJ] " if m["outgoing"] else ""
         body = strip_quotes(m["body"] or "")[:per_msg]
+        # wat in de pdf-bijlagen staat (een hotelbevestiging zonder tekst in de mail zelf)
+        att = (m.get("att_text") or "")[:per_msg]
         parts.append(
             f"--- {who}Van: {m['from_name']} <{m['from_addr']}> | Aan: {to} | Datum: {m['date']}\n"
-            f"Onderwerp: {m['subject']}\n\n{body}"
+            f"Onderwerp: {m['subject']}\n\n{body}" + (f"\n\nTekst uit de bijlagen:\n{att}" if att else "")
         )
     return "\n\n".join(parts)
 
@@ -313,7 +316,7 @@ class AIWorker:
             return None
         if all(m["bulk"] for m in msgs) and not (t.get("context") or "").strip():
             res = {"summary": msgs[-1]["snippet"][:200], "priority": "laag", "category": msgs[-1].get("kind") or "reclame",
-                   "action": "geen", "deadline": None, "awaits": 0}
+                   "action": "geen", "deadline": None, "awaits": 0, "event": 0}
         elif not self.active_for(t["account"]):
             return None
         else:
@@ -335,12 +338,15 @@ class AIWorker:
                 "action": act if act in ACTIONS else "lezen",
                 "deadline": dl if isinstance(dl, str) and re.match(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$", dl) else None,
                 "awaits": _bool(data.get("wacht_op_antwoord")),
+                "event": _bool(data.get("gebeurtenis")) or 0,
             }
             dossiers.assign(self.db, tid, dossiers.extract(raw))
         self.db.x(
-            "UPDATE threads SET summary=?, priority=?, category=?, action=?, deadline=?, awaits=?, ai_count=? WHERE tid=?",
-            (res["summary"], res["priority"], res["category"], res["action"], res["deadline"], res["awaits"], len(msgs), tid),
+            "UPDATE threads SET summary=?, priority=?, category=?, action=?, deadline=?, awaits=?, has_event=?, ai_count=? WHERE tid=?",
+            (res["summary"], res["priority"], res["category"], res["action"], res["deadline"], res["awaits"], res["event"], len(msgs), tid),
         )
+        if res["event"] and not t.get("moments_ai"):  # een boeking of afspraak: meteen de momenten zoeken (agenda)
+            self.enqueue_moments(tid)
         return res
 
     def context(self, t, msgs):
@@ -357,7 +363,7 @@ class AIWorker:
         return ("\n\n" + "\n\n".join(parts)) if parts else ""
 
     def moments(self, tid):
-        """Momenten waarop een gemarkeerde thread nodig is. Ook voor notificaties: de vlag is een bewuste keuze."""
+        """Momenten waarop een thread nodig is: gemarkeerde mail, en mail die een boeking of afspraak bevestigt."""
         t, msgs = thread_messages(self.db, tid)
         if not t or not msgs or not self.active_for(t["account"]):
             return []

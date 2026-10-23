@@ -111,3 +111,11 @@ def test_share_copies_straight_to_the_other_butler(gw):
     body = json.loads(receive.content)
     assert body["sender"] == "Laurens" and body["note"] == "Kijk eens" and receive.headers["x-butler-gateway"] == "geheim"
     assert c.post("/api/share", json={"tid": 7, "to": "laurens"}).status_code == 400  # niet met jezelf
+
+
+def test_calendar_link_works_without_session(gw):
+    c, users, _, seen = gw
+    tok = "a" * 32
+    assert c.get(f"/cal/laurens/{tok}.ics").json() == {"port": 9101, "path": f"/cal/{tok}.ics"}
+    assert c.get(f"/cal/niemand/{tok}.ics").status_code == 404
+    assert c.get("/cal/laurens/kort.ics", follow_redirects=False).status_code == 303  # geen geheim: aanmelden

@@ -352,11 +352,18 @@ def create_app(users=None, key=None, backends=None, transport=None):
             f = STATIC / path
             if f.is_file():
                 return FileResponse(f, headers={"Cache-Control": "no-cache"})
-        u = current(request)
+        cal = re.fullmatch(r"cal/([a-z0-9-]+)/([0-9a-f]{32})\.ics", path)
+        if cal and request.method == "GET":  # agenda-abonnement: de Agenda-app meldt niet aan, het geheim zit in de link
+            u, path = users.get(cal.group(1)), f"cal/{cal.group(2)}.ics"
+            if not u:
+                return JSONResponse({"detail": "niet gevonden"}, status_code=404)
+        else:
+            u = current(request)
         if not u:
             return need_login(request)
         headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP and k.lower() != "authorization"}
         headers["x-butler-gateway"] = secret
+        headers["x-butler-user"] = u["id"]
         headers["x-forwarded-proto"] = request.url.scheme
         q = request.url.query
         url = f"http://127.0.0.1:{u['port']}/{path}" + (f"?{q}" if q else "")

@@ -287,6 +287,7 @@ def parse(raw, header_only=False):
         "body": body[:50000],
         "html": "" if header_only else _html(msg),
         "attachments": None if header_only else attachments(msg),  # None = niet bekend (enkel headers opgehaald)
+        "att_text": None if header_only else pdf_text(msg),  # tekst uit pdf-bijlagen (hotelbevestiging, ticket)
         "snippet": make_snippet(body),
         "kind": kind,
         "bulk": bool(kind),

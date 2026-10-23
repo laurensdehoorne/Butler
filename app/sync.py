@@ -100,6 +100,7 @@ class Syncer:
     def sync_account(self, c, acc):
         self.sync_folder(c, acc, "inbox")
         self.apply_rules(c, acc)
+        self.read_pdfs(c, acc)
         self.queue_triage(acc)
         if acc.folders.get("sent"):
             self.sync_folder(c, acc, "sent")
@@ -109,6 +110,32 @@ class Syncer:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=max(self.sync_days, 60) * 2)).isoformat()
         self.db.x("DELETE FROM messages WHERE account=? AND folder IN ('_weg','_pending') AND date < ?", (acc.id, cutoff))
         acc.last_sync = datetime.now(timezone.utc).isoformat()
+
+    # --- pdf-bijlagen van mail van voor het lezen ervan ------------------------
+    def read_pdfs(self, c, acc, days=60, limit=25):
+        """Inbox-mail met een pdf die Butler nog niet las: de tekst eruit halen en de mail opnieuw laten samenvatten
+        (zo komt een hotelbevestiging die enkel in de pdf staat toch in de agenda). Enkel kleine pdf's."""
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = self.db.q("""SELECT id, uid, account, thread_key FROM messages WHERE account=? AND folder='INBOX' AND uid>0
+                            AND att_text IS NULL AND attachments LIKE '%.pdf%' AND date >= ? ORDER BY date DESC LIMIT ?""",
+                         (acc.id, since, limit))
+        if not rows:
+            return
+        from email import policy
+        from email.parser import BytesParser
+
+        from .mailparse import pdf_text
+
+        c.select_folder("INBOX", readonly=True)
+        got = c.fetch([r["uid"] for r in rows], ["BODY.PEEK[]"])
+        for r in rows:
+            data = (got.get(r["uid"]) or {}).get(b"BODY[]")
+            text = pdf_text(BytesParser(policy=policy.default).parsebytes(data)) if data else ""
+            self.db.x("UPDATE messages SET att_text=? WHERE id=?", (text, r["id"]))
+            if text:  # opnieuw samenvatten: nu met wat in de pdf staat
+                self.db.x("UPDATE threads SET ai_count=0 WHERE account=? AND thread_key=?", (r["account"], r["thread_key"]))
+                self._triage_tried.discard(self.db.one("SELECT tid FROM threads WHERE account=? AND thread_key=?",
+                                                       (r["account"], r["thread_key"]))["tid"])
 
     # --- opruimregels --------------------------------------------------
     def plan_cleanup(self, acc):
@@ -320,8 +347,8 @@ class Syncer:
         self.db.x(
             """INSERT OR REPLACE INTO messages(account, folder, uid, message_id, thread_key, refs, from_addr, from_name,
                to_addrs, cc_addrs, reply_to, subject, date, snippet, body, seen, outgoing, in_inbox, bulk,
-               kind, unsub, unsub_post, flagged, html, attachments)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               kind, unsub, unsub_post, flagged, html, attachments, att_text)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (acc.id, folder, uid, p["message_id"], key, " ".join(p["refs"]), p["from_addr"], p["from_name"],
              json.dumps(p["to"]), json.dumps(p["cc"]), p["reply_to"], p["subject"], p["date"], p["snippet"],
              p["body"], 1 if (seen or outgoing) else 0, 1 if outgoing else 0, 1 if role == "inbox" else 0,
@@ -329,7 +356,8 @@ class Syncer:
              # HTML enkel voor de inbox bewaren (opent meteen); de rest wordt opgehaald wanneer je de mail opent
              p.get("html") if role == "inbox" else None,
              # de lijst met bijlagen is klein: altijd bewaren; de bestanden zelf blijven op de server
-             json.dumps(p["attachments"]) if p.get("attachments") is not None else None),
+             json.dumps(p["attachments"]) if p.get("attachments") is not None else None,
+             p.get("att_text")),
         )
         self.db.x("INSERT OR IGNORE INTO threads(account, thread_key) VALUES(?,?)", (acc.id, key))
         tid = self.db.one("SELECT tid FROM threads WHERE account=? AND thread_key=?", (acc.id, key))["tid"]
@@ -400,13 +428,14 @@ class Syncer:
 
     # --- momenten uit gemarkeerde mail -------------------------------------
     def queue_moments(self, acc):
-        """Gemarkeerde threads met nieuwe berichten naar de AI; vlag weg = momenten weg."""
+        """Gemarkeerde threads, en mail die een boeking of afspraak bevestigt (de AI zag een gebeurtenis), met nieuwe
+        berichten naar de AI; vlag weg en geen gebeurtenis = momenten weg."""
         since = (datetime.now(timezone.utc) - timedelta(days=MOMENT_DAYS)).isoformat()
         rows = self.db.q(
             """SELECT t.tid, t.moments_ai, t.dossier_ai, COUNT(DISTINCT COALESCE(m.message_id, 'row' || m.id)) AS n,
-                      MAX(m.flagged) AS flagged, MAX(m.date) AS last
+                      MAX(m.flagged) OR COALESCE(t.has_event, 0) AS flagged, MAX(m.date) AS last
                FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
-               WHERE t.account=? GROUP BY t.tid HAVING MAX(m.flagged)=1 OR t.moments_ai>0""",
+               WHERE t.account=? GROUP BY t.tid HAVING MAX(m.flagged)=1 OR t.has_event=1 OR t.moments_ai>0""",
             (acc.id,),
         )
         for r in rows:

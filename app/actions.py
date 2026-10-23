@@ -89,8 +89,8 @@ def fetch_html(db, acc, mid):
     p = parse(data) if data else None
     html = html if html is not None else (p["html"] if p else "")
     atts = atts if atts is not None else (p["attachments"] if p else [])
-    db.x("UPDATE messages SET html=?, attachments=? WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
-         (html, json.dumps(atts), mid, row["account"], row["message_id"] or ""))
+    db.x("UPDATE messages SET html=?, attachments=?, att_text=COALESCE(att_text, ?) WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
+         (html, json.dumps(atts), p.get("att_text") if p else None, mid, row["account"], row["message_id"] or ""))
     return html, atts
 
 

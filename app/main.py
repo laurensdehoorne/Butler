@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import actions, autopilot, config, costs, dossiers, fatigue, forward, moments, search, shared, tone
+from . import actions, autopilot, config, costs, dossiers, fatigue, forward, ical, moments, search, shared, tone
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
@@ -466,6 +466,16 @@ def trigger_sync():
     return {"ok": True}
 
 
+def inbox_unread(account=""):
+    """Hoeveel threads in je inbox een ongelezen persoonlijk bericht hebben (het getal op de Inbox-tab); reclame en
+    notificaties tellen niet mee."""
+    return db.one("""SELECT COUNT(DISTINCT t.tid) AS n FROM threads t
+                     JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                     WHERE m.in_inbox=1 AND m.seen=0 AND m.outgoing=0 AND m.bulk=0 AND (?='' OR t.account=?)
+                       AND (t.snooze_until IS NULL OR t.snooze_until <= ?)""",
+                  (account, account, _now().isoformat()))["n"]
+
+
 @app.get("/api/inbox", dependencies=[Depends(auth)])
 def inbox(account: str = "", filter: str = "alle", q: str = "", limit: int = 150):
     if q.strip():  # slim zoeken: alle mail, de beste eerst (zie search.py)
@@ -497,7 +507,7 @@ def inbox(account: str = "", filter: str = "alle", q: str = "", limit: int = 150
         out.append(card)
         if len(out) >= limit:
             break
-    return {"threads": out}
+    return {"threads": out, "unread": inbox_unread(account)}
 
 
 @app.get("/api/followup", dependencies=[Depends(auth)])
@@ -552,6 +562,7 @@ def followup(account: str = ""):
     mine.sort(key=lambda c: (not c["flagged"], c["priority"] != "hoog", soonest.get(c["tid"], "9999"), c["date"] or ""))
     theirs.sort(key=lambda c: c["date"] or "")
     return {"waiting_on_me": mine[:150], "waiting_on_them": theirs[:150], "reminders": reminders[:50],
+            "inbox_unread": inbox_unread(account),
             "followup_days": FOLLOWUP_DAYS, **moment_cards(account)}
 
 
@@ -586,6 +597,25 @@ def agenda(account: str = ""):
             items.append({**c, "moment": None, "sort": r["deadline"], "allday": len(r["deadline"]) <= 10})
     items.sort(key=lambda x: x["sort"])
     return {"items": items[:300]}
+
+
+@app.get("/api/calendar", dependencies=[Depends(auth)])
+def calendar_link(request: Request):
+    """Het pad van het agenda-abonnement; de app maakt er webcal://<host><pad> van. Achter de gateway hoort de
+    gebruiker in het pad, zodat de gateway weet wiens agenda het is (een agenda-app meldt niet aan)."""
+    uid = request.headers.get("x-butler-user", "") if GATEWAY_SECRET else ""
+    tok = ical.token(avatars.key)
+    return {"path": f"/cal/{uid}/{tok}.ics" if uid else f"/cal/{tok}.ics"}
+
+
+@app.get("/cal/{tok}.ics")
+def calendar_feed(tok: str):
+    if not ical.valid(avatars.key, tok):
+        raise HTTPException(404)
+    body = ical.calendar(agenda()["items"], notifier.tz, APP.get("base_url", "").rstrip("/"),
+                         name="Butler" + (f" ({AI_CFG.get('name')})" if AI_CFG.get("name") else ""))
+    return Response(body, media_type="text/calendar; charset=utf-8",
+                    headers={"Cache-Control": "private, max-age=900", "Content-Disposition": 'inline; filename="butler.ics"'})
 
 
 def tone_loop():

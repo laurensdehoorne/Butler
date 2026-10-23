@@ -1,7 +1,8 @@
 """Slim zoeken: snel in alle mail (SQLite FTS5), en vragen aan Butler ("wanneer vertrekt mijn vlucht naar Lissabon?").
 
 Gewoon zoeken
-- Elk woord moet ergens voorkomen (onderwerp, afzender, ontvangers, tekst, namen van bijlagen of de samenvatting),
+- Elk woord moet ergens voorkomen (onderwerp, afzender, ontvangers, tekst, namen en tekst van pdf-bijlagen of de
+  samenvatting),
   als begin van een woord en zonder te letten op accenten: "factu" vindt "Factuur", "malaga" vindt "Málaga".
 - Filters: van:sofie, aan:billit, na:2026-03, voor:2025, bijlage (of heeft:bijlage), pdf.
 - Niets met alle woorden? Dan wat met de meeste woorden overeenkomt.
@@ -17,21 +18,21 @@ from datetime import datetime
 
 FTS_SQL = """
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-  subject, from_name, from_addr, to_addrs, body, attachments,
+  subject, from_name, from_addr, to_addrs, body, attachments, att_text,
   content='messages', content_rowid='id', tokenize='unicode61 remove_diacritics 2');
 CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
-  INSERT INTO messages_fts(rowid, subject, from_name, from_addr, to_addrs, body, attachments)
-  VALUES (new.id, new.subject, new.from_name, new.from_addr, new.to_addrs, new.body, new.attachments);
+  INSERT INTO messages_fts(rowid, subject, from_name, from_addr, to_addrs, body, attachments, att_text)
+  VALUES (new.id, new.subject, new.from_name, new.from_addr, new.to_addrs, new.body, new.attachments, new.att_text);
 END;
 CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
-  INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_addr, to_addrs, body, attachments)
-  VALUES ('delete', old.id, old.subject, old.from_name, old.from_addr, old.to_addrs, old.body, old.attachments);
+  INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_addr, to_addrs, body, attachments, att_text)
+  VALUES ('delete', old.id, old.subject, old.from_name, old.from_addr, old.to_addrs, old.body, old.attachments, old.att_text);
 END;
-CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE OF subject, from_name, from_addr, to_addrs, body, attachments ON messages BEGIN
-  INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_addr, to_addrs, body, attachments)
-  VALUES ('delete', old.id, old.subject, old.from_name, old.from_addr, old.to_addrs, old.body, old.attachments);
-  INSERT INTO messages_fts(rowid, subject, from_name, from_addr, to_addrs, body, attachments)
-  VALUES (new.id, new.subject, new.from_name, new.from_addr, new.to_addrs, new.body, new.attachments);
+CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE OF subject, from_name, from_addr, to_addrs, body, attachments, att_text ON messages BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_addr, to_addrs, body, attachments, att_text)
+  VALUES ('delete', old.id, old.subject, old.from_name, old.from_addr, old.to_addrs, old.body, old.attachments, old.att_text);
+  INSERT INTO messages_fts(rowid, subject, from_name, from_addr, to_addrs, body, attachments, att_text)
+  VALUES (new.id, new.subject, new.from_name, new.from_addr, new.to_addrs, new.body, new.attachments, new.att_text);
 END;
 """
 
@@ -44,6 +45,11 @@ DATE = re.compile(r"^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$")
 def setup(conn):
     """FTS-index en triggers; de eerste keer de bestaande mail indexeren. False als SQLite geen FTS5 heeft."""
     try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(messages_fts)")}
+        if cols and "att_text" not in cols:  # van voor de tekst uit pdf-bijlagen: opnieuw opbouwen
+            for name in ("messages_fts_ai", "messages_fts_ad", "messages_fts_au"):
+                conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+            conn.execute("DROP TABLE messages_fts")
         new = not conn.execute("SELECT 1 FROM sqlite_master WHERE name='messages_fts'").fetchone()
         conn.executescript(FTS_SQL)
         if new:
@@ -129,7 +135,7 @@ def find(db, q, account="", limit=150, any_word=False, words=None, filters=None,
         if sql_words and fts:
             # onderwerp en afzender wegen zwaarder dan de tekst
             sql = f"""SELECT t.tid, MAX(m.date) AS d, MIN(f.r) AS rank
-                      FROM (SELECT rowid, bm25(messages_fts, 6, 4, 3, 1, 1, 3) AS r FROM messages_fts
+                      FROM (SELECT rowid, bm25(messages_fts, 6, 4, 3, 1, 1, 3, 1) AS r FROM messages_fts
                             WHERE messages_fts MATCH ? ORDER BY r LIMIT 5000) f
                       JOIN messages m ON m.id = f.rowid  -- LIMIT: anders vouwt SQLite de subquery uit en mag bm25 niet
                       JOIN threads t ON t.account=m.account AND t.thread_key=m.thread_key

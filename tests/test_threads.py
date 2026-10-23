@@ -65,3 +65,12 @@ def test_digest(app, acc):
     seed(acc)
     text = app.digest_text()
     assert text.startswith("Wacht op jou: 2") and "Wacht op antwoord: 1" in text
+
+
+def test_inbox_badge_counts_unread_personal_mail_only(app, client, acc):
+    put(acc, "INBOX", 1, raw("Ann <ann@y.be>", "Vraag", "<q@y>"))
+    put(acc, "INBOX", 2, raw("Shop <news@shop.be>", "Promo", "<p@x>", unsub="<https://shop.be/u>"))
+    put(acc, "INBOX", 3, raw("Bob <bob@y.be>", "Gelezen", "<g@y>"))
+    app.db.x("UPDATE messages SET seen=1 WHERE subject='Gelezen'")
+    assert client.get("/api/inbox", headers=H).json()["unread"] == 1
+    assert client.get("/api/followup", headers=H).json()["inbox_unread"] == 1
