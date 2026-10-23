@@ -55,6 +55,15 @@ CREATE TABLE IF NOT EXISTS threads(
   UNIQUE(account, thread_key)
 );
 
+-- meldingen over nieuwe mail: om afzenders die je steeds negeert stil te zetten (zie fatigue.py)
+CREATE TABLE IF NOT EXISTS notify_log(
+  at TEXT,
+  account TEXT,
+  addr TEXT,
+  tid INTEGER
+);
+CREATE INDEX IF NOT EXISTS ix_notify_addr ON notify_log(account, addr, at);
+
 -- wat Butler zelf deed (zie autopilot.py): facturen doorgestuurd, reclame opgeruimd, concepten klaargezet
 CREATE TABLE IF NOT EXISTS auto_log(
   id INTEGER PRIMARY KEY,
@@ -181,7 +190,8 @@ class DB:
             for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0"),
                                ("messages", "html TEXT"), ("threads", "context TEXT"), ("sender_rules", "context TEXT"),
                                ("threads", "dossier_id INTEGER"), ("threads", "dossier_ai INTEGER DEFAULT 0"),
-                               ("messages", "attachments TEXT"), ("threads", "awaits INTEGER"), ("dossiers", "closed_at TEXT")):
+                               ("messages", "attachments TEXT"), ("threads", "awaits INTEGER"), ("dossiers", "closed_at TEXT"),
+                               ("sender_rules", "notify INTEGER"), ("sender_rules", "notify_auto INTEGER DEFAULT 0")):
                 if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
             # dossiers v2 (meerdere per mail, geen verzamelnamen, referentienummers): eenmalig opnieuw laten indelen,
@@ -253,6 +263,6 @@ def upsert_rule(db, account, addr, **fields):
     addr = addr.lower()
     db.x("INSERT OR IGNORE INTO sender_rules(account, addr) VALUES(?,?)", (account, addr))
     for k, v in fields.items():
-        if k in ("kind", "action", "after_days", "unsubscribed_at", "context"):
+        if k in ("kind", "action", "after_days", "unsubscribed_at", "context", "notify", "notify_auto"):
             db.x(f"UPDATE sender_rules SET {k}=? WHERE account=? AND addr=?", (v, account, addr))
     return sender_rule(db, account, addr)

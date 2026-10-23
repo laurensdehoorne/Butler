@@ -149,7 +149,7 @@ def due(db, notifier, now=None):
         if (r["kind"], r["at"]) in done:
             continue
         done.add((r["kind"], r["at"]))
-        if notifier.mode != "off":
+        if notifier.topic_on("moment"):
             if hold_for_night(now.astimezone(notifier.tz), r["until"]):
                 continue
             notifier.send(r["title"], r["detail"] or "", tid=r["tid"], high=True,

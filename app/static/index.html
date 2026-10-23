@@ -1179,6 +1179,7 @@ function renderThread(){
     `<button data-a="forward">${I('fwd')}Doorsturen…</button>`,
     (S.me?.users || []).length > 1 ? `<button data-a="share">${I('share')}Delen met…</button>` : '',
     `<button data-a="tags">${I('tag')}Tags bewerken</button>`,
+    t.sender ? `<button data-a="${t.sender.muted ? 'notify-on' : 'notify-off'}">${I('bell')}${t.sender.muted ? 'Weer meldingen' : 'Geen meldingen meer'} van ${esc(t.sender.name)}</button>` : '',
     // soort van de afzender: zo sorteert Butler alle mail van hem (ook in Opruimen)
     ...(t.sender ? [['notificatie', 'bell', 'Is een notificatie'], ['reclame', 'tag', 'Is reclame'], ['persoonlijk', 'inbox', 'Is persoonlijke mail']]
       .filter(([k]) => k !== (t.kind || 'persoonlijk'))
@@ -1263,9 +1264,11 @@ function renderThread(){
     ? `<div class="info">${I('check')}Factuur doorgestuurd naar ${esc(inv.to)}</div>`
     : `<div class="invoice">${I('file')}<span>Factuur? Stuur ze door naar <b>${esc(inv.to)}</b>.</span>
         <button class="btn primary" data-a="invoice">${I('fwd')}Doorsturen</button></div>`;
+  const mutedInfo = t.sender?.muted && t.sender.muted_auto
+    ? `<div class="info">${I('bell')}<span>Geen meldingen meer van ${esc(t.sender.name)}<span class="sub">Je las hun laatste meldingen niet. Weer aanzetten kan via Meer.</span></span></div>` : '';
   const AUTO = {factuur: ['fwd', 'Butler stuurde deze factuur door'], concept: ['draft', 'Butler zette een antwoordconcept klaar']};
   const autoInfo = (t.auto || []).filter(x => AUTO[x.kind]).map(x => `<div class="info">${I(AUTO[x.kind][0])}<span>${AUTO[x.kind][1]}${x.undone_at ? ' (teruggedraaid)' : ''}<span class="sub">${esc(x.detail)}, ${esc(when(x.at))}</span></span></div>`).join('');
-  $('#s-body').innerHTML = note + autoInfo + invoice + context + upcoming + snooze + tags + msgs + related + compose;
+  $('#s-body').innerHTML = note + autoInfo + mutedInfo + invoice + context + upcoming + snooze + tags + msgs + related + compose;
   if(keep) $('#reply').value = keep;
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
   showHtmlMessages();
@@ -1469,6 +1472,10 @@ async function doAction(a, btn){
       const r = await post(p+'/forward', {message_id: inv.message_id, to: [inv.to]});
       toast(`Doorgestuurd naar ${inv.to}` + (r.attachments ? ` (${r.attachments} bijlage${r.attachments > 1 ? 'n' : ''})` : ''));
       S.thread = await api(p); return renderThread(); }
+    if(a === 'notify-off' || a === 'notify-on'){
+      await post('/api/senders/rule', {account: t.account, addr: t.sender.addr, notify: a === 'notify-on' ? 1 : 0});
+      toast(a === 'notify-on' ? `Weer meldingen van ${t.sender.name}` : `Geen meldingen meer van ${t.sender.name}`);
+      S.thread = await api(p); return renderThread(); }
     if(a.startsWith('kind-')){
       const kind = a.slice(5);
       await post('/api/senders/rule', {account: t.account, addr: t.sender.addr, kind});
@@ -1625,10 +1632,10 @@ async function openSettings(view='root'){
   S.view = view; S.cfgErrors = {};
   $('#set-body').innerHTML = placeholder();
   openDialog(settings);
-  const [dev, cost, sub, cfg, tn] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})),
-    mySub().catch(()=>null), api('/api/config').catch(()=>null), api('/api/tone').catch(()=>null)]);
+  const [dev, cost, sub, cfg, tn, mu] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})),
+    mySub().catch(()=>null), api('/api/config').catch(()=>null), api('/api/tone').catch(()=>null), api('/api/notify/muted').catch(()=>({muted:[]}))]);
   const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null);  // enkel achter de gateway
-  S.set = {devices: dev.devices, costs: cost.months, here: !!sub, tone: tn, me};
+  S.set = {devices: dev.devices, costs: cost.months, here: !!sub, tone: tn, me, muted: mu.muted};
   S.cfg = cfg;
   if(view === 'account:new') S.view = newAccount();
   renderSettings();
@@ -1682,6 +1689,8 @@ function rootSettings(){
         <button class="btn primary" data-set="user-add">${I('plus')}Gebruiker toevoegen</button></div></div>`);
   return who + `
     <h3 class="group-h">Meldingen</h3><div class="group">${push}</div>
+    ${(st.muted || []).length ? `<h3 class="group-h">Geen meldingen van</h3><div class="group">${st.muted.map(m => `<div class="line"><span>${esc(m.addr)}<span class="sub">${m.notify_auto ? 'Je las hun laatste meldingen niet' : 'Door jou stil gezet'}</span></span>
+      <button class="btn" data-set="unmute" data-acc="${esc(m.account)}" data-addr="${esc(m.addr)}">Weer melden</button></div>`).join('')}</div>` : ''}
     <h3 class="group-h">Toestellen met meldingen</h3><div class="group">${devs}</div>
     <h3 class="group-h">AI-dienst</h3><div class="group">${ai}</div>
     <h3 class="group-h">Schrijfstijl</h3><div class="group" id="tone-group">${toneSettings()}</div>
@@ -1813,6 +1822,10 @@ async function waitForRestart(){
 async function settingAction(a, el){
   if(a === 'open'){ S.view = el.dataset.view; S.cfgErrors = {}; S.cfg.accounts = S.cfg.accounts.filter(x => !x.isNew || S.view.startsWith('account:')); renderSettings(); settings.scrollTop = 0; return; }
   if(a === 'add-account'){ S.view = newAccount(); renderSettings(); return; }
+  if(a === 'unmute'){
+    await post('/api/senders/rule', {account: el.dataset.acc, addr: el.dataset.addr, notify: 1});
+    S.set.muted = S.set.muted.filter(m => m.addr !== el.dataset.addr); toast('Weer meldingen'); renderSettings(); return;
+  }
   if(a === 'logout'){ await fetch('/logout', {method: 'POST'}); location.replace('/login'); return; }
   if(a === 'pw-change' || a === 'pw-reset'){
     const uid = a === 'pw-change' ? S.set.me.id : el.dataset.id;

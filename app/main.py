@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import actions, autopilot, config, costs, dossiers, forward, moments, shared, tone
+from . import actions, autopilot, config, costs, dossiers, fatigue, forward, moments, shared, tone
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
@@ -319,6 +319,11 @@ def attachment(sig: str, mid: int, idx: int, e: int = 0):
 
 
 # --- wat Butler zelf deed --------------------------------------------------------
+@app.get("/api/notify/muted", dependencies=[Depends(auth)])
+def notify_muted():
+    return {"muted": fatigue.muted_list(db)}
+
+
 @app.get("/api/activity", dependencies=[Depends(auth)])
 def activity():
     return {"entries": autopilot.entries(db), "enabled": {k: autopilot.enabled(APP, k) for k in autopilot.KINDS}}
@@ -581,6 +586,11 @@ def tone_loop():
                 ai.enqueue_tone()
         except Exception:
             log.exception("schrijfprofiel plannen mislukt")
+        try:  # afzenders waarvan je de meldingen steeds negeert: stil
+            for addr in fatigue.check(db):
+                log.info("meldingen van %s stil gezet: steeds genegeerd", addr)
+        except Exception:
+            log.exception("negeer-controle mislukt")
         time.sleep(86400)
 
 
@@ -699,7 +709,8 @@ def get_thread(tid: int):
     if incoming:
         rule = sender_rule(db, t["account"], incoming[-1]["from_addr"]) or {}
         card["sender"] = {"addr": incoming[-1]["from_addr"], "name": incoming[-1]["from_name"] or incoming[-1]["from_addr"],
-                          "context": rule.get("context") or ""}
+                          "context": rule.get("context") or "", "muted": rule.get("notify") == 0,
+                          "muted_auto": bool(rule.get("notify_auto"))}
     card["moments"] = [_moment(r) for r in db.q("SELECT * FROM moments WHERE tid=? AND until > ? ORDER BY at",
                                                   (tid, _now().isoformat()))]
     card["invoice"] = forward.suggestion(db, APP, t, msgs)  # factuur: met één tik naar je boekhouding
@@ -1030,6 +1041,7 @@ class RuleIn(SenderIn):
     action: str | None = None        # none | keep | archive | trash | archive_after
     after_days: int | None = None
     kind: str | None = None          # 'reclame' | 'notificatie' | 'persoonlijk' | 'auto'
+    notify: int | None = None        # 0 = geen meldingen, 1 = altijd, -1 = gewoon (zoals Butler het beslist)
 
 
 @app.post("/api/senders/rule", dependencies=[Depends(auth)])
@@ -1050,6 +1062,9 @@ def sender_set_rule(body: RuleIn):
         if kind is not None:  # bestaande mails meteen herclassificeren
             db.x("UPDATE messages SET kind=?, bulk=? WHERE account=? AND from_addr=? AND outgoing=0",
                  (kind, 1 if kind else 0, acc.id, body.addr.lower()))
+    if body.notify is not None:
+        fields["notify"] = None if body.notify < 0 else int(bool(body.notify))
+        fields["notify_auto"] = 0
     rule = upsert_rule(db, acc.id, body.addr, **fields)
     acc.wake.set()  # regels meteen toepassen bij de volgende sync
     return {"ok": True, "rule": rule}

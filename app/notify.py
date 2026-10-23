@@ -19,6 +19,11 @@ class Notifier:
         self.base_url = (app_cfg.get("base_url") or "").rstrip("/")
         self.tz = ZoneInfo(app_cfg.get("timezone", "Europe/Brussels"))
         self.quiet = self._parse_quiet(cfg.get("quiet_hours") or "")
+        # per onderwerp aan of uit (Instellingen → Meldingen); nieuwe mail volgt self.mode
+        self.topics = {"moment": cfg.get("moments", True), "shared": cfg.get("shared", True), "digest": True}
+
+    def topic_on(self, kind):
+        return self.mode != "off" and bool(self.topics.get(kind, True))
 
     @staticmethod
     def _parse_quiet(s):
@@ -43,6 +48,9 @@ class Notifier:
         return priority == "hoog"
 
     def send(self, title, message, tid=None, high=False, extra=None, force=False):
+        kind = (extra or {}).get("type")
+        if kind in self.topics and not self.topics[kind]:
+            return
         if not force and self.in_quiet_hours():
             log.info("stille uren, melding overgeslagen: %s", title)
             return

@@ -66,6 +66,8 @@ SECTIONS = [
     {"id": "notify", "title": "Meldingen", "fields": [
         F("notify.mode", "Waarvoor een melding", "select", "", "important",
           options=[["important", "Enkel belangrijke mail"], ["all", "Elke persoonlijke mail"], ["off", "Geen meldingen"]]),
+        F("notify.moments", "Wanneer je een mail nodig hebt", "bool", "Online inchecken, een concert, een deadline: op het moment zelf.", True),
+        F("notify.shared", "Mail die iemand met je deelt", "bool", "", True),
         F("notify.quiet_hours", "Stille uren", "text", "Bv. 22:00-07:00. Leeg = geen stille uren.", "", pattern=r"^(\d{2}:\d{2}-\d{2}:\d{2})?$"),
         F("notify.digest_time", "Ochtendsamenvatting om", "text", "Bv. 07:30. Leeg = geen ochtendsamenvatting.", "", pattern=r"^(\d{2}:\d{2})?$"),
         F("notify.digest_days", "Ochtendsamenvatting op", "days", "", [1, 2, 3, 4, 5]),

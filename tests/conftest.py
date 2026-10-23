@@ -28,7 +28,7 @@ import app.main as M  # noqa: E402
 from app.mailparse import parse  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-TABLES = ("messages", "threads", "folder_state", "sender_rules", "settings", "push_subs", "ai_usage", "moments", "thread_dossiers", "dossiers", "shared", "auto_log")
+TABLES = ("messages", "threads", "folder_state", "sender_rules", "settings", "push_subs", "ai_usage", "moments", "thread_dossiers", "dossiers", "shared", "auto_log", "notify_log")
 H = {"Authorization": "Bearer t0k"}
 
 

@@ -6,7 +6,7 @@ import re
 import threading
 from datetime import date, datetime
 
-from . import dossiers, moments, tone
+from . import dossiers, fatigue, moments, tone
 
 from .db import sender_rule, thread_messages
 from .mailparse import strip_quotes
@@ -291,11 +291,16 @@ class AIWorker:
             return
         last = [m for m in msgs if not m["outgoing"]][-1:] or msgs[-1:]
         last = last[0]
+        if fatigue.muted(self.db, t["account"], last["from_addr"]):
+            return
         acc = self.accounts.get(t["account"])
-        title = f"{acc.name if acc else t['account']}: {last['from_name']}"
-        text = last["subject"]
+        # wie en waarover: de afzender als titel, het account enkel als er meer dan één is
+        who = last["from_name"] or last["from_addr"]
+        title = f"{who} ({acc.name})" if acc and len(self.accounts) > 1 else who
+        text = last["subject"] or "(geen onderwerp)"
         if res and res.get("summary"):
             text += "\n" + res["summary"]
+        fatigue.record(self.db, t["account"], last["from_addr"], tid)
         self.notifier.send(title, text, tid=tid, high=(prio == "hoog"),
                            extra={"account": t["account"], "from": last["from_addr"], "subject": last["subject"],
                                   "priority": prio, "summary": (res or {}).get("summary")})
