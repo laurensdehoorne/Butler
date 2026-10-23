@@ -45,9 +45,9 @@ STATIC = Path(__file__).parent / "static"
 COOKIE = "butler_session"
 SESSION_DAYS = 180
 FIRST_PORT = 9101
-# wat iedereen mag zien zonder aan te melden: de app-schil (icoon, manifest, lettertype, service worker)
+# wat iedereen mag zien zonder aan te melden: de app-schil (icoon, manifest, service worker)
 PUBLIC = {"/manifest.webmanifest", "/icon.svg", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png",
-          "/badge-96.png", "/sw.js", "/fonts/bodoni-moda-latin.woff2", "/health"}
+          "/badge-96.png", "/sw.js", "/health"}
 HOP = {"connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "proxy-authorization",
        "proxy-authenticate", "host", "content-length", "cookie"}
 # deze AI-instellingen neemt een nieuwe gebruiker over van de beheerder (de sleutels); naam en handtekening niet

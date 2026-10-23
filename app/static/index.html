@@ -12,12 +12,10 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="preload" href="/fonts/bodoni-moda-latin.woff2" as="font" type="font/woff2" crossorigin>
 <title>Butler</title>
 <style>
 /* Butler draagt smoking: de kop is het groene jasje, de inhoud het papier van de envelop,
    en goud (de vlinderdas uit het icoon) is voorbehouden aan wat Butler zelf doet. */
-@font-face{font-family:"Bodoni Moda";src:url(/fonts/bodoni-moda-latin.woff2) format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
 /* kleuren van Apple Mail en Spark: de systeemkleuren van iOS. Wit en lichtgrijs (zwart en donkergrijs in donkere modus),
    blauw voor alles wat je kunt tikken, rood voor verwijderen en tellers, oranje voor vlaggen.
    Goud blijft voor wat Butler zelf doet: de vlinderdas bij samenvattingen en wat nu nodig is. */
@@ -30,10 +28,9 @@
   --danger:#ff3b30; --danger-tint:#ffe5e3; --out:#e5f0ff; --flag:#ff9500; --badge:#ff3b30;
   --elev:0 16px 44px -14px rgb(0 0 0 / .22), 0 1px 3px rgb(0 0 0 / .06);
   --av-l:90%; --av-c:.04; --av-ink:34%;
-  /* enkel het woordmerk "Butler" is Bodoni (het logo); de rest is SF Pro, zoals Apple's eigen apps */
-  --display:"Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
+  /* alles in SF Pro, zoals Apple's eigen apps; "Butler" bovenaan is een Large Title (34 pt, vet) */
   /* de tekststijlen van Apple (HIG): op iPhone is 1rem de Body-maat uit Instellingen (17 pt), zodat alles meeschaalt */
-  --fs-title1:1.647rem; --fs-title2:1.294rem; --fs-title3:1.176rem; --fs-body:1rem; --fs-callout:.941rem;
+  --fs-large:2rem; --fs-title1:1.647rem; --fs-title2:1.294rem; --fs-title3:1.176rem; --fs-body:1rem; --fs-callout:.941rem;
   --fs-subhead:.882rem; --fs-footnote:.765rem; --fs-caption:.706rem; --fs-caption2:.647rem;
   --text: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   accent-color: var(--lapel);
@@ -84,7 +81,7 @@ header::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--
 .brand{display:flex;align-items:center;gap:10px}
 .wordmark{flex:1;min-width:0;display:flex;flex-direction:column}
 /* geen scale op tekst: Safari bewaart dan een wazige momentopname van de letters; de lettergrootte zelf verandert */
-.wordmark h1{display:flex;align-items:center;gap:10px;margin:0;font:600 1.875rem/1 var(--display);letter-spacing:.005em;transition:font-size .3s ease}
+.wordmark h1{display:flex;align-items:center;gap:10px;margin:0;font:700 var(--fs-large)/1.1 var(--text);transition:font-size .3s ease}
 .wordmark h1 .appicon{width:34px;height:34px;flex:none;filter:drop-shadow(0 1px 2px rgb(0 0 0/.15));transition:width .3s ease,height .3s ease}
 /* bij scrollen klapt de grote titel in tot een compacte balk */
 header.compact{padding-top:calc(env(safe-area-inset-top) + 6px)}
