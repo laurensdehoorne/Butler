@@ -4,7 +4,9 @@ import logging
 import queue
 import re
 import threading
-from datetime import date
+from datetime import date, datetime
+
+from . import moments
 
 from .db import thread_messages
 from .mailparse import strip_quotes
@@ -230,23 +232,33 @@ class AIWorker:
         threading.Thread(target=self._run, daemon=True, name="ai").start()
 
     def enqueue(self, tid, notify=False):
+        self._put(("triage", tid, notify))
+
+    def enqueue_moments(self, tid):
+        self._put(("moments", tid, False))
+
+    def _put(self, job):
         with self.lock:
-            if (tid, notify) in self.pending:
+            if job in self.pending:
                 return
-            self.pending.add((tid, notify))
-        self.q.put((tid, notify))
+            self.pending.add(job)
+        self.q.put(job)
 
     def _run(self):
         while True:
-            tid, notify = self.q.get()
+            job = self.q.get()
+            kind, tid, notify = job
             with self.lock:
-                self.pending.discard((tid, notify))
+                self.pending.discard(job)
             try:
+                if kind == "moments":
+                    self.moments(tid)
+                    continue
                 res = self.triage(tid)
                 if notify:
                     self._maybe_notify(tid, res)
             except Exception:
-                log.exception("triage mislukt voor thread %s", tid)
+                log.exception("%s mislukt voor thread %s", kind, tid)
 
     def _maybe_notify(self, tid, res):
         t, msgs = thread_messages(self.db, tid)
@@ -300,6 +312,19 @@ class AIWorker:
             (res["summary"], res["priority"], res["category"], res["action"], res["deadline"], len(msgs), tid),
         )
         return res
+
+    def moments(self, tid):
+        """Momenten waarop een gemarkeerde thread nodig is. Ook voor notificaties: de vlag is een bewuste keuze."""
+        t, msgs = thread_messages(self.db, tid)
+        if not t or not msgs or not self.active_for(t["account"]):
+            return []
+        tz = self.notifier.tz
+        system = moments.SYSTEM.format(owner=self.cfg.get("owner", "de gebruiker"), name=self.cfg.get("name", "de gebruiker"),
+                                       now=datetime.now(tz).strftime("%Y-%m-%d %H:%M"), tz=tz.key)
+        items = moments.parse(self._call("triage", system, thread_text(msgs, per_msg=6000), 900), tz)
+        moments.save(self.db, tid, items)
+        self.db.x("UPDATE threads SET moments_ai=? WHERE tid=?", (len(msgs), tid))
+        return items
 
     def draft(self, tid, instruction=""):
         if not self.enabled:

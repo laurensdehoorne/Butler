@@ -20,6 +20,16 @@ Butler is bedoeld als **assistent naast** je mailapp, niet als vervanger:
 - **Concepten in plaats van versturen.** Een antwoordvoorstel kun je met *Zet als concept* in de Concepten-map van je mailbox zetten; je vindt het dan in Spark terug om na te kijken en te versturen. Rechtstreeks versturen kan ook nog.
 - **Geen dubbele meldingen.** Laat Spark gewoon elke mail melden en zet Butler op `notify.mode: important`: dan krijg je enkel een extra (time-sensitive) melding voor wat écht dringend is, plus de ochtendsamenvatting (`digest_time`).
 
+## Gemarkeerde mail op het juiste moment
+
+Markeer in Spark een mail die je later nodig hebt (een vlucht, een concert, een reservatie): Spark zet er een vlag op, in Gmail een ster. Butler ziet die vlag, ook als de mail al gearchiveerd (*Klaar*) is, en laat de AI bepalen wanneer je de mail nodig hebt:
+
+- **Vlucht**: wanneer het online inchecken opengaat (of 24 uur voor vertrek) en 3 uur voor vertrek.
+- **Concert of evenement**: om 9:00 op de dag zelf en 2 uur voor de start.
+- **Afspraak, reservatie, afhaling**: 2 uur ervoor.
+
+Op dat moment krijg je een melding (ook tijdens stille uren, maar 's nachts pas om 7:00, tenzij het dan al te laat is) en staat de mail bovenaan *Opvolgen* onder **Nu nodig**; wat binnen de week komt, staat onder **Binnenkort**. Na afloop verdwijnt het vanzelf. Haal je de vlag weg, dan verdwijnen ook de momenten. Gemarkeerde mail gaat naar de AI, ook als het een notificatie is (bv. van een luchtvaartmaatschappij): de vlag is een bewuste keuze.
+
 ## Reclame en notificaties opruimen
 
 Elke mail wordt herkend als **persoonlijk**, **notificatie** (bestellingen, verzendingen, beveiligingsmeldingen, systemen, …) of **reclame** (nieuwsbrieven, promoties), op basis van `List-Unsubscribe`/`List-Id`, de afzender (`noreply@`, `newsletter@`, …) en het onderwerp. Klopt het niet voor een afzender, dan corrigeer je dat één keer en geldt het voortaan voor al zijn mails.
@@ -43,7 +53,7 @@ andere ─┘ SMTP ◄──── SQLite-cache /data ────┘─ Webinte
 ```
 
 - Per account een IMAP-verbinding die met **IDLE** op nieuwe mail wacht (meestal binnen enkele seconden), met een volledige sync minstens elke `poll_seconds`.
-- INBOX en Verzonden van de laatste `sync_days` dagen worden lokaal gecachet in SQLite (`/data/butler.db`). Threads worden opgebouwd via `X-GM-THRID` (Gmail) of `References`/`In-Reply-To` (iCloud en andere).
+- Alle mail (INBOX, Verzonden en het archief: *Alle e-mail* bij Gmail, *Archief* bij iCloud) wordt lokaal gecachet in SQLite (`/data/butler.db`); met `sync_days` beperk je dat tot de laatste X dagen, gemarkeerde mail blijft dan altijd. De eerste sync van een groot archief duurt even: het nieuwste komt eerst. Threads worden opgebouwd via `X-GM-THRID` (Gmail) of `References`/`In-Reply-To` (iCloud en andere).
 - Grote berichten (> 5 MB) worden enkel met headers opgehaald.
 - Bij de eerste sync worden geen meldingen verstuurd en enkel threads van de laatste `ai.initial_days` dagen samengevat, om kosten te beperken. Nieuwsbrieven (herkend aan `List-Unsubscribe` e.d.) gaan nooit naar de AI.
 
@@ -157,7 +167,8 @@ Zie [`config.example.yaml`](config.example.yaml). Belangrijkste opties:
 | Sleutel | Betekenis |
 |---|---|
 | `app.followup_days` | Na hoeveel dagen zonder antwoord een verstuurde mail in *Wacht op antwoord* verschijnt |
-| `app.sync_days` | Hoeveel dagen mail lokaal bijgehouden wordt |
+| `app.sync_days` | Hoeveel dagen mail lokaal bijgehouden wordt; `0` = alle mail |
+| `app.sync_archive` | Ook het archief synchroniseren (standaard aan) |
 | `ai.triage_model` / `ai.draft_model` | Claude-modellen voor samenvatten en antwoordvoorstellen |
 | `ai.owner`, `ai.name`, `ai.signature` | Context voor de AI: wie je bent en hoe je ondertekent |
 | `notify.mode` | `all`, `important` (enkel prioriteit *hoog*) of `off` |

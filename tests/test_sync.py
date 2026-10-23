@@ -1,17 +1,18 @@
 from datetime import datetime, timezone
 from unittest import mock
 
-from imapclient import SEEN
+from imapclient import FLAGGED, SEEN
 
 from tests.conftest import raw
 
 
 class FakeIMAP:
-    """Genoeg van IMAPClient voor Syncer: select, search, fetch."""
+    """Genoeg van IMAPClient voor Syncer: select, search, fetch. Zoeken kent enkel FLAGGED; de rest geeft alles."""
 
     def __init__(self):
         self.box = {"INBOX": {10: raw("P <p10@x.be>", "een", "<m10@x>"), 11: raw("P <p11@x.be>", "twee", "<m11@x>")},
-                    "Sent Messages": {}}
+                    "Sent Messages": {}, "Archive": {}}
+        self.flagged = set()  # (map, uid)
         self.cur = None
 
     def select_folder(self, folder, readonly=False):
@@ -19,6 +20,8 @@ class FakeIMAP:
         return {b"UIDVALIDITY": 7}
 
     def search(self, criteria):
+        if criteria == ["FLAGGED"]:
+            return [u for u in self.box[self.cur] if (self.cur, u) in self.flagged]
         return list(self.box[self.cur])
 
     def fetch(self, uids, items):
@@ -29,7 +32,7 @@ class FakeIMAP:
                 if it == "RFC822.SIZE":
                     d[b"RFC822.SIZE"] = len(data)
                 elif it == "FLAGS":
-                    d[b"FLAGS"] = (SEEN,) if u == 10 else ()
+                    d[b"FLAGS"] = ((SEEN,) if u == 10 else ()) + ((FLAGGED,) if (self.cur, u) in self.flagged else ())
                 elif it == "INTERNALDATE":
                     d[b"INTERNALDATE"] = datetime.now(timezone.utc)
                 elif it == "BODY.PEEK[]":

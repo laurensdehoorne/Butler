@@ -4,7 +4,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from imapclient import SEEN
+from imapclient import FLAGGED, SEEN
 
 from .db import sender_rule
 from .mailparse import parse
@@ -13,6 +13,7 @@ log = logging.getLogger("butler.sync")
 
 MAX_FULL_SIZE = 5 * 1024 * 1024  # groter → enkel headers
 CHUNK = 40
+MOMENT_DAYS = 365  # gemarkeerde mails ouder dan dit gaan niet meer naar de AI voor momenten
 
 
 def _chunks(seq, n):
@@ -34,7 +35,8 @@ class Syncer:
         self.accounts = accounts
         self.ai = ai_worker
         self.notifier = notifier
-        self.sync_days = int(app_cfg.get("sync_days", 60))
+        self.sync_days = int(app_cfg.get("sync_days", 0))  # 0 = alle mail
+        self.archive = bool(app_cfg.get("sync_archive", True))  # ook Alle e-mail (Gmail) / Archief (iCloud)
         self.poll = int(app_cfg.get("poll_seconds", 300))
         self.ai_initial_days = int(ai_cfg.get("initial_days", 7))
         cl = app_cfg.get("cleanup") or {}
@@ -89,7 +91,10 @@ class Syncer:
         self.apply_rules(c, acc)
         if acc.folders.get("sent"):
             self.sync_folder(c, acc, "sent")
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=self.sync_days * 2)).isoformat()
+        if self.archive and acc.folders.get("archive"):
+            self.sync_folder(c, acc, "archive")
+        self.queue_moments(acc)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max(self.sync_days, 60) * 2)).isoformat()
         self.db.x("DELETE FROM messages WHERE account=? AND folder IN ('_weg','_pending') AND date < ?", (acc.id, cutoff))
         acc.last_sync = datetime.now(timezone.utc).isoformat()
 
@@ -157,8 +162,11 @@ class Syncer:
         else:
             last_uid, initialized = st["last_uid"], bool(st["initialized"])
 
-        since = date.today() - timedelta(days=self.sync_days)
-        current = set(c.search(["SINCE", since]))
+        if self.sync_days:  # venster, maar gemarkeerde mail blijft altijd (vlucht van maanden geleden geboekt)
+            since = date.today() - timedelta(days=self.sync_days)
+            current = set(c.search(["OR", "FLAGGED", ["SINCE", since]]))
+        else:
+            current = set(c.search(["ALL"]))
         known = {r["uid"] for r in self.db.q("SELECT uid FROM messages WHERE account=? AND folder=?", (acc.id, folder))}
 
         gone = known - current
@@ -169,7 +177,8 @@ class Syncer:
                 [(acc.id, folder, u) for u in gone],
             )
 
-        new = sorted(current - known)
+        # nieuwste eerst: bij de eerste sync van een groot archief verschijnt het recente meteen
+        new = sorted(current - known, reverse=True)
         triage = {}
         for chunk in _chunks(new, CHUNK):
             self.fetch_store(c, acc, folder, role, chunk, initialized, last_uid, triage)
@@ -182,6 +191,14 @@ class Syncer:
                     "UPDATE messages SET seen=? WHERE account=? AND folder=? AND uid=?",
                     [(1 if SEEN in d.get(b"FLAGS", ()) else 0, acc.id, folder, u) for u, d in flags.items()],
                 )
+
+        # vlaggen (Spark, Gmail-ster): de server zoekt ze op, zodat niet elk bericht opgehaald hoeft te worden
+        flagged = set(c.search(["FLAGGED"])) & current
+        was = {r["uid"] for r in self.db.q("SELECT uid FROM messages WHERE account=? AND folder=? AND flagged=1",
+                                           (acc.id, folder))}
+        if flagged != was:
+            self.db.xm("UPDATE messages SET flagged=? WHERE account=? AND folder=? AND uid=?",
+                       [(1, acc.id, folder, u) for u in flagged - was] + [(0, acc.id, folder, u) for u in was - flagged])
 
         for tid, notify in triage.items():
             if self.ai.active_for(acc.id):
@@ -223,7 +240,7 @@ class Syncer:
                 p["date"] = _internaldate(m.get(b"INTERNALDATE"))
             seen = SEEN in m.get(b"FLAGS", ())
             thrid = m.get(b"X-GM-THRID")
-            tid, outgoing = self.store(acc, folder, role, uid, p, seen, thrid)
+            tid, outgoing = self.store(acc, folder, role, uid, p, seen, thrid, flagged=FLAGGED in m.get(b"FLAGS", ()))
 
             arrival = initialized and role == "inbox" and uid > last_uid and not outgoing
             if arrival:
@@ -261,7 +278,7 @@ class Syncer:
                 return r["thread_key"]
         return (p["refs"][0] if p["refs"] else p["in_reply_to"]) or p["message_id"] or f"uid:{acc.id}:{folder}:{uid}"
 
-    def store(self, acc, folder, role, uid, p, seen, thrid=None):
+    def store(self, acc, folder, role, uid, p, seen, thrid=None, flagged=False):
         outgoing = acc.is_me(p["from_addr"])
         rule = sender_rule(self.db, acc.id, p["from_addr"])
         if rule and rule["kind"] is not None:  # handmatige correctie per afzender
@@ -276,13 +293,31 @@ class Syncer:
         self.db.x(
             """INSERT OR REPLACE INTO messages(account, folder, uid, message_id, thread_key, refs, from_addr, from_name,
                to_addrs, cc_addrs, reply_to, subject, date, snippet, body, seen, outgoing, in_inbox, bulk,
-               kind, unsub, unsub_post)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               kind, unsub, unsub_post, flagged)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (acc.id, folder, uid, p["message_id"], key, " ".join(p["refs"]), p["from_addr"], p["from_name"],
              json.dumps(p["to"]), json.dumps(p["cc"]), p["reply_to"], p["subject"], p["date"], p["snippet"],
              p["body"], 1 if (seen or outgoing) else 0, 1 if outgoing else 0, 1 if role == "inbox" else 0,
-             1 if p["bulk"] else 0, p["kind"], p.get("unsub", ""), 1 if p.get("unsub_post") else 0),
+             1 if p["bulk"] else 0, p["kind"], p.get("unsub", ""), 1 if p.get("unsub_post") else 0, 1 if flagged else 0),
         )
         self.db.x("INSERT OR IGNORE INTO threads(account, thread_key) VALUES(?,?)", (acc.id, key))
         tid = self.db.one("SELECT tid FROM threads WHERE account=? AND thread_key=?", (acc.id, key))["tid"]
         return tid, outgoing
+
+    # --- momenten uit gemarkeerde mail -------------------------------------
+    def queue_moments(self, acc):
+        """Gemarkeerde threads met nieuwe berichten naar de AI; vlag weg = momenten weg."""
+        since = (datetime.now(timezone.utc) - timedelta(days=MOMENT_DAYS)).isoformat()
+        rows = self.db.q(
+            """SELECT t.tid, t.moments_ai, COUNT(DISTINCT COALESCE(m.message_id, 'row' || m.id)) AS n,
+                      MAX(m.flagged) AS flagged, MAX(m.date) AS last
+               FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+               WHERE t.account=? GROUP BY t.tid HAVING MAX(m.flagged)=1 OR t.moments_ai>0""",
+            (acc.id,),
+        )
+        for r in rows:
+            if not r["flagged"]:
+                self.db.x("DELETE FROM moments WHERE tid=?", (r["tid"],))
+                self.db.x("UPDATE threads SET moments_ai=0 WHERE tid=?", (r["tid"],))
+            elif r["moments_ai"] != r["n"] and r["last"] >= since and self.ai.active_for(acc.id):
+                self.ai.enqueue_moments(r["tid"])
