@@ -24,6 +24,11 @@ MAX_PER_MAIL = 4
 MAX_REF_THREADS = 8  # staat een nummer in meer threads, dan is het geen referentie maar bv. een ondernemingsnummer
 REF_RE = re.compile(r"(?<![\w-])[A-Z]{0,4}\d[\d/-]{5,}\d[A-Z0-9]{0,4}(?![\w-])")
 DATE_RE = re.compile(r"^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$|^\d{4}[-/]\d{1,2}[-/]\d{1,2}$")
+# in de tekst telt een nummer enkel op een regel die over een referentie gaat; zo vallen wetteksten in een
+# voettekst (Verordening (EU) 2016/679) en telefoonnummers weg
+REF_WORDS = re.compile(r"\b(ref|referentie|reference|kenmerk|dossier|polis|policy|boeking|booking|reserv|klant|schade|claim|"
+                       r"order|bestel|factuur|invoice|case|ticket|nr|nummer|number|no\.|n°)", re.I)
+LEGAL_RE = re.compile(r"^(19|20)\d{2}/\d{1,4}$")  # EU-verordeningen en -richtlijnen: 2016/679, 2019/1937
 
 
 def names(db, days=365, limit=50):
@@ -67,11 +72,12 @@ def _locked(db, tid):
 
 
 def assign(db, tid, names_):
-    """De dossiers die de AI voor deze thread koos (vervangt haar vorige keuze), plus koppeling via referentienummers."""
+    """De dossiers die de AI voor deze thread koos, plus koppeling via referentienummers. De AI heeft het laatste
+    woord over de thread zelf: haar keuze vervangt ook wat eerder via een nummer gekoppeld werd."""
     if _locked(db, tid):
         return []
     now = datetime.now(timezone.utc).isoformat()
-    db.x("DELETE FROM thread_dossiers WHERE tid=? AND source='ai'", (tid,))
+    db.x("DELETE FROM thread_dossiers WHERE tid=?", (tid,))
     ids = [_id(db, n, now) for n in names_ or []]
     for did in ids:
         db.x("INSERT OR IGNORE INTO thread_dossiers(tid, dossier_id, source) VALUES(?,?,'ai')", (tid, did))
@@ -90,9 +96,10 @@ def references(db, tid, limit=6):
     found = []
     for m in db.q("SELECT subject, substr(body, 1, 20000) AS body FROM messages WHERE account=? AND thread_key=?",
                   (t["account"], t["thread_key"])):
-        for ref in REF_RE.findall(f"{m['subject'] or ''}\n{m['body'] or ''}"):
+        lines = [m["subject"] or ""] + [ln for ln in (m["body"] or "").splitlines() if REF_WORDS.search(ln)]
+        for ref in REF_RE.findall("\n".join(lines)):
             digits = sum(c.isdigit() for c in ref)
-            if digits < 7 or DATE_RE.match(ref) or (ref.isdigit() and ref.startswith("0")):  # datums en telefoonnummers niet
+            if digits < 7 or DATE_RE.match(ref) or LEGAL_RE.match(ref) or (ref.isdigit() and ref.startswith("0")):
                 continue
             if ref not in found:
                 found.append(ref)
@@ -102,15 +109,18 @@ def references(db, tid, limit=6):
 
 
 def link_by_reference(db, tid, ids):
-    """Andere threads met hetzelfde referentienummer in dezelfde dossiers zetten."""
+    """Andere threads met hetzelfde referentienummer in dezelfde dossiers zetten, zolang de AI ze nog niet zelf
+    bekeek (dossier_ai=0): daarna geldt haar oordeel."""
     for ref in references(db, tid):
+        # S00632608501 en S006326085 zijn hetzelfde dossier: verzekeraars hangen soms een volgnummer aan de referentie
+        core = ref[:-2] if re.match(r"^[A-Z]{1,4}\d{10,}$", ref) else ref
         rows = db.q("""SELECT DISTINCT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
                        WHERE t.tid != ? AND (m.subject LIKE ? OR m.body LIKE ?) LIMIT ?""",
-                    (tid, f"%{ref}%", f"%{ref}%", MAX_REF_THREADS + 1))
+                    (tid, f"%{core}%", f"%{core}%", MAX_REF_THREADS + 1))
         if len(rows) > MAX_REF_THREADS:
             continue
         for r in rows:
-            if not _locked(db, r["tid"]):
+            if db.one("SELECT dossier_ai FROM threads WHERE tid=?", (r["tid"],))["dossier_ai"] == 0:
                 for did in ids:
                     db.x("INSERT OR IGNORE INTO thread_dossiers(tid, dossier_id, source) VALUES(?,?,'ref')", (r["tid"], did))
 

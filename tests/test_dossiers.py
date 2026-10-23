@@ -72,3 +72,22 @@ def test_catch_up_includes_recent_archived_personal_mail(app, acc):
     with mock.patch.object(app.ai, "enqueue") as enqueue:
         app.syncer.queue_triage(acc)
     assert [c.args[0] for c in enqueue.call_args_list] == [recent]
+
+
+def test_legal_footer_numbers_do_not_link_and_ai_has_final_say(app, acc):
+    footer = "Uw gegevens worden verwerkt volgens Verordening (EU) 2016/679 (AVG)."
+    malaga, _ = put(acc, "INBOX", 1, raw("Air France <af@airfrance.fr>", "Boeking Parijs < > Malaga", "<m1@af>",
+                                         body=f"Uw boeking.\n{footer}"))
+    manchester, _ = put(acc, "INBOX", 2, raw("Air France <af@airfrance.fr>", "Boeking Parijs < > Manchester", "<m2@af>",
+                                             body=f"Uw boeking.\n{footer}"))
+    assert D.references(app.db, malaga) == []  # 2016/679 is een wet, geen referentie
+    D.assign(app.db, malaga, ["Reis Parijs-Malaga"])
+    assert D.of_thread(app.db, manchester) == []
+
+    # een echte referentie koppelt wel, tot de AI de mail zelf bekijkt en anders beslist
+    shared, _ = put(acc, "INBOX", 3, raw("KBC <k@kbc.be>", "Brievenbus", "<k1@kbc>", body="Schadenummer: S006326085"))
+    other, _ = put(acc, "INBOX", 4, raw("KBC <k@kbc.be>", "Iets", "<k2@kbc>", body="Uw schade S006326085 is betaald"))
+    D.assign(app.db, shared, ["Aanrijding brievenbus"])
+    assert [d["name"] for d in D.of_thread(app.db, other)] == ["Aanrijding brievenbus"]
+    D.assign(app.db, other, ["Schade aan ramen"])
+    assert [d["name"] for d in D.of_thread(app.db, other)] == ["Schade aan ramen"]
