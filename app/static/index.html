@@ -405,9 +405,17 @@ textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto
 .att-size{color:var(--muted);font-size:0.8125rem;white-space:nowrap}
 #viewer{width:100%;max-width:none;height:100dvh;max-height:none;margin:0;background:#000;color:#fff;--off:0 0;--sc:.97}
 #viewer::backdrop{background:#000}
-#viewer img{display:block;width:100%;height:calc(100% - 56px - env(safe-area-inset-top));object-fit:contain}
+#viewer[open]{display:flex;flex-direction:column}
+.viewer-body{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom)}
+.viewer-body > img{display:block;width:100%;height:100%;object-fit:contain}
+.viewer-body.pdf{background:#2c2c2e;padding:8px 0 calc(8px + env(safe-area-inset-bottom))}
+.viewer-body.pdf canvas{display:block;width:calc(100% - 16px);max-width:900px;margin:0 auto 8px;background:#fff;border-radius:4px}
+.viewer-msg{display:grid;place-items:center;height:100%;padding:24px;text-align:center;color:#ebebf5;opacity:.8}
+.viewer-msg .i{width:44px;height:44px;opacity:.8}
+.viewer-msg .btn{width:auto;margin-top:8px}
+.viewer-done{border:0;background:transparent;color:#0a84ff;font:600 1.0625rem/1 inherit;font-family:inherit;min-height:44px;padding:0 8px;cursor:pointer}
 .viewer-bar{display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 6px) 8px 6px 16px;height:calc(56px + env(safe-area-inset-top))}
-.viewer-bar .viewer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.viewer-bar .viewer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;text-align:center}
 .viewer-bar .iconbtn{color:#fff}
 .mb.html{white-space:normal;max-width:none}
 .msg.out .mb.html{border-left:0;padding-left:46px;margin-left:0}
@@ -509,6 +517,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M8.5 3.5A6 6 0 0 1 18 8c0 3 .6 5 1.3 6.4"/><path d="M6 8c0 7-3 9-3 9h14"/><path d="M10 21a2 2 0 0 0 4 0"/><path d="M3 3l18 18"/></symbol>
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M8 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2"/></symbol>
   <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4.5L17 13H5"/></symbol>
@@ -610,10 +619,11 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   </form>
 </dialog>
 <dialog id="viewer" closedby="any" aria-label="Bijlage bekijken">
-  <div class="viewer-bar"><span class="viewer-name"></span>
-    <a class="iconbtn viewer-open" target="_blank" rel="noopener" aria-label="Openen of bewaren"><svg class="i" aria-hidden="true"><use href="#i-ext"/></svg></a>
-    <button class="iconbtn" data-viewer-close aria-label="Sluiten"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-  <img alt="">
+  <div class="viewer-bar">
+    <button class="viewer-done" data-viewer-close>Gereed</button>
+    <span class="viewer-name"></span>
+    <button class="iconbtn viewer-share" aria-label="Delen of bewaren"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg></button></div>
+  <div class="viewer-body" tabindex="0"></div>
 </dialog>
 <div class="toast" id="toast" role="status"></div>
 
@@ -1132,7 +1142,9 @@ async function openThread(tid, push=true){
   $('#back-label').textContent = TAB_NAMES[S.tab];
   if(fresh){ $('#s-title').textContent=''; $('#s-meta').innerHTML=''; $('#s-body').innerHTML=placeholder(); $('#s-actions').innerHTML=''; }
   openDialog(sheet);
-  try{ S.thread = await api('/api/threads/'+tid); renderThread(); if(fresh){ sheet.scrollTop = 0; $('#s-body').focus({preventScroll:true}); } }
+  try{ S.thread = await api('/api/threads/'+tid); renderThread(); if(fresh){ sheet.scrollTop = 0; $('#s-body').focus({preventScroll:true}); }
+    // openen = gelezen, ook op de server (zoals in Spark en Mail), op de achtergrond
+    if(fresh && S.thread.unread) post(`/api/threads/${tid}/read`).then(() => { if(S.thread?.tid === tid){ S.thread.unread = false; $("#more-menu [data-a=read]")?.remove(); } }).catch(() => {}); }
   catch(e){ $('#s-body').innerHTML = empty('Deze mail opent niet', esc(e.message), I('x')); }
 }
 function closeThread(){
@@ -1287,22 +1299,104 @@ function attList(m){
     const icon = a.type === 'application/pdf' ? 'pdf' : a.type.startsWith('image/') ? 'image' : 'file';
     const img = a.inline && a.type.startsWith('image/');
     // pdf: de pdf-lezer van het toestel; afbeelding: hier bekijken; de rest: downloaden
-    return `<a class="att" href="${esc(a.url)}" ${img ? 'data-img' : 'target="_blank" rel="noopener"'} ${a.inline ? '' : `download="${esc(a.name)}"`}>
+    return `<a class="att" href="${esc(a.url)}" data-type="${esc(a.type)}" ${img ? 'data-img' : ''}>
       ${I(icon)}<span class="att-name">${esc(a.name)}</span><span class="att-size">${attSize(a.size)}</span></a>`;
   }).join('');
 }
+// Bijlagen openen altijd binnen Butler, met Gereed om terug te gaan: een link naar buiten opent in de app op het
+// beginscherm een venster zonder terugknop. Pdf's tekent pdf.js (alle pagina's, ook op iOS), afbeeldingen een <img>;
+// de rest en "bewaren" gaan via Delen (Bewaar in Bestanden, open in Word, ...) of, zonder Delen, een download.
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+let pdfjs = null;
+const loadPdfjs = () => pdfjs ??= new Promise((ok, fail) => {
+  const sc = document.createElement('script');
+  sc.src = PDFJS + 'pdf.min.js';
+  sc.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); };
+  sc.onerror = () => { pdfjs = null; fail(new Error('pdf-lezer niet geladen')); };
+  document.head.append(sc);
+});
+async function fetchFile(url, name, type){
+  let token = ''; try{ token = localStorage.getItem('butler_token') || ''; }catch(e){}
+  const r = await fetch(url, {headers: token && url.startsWith('/api/') ? {Authorization: 'Bearer ' + token} : {}});
+  if(!r.ok) throw Object.assign(new Error(r.status === 404 ? 'De bijlage is niet (meer) te vinden.' : 'Openen lukte niet.'), {status: r.status});
+  const blob = await r.blob();
+  return new File([blob], name, {type: type || blob.type});
+}
+async function shareFile(file){
+  if(navigator.canShare?.({files: [file]})){
+    try{ await navigator.share({files: [file]}); }catch(e){ if(e.name !== 'AbortError') toast('Delen lukte niet'); }
+    return;
+  }
+  const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(file), download: file.name});
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+const viewer = $('#viewer'), vbody = viewer.querySelector('.viewer-body');
+let viewerFile = null, viewerUrl = null;
+async function renderPdf(file, seq){
+  const lib = await loadPdfjs();
+  const doc = await lib.getDocument({data: await file.arrayBuffer()}).promise;
+  vbody.classList.add('pdf'); vbody.replaceChildren();
+  const width = Math.min(vbody.clientWidth - 16, 900), dpr = Math.min(devicePixelRatio || 1, 2);
+  for(let n = 1; n <= doc.numPages; n++){
+    if(seq !== viewer.dataset.seq) return;  // intussen gesloten of iets anders geopend
+    const page = await doc.getPage(n);
+    const vp = page.getViewport({scale: width / page.getViewport({scale: 1}).width * dpr});
+    const c = Object.assign(document.createElement('canvas'), {width: vp.width, height: vp.height});
+    c.setAttribute('aria-label', `Pagina ${n} van ${doc.numPages}`);
+    vbody.append(c);
+    await page.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+  }
+}
+// een link is een dag geldig: stond de mail langer open, dan eerst een verse link vragen
+async function freshFile(url, name, type){
+  try{ return await fetchFile(url, name, type); }
+  catch(err){
+    if(err.status !== 404 || !url.startsWith('/att/') || !S.thread) throw err;
+    S.thread = await api('/api/threads/' + S.thread.tid);
+    const fresh = S.thread.messages.flatMap(m => m.attachments || []).find(x => x.name === name);
+    if(!fresh) throw err;
+    return fetchFile(fresh.url, name, type);
+  }
+}
+async function openAttachment(a){
+  const name = a.querySelector('.att-name').textContent, url = a.getAttribute('href'), type = a.dataset.type || '';
+  const kind = type === 'application/pdf' ? 'pdf' : type.startsWith('image/') && type !== 'image/heic' ? 'img' : 'file';
+  const seq = viewer.dataset.seq = String(Date.now());
+  viewer.querySelector('.viewer-name').textContent = name;
+  vbody.className = 'viewer-body'; vbody.innerHTML = '<div class="viewer-msg">Laden…</div>';
+  viewerFile = null;
+  openDialog(viewer);
+  try{
+    const file = viewerFile = await freshFile(url, name, type);
+    if(seq !== viewer.dataset.seq) return;
+    if(kind === 'file'){  // Word, Excel, html, ...: Delen opent ze in de juiste app (een tik, want iOS vraagt dat)
+      vbody.innerHTML = `<div class="viewer-msg"><div>${I('file')}<p><b>${esc(name)}</b><br>${attSize(file.size)}</p>
+        <p>Butler kan dit soort bestand niet zelf tonen.</p>
+        <button class="btn primary" data-vshare>${I('upload')}Openen in een andere app of bewaren</button></div></div>`;
+    } else if(kind === 'img'){
+      if(viewerUrl) URL.revokeObjectURL(viewerUrl);
+      const img = new Image(); img.alt = name; img.src = viewerUrl = URL.createObjectURL(file);
+      vbody.replaceChildren(img);
+    } else await renderPdf(file, seq);
+  }catch(err){
+    vbody.innerHTML = `<div class="viewer-msg">${esc(err.message)}<br>Probeer Delen om ze in een andere app te openen.</div>`;
+  }
+}
 document.addEventListener('click', e => {
-  const a = e.target.closest('a.att[data-img]');
+  const a = e.target.closest('a.att');
   if(!a) return;
   e.preventDefault();
-  const v = $('#viewer');
-  v.querySelector('img').src = a.getAttribute('href');
-  v.querySelector('.viewer-name').textContent = a.querySelector('.att-name').textContent;
-  v.querySelector('.viewer-open').href = a.getAttribute('href');
-  openDialog(v);
+  openAttachment(a);
 });
-wireDialog($('#viewer'), () => closeTopLayer($('#viewer')));
-$('#viewer [data-viewer-close]').onclick = () => closeTopLayer($('#viewer'));
+vbody.addEventListener('click', e => { if(e.target.closest('[data-vshare]') && viewerFile) shareFile(viewerFile); });
+viewer.querySelector('.viewer-share').onclick = async () => {
+  if(viewerFile) return shareFile(viewerFile);
+  toast('Nog aan het laden…');
+};
+const closeViewer = () => { viewer.dataset.seq = ''; closeTopLayer(viewer); };
+wireDialog(viewer, closeViewer);
+$('#viewer [data-viewer-close]').onclick = closeViewer;
 
 /* ---------- HTML-mails: in een iframe zonder scripts; externe afbeeldingen komen via Butler ---------- */
 const mailDoc = html => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
