@@ -29,6 +29,17 @@ def device_name(user_agent):
     return f"{device} · {browser}" if browser else device
 
 
+def contact_uri(value):
+    """De VAPID-contactgegevens die Apple en Google eisen: mailto: of een https-adres. Een kaal e-mailadres krijgt
+    zelf mailto: ervoor (zonder faalt elke melding met "Missing 'sub' from claims")."""
+    v = (value or "").strip()
+    if v.lower().startswith(("mailto:", "https://")):
+        return v
+    if "@" in v and " " not in v:
+        return "mailto:" + v
+    return "https://github.com"
+
+
 def device_id(endpoint):
     """Korte publieke naam voor een abonnement (het endpoint zelf is een geheim adres)."""
     return hashlib.sha256(endpoint.encode()).hexdigest()[:16]
@@ -38,9 +49,9 @@ class Push:
     def __init__(self, db, data_dir, contact=""):
         self.db = db
         self.key_path = Path(data_dir) / "vapid.pem"
-        # Apple aanvaardt enkel mailto: of een https-domein zonder pad
-        self.contact = (contact or os.environ.get("PUSH_CONTACT", "")).strip() or "https://github.com"
+        self.contact = contact_uri(contact or os.environ.get("PUSH_CONTACT", ""))
         self._vapid = None
+        self.last_error = ""
 
     # --- sleutels -------------------------------------------------------
     def vapid(self):
@@ -93,26 +104,31 @@ class Push:
 
     # --- versturen ------------------------------------------------------
     def _send_one(self, subscription, message):
-        """False als de pushdienst zegt dat het toestel niet meer bestaat (app verwijderd)."""
+        """"ok", "gone" (de pushdienst kent het toestel niet meer: app verwijderd) of "error"."""
         from pywebpush import WebPushException, webpush
 
         try:
             webpush(subscription, json.dumps(message), vapid_private_key=self.vapid(),
                     vapid_claims={"sub": self.contact}, ttl=24 * 3600, timeout=20)
-            return True
+            return "ok"
         except WebPushException as e:
             status = getattr(e.response, "status_code", None)
             if status in (404, 410):
-                return False
-            log.warning("push mislukt (%s): %s", status, e)
-            return True
+                return "gone"
+            self.last_error = f"pushdienst antwoordde {status}"
+        except Exception as e:  # bv. een ongeldige VAPID-instelling: nooit de hele aanvraag laten mislukken
+            self.last_error = str(e)[:200]
+        log.warning("push mislukt: %s", self.last_error)
+        return "error"
 
     def send(self, message):
-        """message = {title, body, url, tag?}. Stuurt naar elk toestel; verdwenen toestellen worden vergeten."""
+        """message = {title, body, url, tag?}. Stuurt naar elk toestel; verdwenen toestellen worden vergeten.
+        Geeft het aantal toestellen terug dat de melding echt kreeg."""
         sent = 0
         for r in self.db.q("SELECT endpoint, data FROM push_subs"):
-            if self._send_one(json.loads(r["data"]), message):
+            result = self._send_one(json.loads(r["data"]), message)
+            if result == "ok":
                 sent += 1
-            else:
+            elif result == "gone":
                 self.remove(r["endpoint"])
         return sent

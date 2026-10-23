@@ -363,7 +363,7 @@ class Syncer:
             return
         rows = self.db.q(
             """SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
-               WHERE t.account=? AND t.ai_count=0 GROUP BY t.tid
+               WHERE t.account=? AND (t.ai_count=0 OR t.dossier_ai=0) GROUP BY t.tid
                HAVING SUM(m.in_inbox) > 0 AND MIN(m.bulk) = 0 ORDER BY MAX(m.date) DESC LIMIT 300""",
             (acc.id,),
         )
@@ -377,7 +377,7 @@ class Syncer:
         """Gemarkeerde threads met nieuwe berichten naar de AI; vlag weg = momenten weg."""
         since = (datetime.now(timezone.utc) - timedelta(days=MOMENT_DAYS)).isoformat()
         rows = self.db.q(
-            """SELECT t.tid, t.moments_ai, COUNT(DISTINCT COALESCE(m.message_id, 'row' || m.id)) AS n,
+            """SELECT t.tid, t.moments_ai, t.dossier_ai, COUNT(DISTINCT COALESCE(m.message_id, 'row' || m.id)) AS n,
                       MAX(m.flagged) AS flagged, MAX(m.date) AS last
                FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
                WHERE t.account=? GROUP BY t.tid HAVING MAX(m.flagged)=1 OR t.moments_ai>0""",
@@ -387,5 +387,5 @@ class Syncer:
             if not r["flagged"]:
                 self.db.x("DELETE FROM moments WHERE tid=?", (r["tid"],))
                 self.db.x("UPDATE threads SET moments_ai=0 WHERE tid=?", (r["tid"],))
-            elif r["moments_ai"] != r["n"] and r["last"] >= since and self.ai.active_for(acc.id):
+            elif (r["moments_ai"] != r["n"] or r["dossier_ai"] == 0) and r["last"] >= since and self.ai.active_for(acc.id):
                 self.ai.enqueue_moments(r["tid"])

@@ -184,6 +184,16 @@ a.item{touch-action:pan-y}
 .ctx-show p{margin:6px 0 0;white-space:pre-wrap}
 .ctx-form{margin-bottom:16px}
 .ctx-form .hint{font-size:0.8125rem;color:var(--muted);margin-top:8px}
+.badge.dossier{background:var(--out);color:var(--lapel);font-weight:600;cursor:pointer}
+.linkbtn{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:0;color:var(--lapel);font:inherit;font-weight:600;cursor:pointer}
+.linkbtn .i{width:14px;height:14px}
+.related{margin:18px 0 0;padding:12px 14px;border-radius:12px;background:var(--tint)}
+.related-h{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:4px}
+.related-h .i{width:16px;height:16px;color:var(--lapel)}
+.rel{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--rule)}
+.rel:first-of-type{border-top:0}
+.rel span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rel time{color:var(--muted);font-size:0.8125rem;white-space:nowrap}
 .m-when{display:block;font-size:0.8125rem;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums}
 .info .tie{width:18px;height:9px}
 @container list (min-width:620px){
@@ -406,6 +416,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   <symbol id="i-broom" viewBox="0 0 24 24"><path d="M15 3l-3.5 7.5"/><path d="M7.5 11h8l2 10h-12z"/><path d="M9.5 15.5V21M13.5 15.5V21"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
 </svg>
 
@@ -610,6 +621,7 @@ function card(c, mode){
   if(c.category && c.category!=='overig') badges.push(`<span class="badge">${esc(c.category)}</span>`);
   if(S.accounts.length>1) badges.push(`<span class="badge">${esc(c.account_name)}</span>`);
   c.tags.forEach(t => badges.push(`<span class="badge tag">#${esc(t)}</span>`));
+  if(c.dossier && mode !== 'dossier') badges.unshift(`<span class="badge dossier" data-dossier="${c.dossier.id}">${I('folder')}${esc(c.dossier.name)}</span>`);
   return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}" data-flagged="${c.flagged?1:0}">
     ${avatar(c.who, c.last_outgoing, c.avatar)}
     <div class="c-main">
@@ -663,12 +675,20 @@ function swapList(html, animate){
 
 async function load(animate=false){
   renderChips();
-  const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q, seq = ++S.seq;
+  const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q+'|'+(S.dossier||''), seq = ++S.seq;
   if(!S.loaded[key]) $('#list').innerHTML = placeholder();
   const acc = encodeURIComponent(S.account);
   let html;
   try{
-    if(S.tab==='inbox'){
+    if(S.dossier){  // alle mail die over hetzelfde gaat, met wat eraan komt bovenaan
+      const d = await api(`/api/dossiers/${S.dossier}`);
+      const due = d.moments.filter(c => new Date(c.moment.at) <= new Date()), later = d.moments.filter(c => new Date(c.moment.at) > new Date());
+      html = `<button class="backbtn" data-dossier-back>${I('back')}<span>${TAB_NAMES[S.tab]}</span></button>
+        <div class="sec-h"><h2>${esc(d.dossier.name)}</h2><span class="num">${d.threads.length}</span></div>`
+        + (due.length ? `<section class="now"><div class="items">${due.map(c => momentCard(c, true)).join('')}</div></section>` : '')
+        + (later.length ? `<div class="items">${later.map(c => momentCard(c, false)).join('')}</div>` : '')
+        + `<div class="items">${vis(d.threads).map(c => card(c, 'dossier')).join('')}</div>`;
+    } else if(S.tab==='inbox'){
       const d = await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
       d.threads = vis(d.threads);
       html = d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c)).join('')}</div>`
@@ -809,7 +829,8 @@ function renderThread(){
   const t = S.thread;
   $('#s-title').textContent = t.subject || '(geen onderwerp)';
   $('#s-meta').innerHTML = [S.accounts.length>1 ? t.account_name : '', `${t.n} bericht${t.n>1?'en':''}`, t.done?'afgehandeld':'']
-    .filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('');
+    .filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('')
+    + (t.dossier ? `<button class="linkbtn" data-dossier="${t.dossier.id}">${I('folder')}${esc(t.dossier.name)}</button>` : '');
   const A = (id, icon, label, cls='') => `<button class="btn ${cls}" data-a="${id}">${I(icon)}${label}</button>`;
   $('#s-actions').innerHTML = [
     t.in_inbox ? A('archive','archive','Archiveer','primary') : '',
@@ -821,6 +842,7 @@ function renderThread(){
   $('#more-menu').innerHTML = [
     t.unread ? `<button data-a="read">${I('read')}Markeer als gelezen</button>` : '',
     `<button data-a="tags">${I('tag')}Tags bewerken</button>`,
+    t.dossier ? `<button data-a="dossier-remove">${I('folder')}Uit het dossier halen</button>` : '',
     t.in_inbox ? `<hr><button data-a="trash" class="danger">${I('trash')}Naar de prullenbak</button>` : ''
   ].join('');
   [1,3,7].forEach(d => $('#sn'+d).textContent = shortDay(d));
@@ -842,6 +864,8 @@ function renderThread(){
     note = `<button class="btn ask-butler" data-a="summarize">${TIE()}Laat Butler samenvatten</button>`;
   }
   const context = `<div id="ctx">${contextView(t)}</div>`;
+  const related = (t.dossier_threads || []).length ? `<div class="related"><div class="related-h">${I('folder')}<span>Ook in ${esc(t.dossier.name)}</span></div>
+    ${t.dossier_threads.map(r => `<a class="rel" href="#t=${r.tid}" data-tid="${r.tid}"><span>${esc(r.subject || '(geen onderwerp)')}</span><time>${esc(when(r.date))}</time></a>`).join('')}</div>` : '';
   const upcoming = (t.moments || []).map(m => `<div class="info">${TIE()}<span><b>${esc(m.title)}</b>, ${esc(momentWhen(m, new Date(m.at) <= new Date()))}</span></div>`).join('');
   const snooze = t.snooze_until ? `<div class="info">${I('clock')}Gesnoozed tot ${esc(fullDate(t.snooze_until))}</div>` : '';
   const tags = t.tags.length ? `<div class="meta" style="margin:0 0 14px">${t.tags.map(x=>`<span class="badge tag">#${esc(x)}</span>`).join('')}</div>` : '';
@@ -881,7 +905,7 @@ function renderThread(){
     </section>`;
 
   const keep = $('#reply')?.value, keepInstr = $('#instr')?.value;
-  $('#s-body').innerHTML = note + context + upcoming + snooze + tags + msgs + compose;
+  $('#s-body').innerHTML = note + context + upcoming + snooze + tags + msgs + related + compose;
   if(keep) $('#reply').value = keep;
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
   showHtmlMessages();
@@ -962,6 +986,7 @@ async function doAction(a, btn){
     if(a==='archive'){ inBackground(t.tid, p+'/archive', 'Gearchiveerd', 'Archiveren mislukt'); return closeThread(); }
     if(a==='trash'){ if(!await ask({title:'Naar de prullenbak?', msg:t.subject, ok:'Verwijderen', danger:true})) return;
       inBackground(t.tid, p+'/trash', 'Verwijderd', 'Verwijderen mislukt'); return closeThread(); }
+    if(a==='dossier-remove'){ S.thread = await post(p+'/dossier/remove'); toast('Uit het dossier gehaald'); return renderThread(); }
     if(a==='ctx-edit'){ $('#ctx').innerHTML = contextForm(t); $('#ctx-text').focus(); return; }
     if(a==='ctx-cancel'){ $('#ctx').innerHTML = contextView(t); return; }
     if(a==='ctx-save'){ btn.innerHTML = TIE()+'Butler leest opnieuw…';
@@ -995,9 +1020,11 @@ async function doAction(a, btn){
 
 /* ---------- events ---------- */
 document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-tid],[data-a],[data-toggle]');
+  const el = e.target.closest('[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
-  if(el.dataset.tab){ if(S.tab!==el.dataset.tab){ S.tab=el.dataset.tab; load(true); } }
+  if(el.dataset.dossier){ e.preventDefault(); if(S.thread) closeThread(); S.dossier = +el.dataset.dossier; scrollTo(0, 0); return load(true); }
+  if(el.hasAttribute('data-dossier-back')){ S.dossier = null; return load(true); }
+  if(el.dataset.tab){ if(S.tab!==el.dataset.tab || S.dossier){ S.tab=el.dataset.tab; S.dossier = null; load(true); } }
   else if(el.dataset.acc!==undefined){ S.account=el.dataset.acc; load(true); }
   else if(el.dataset.f){ S.filter=el.dataset.f; load(true); }
   else if(el.dataset.cf){ S.cfilter=el.dataset.cf; load(true); }

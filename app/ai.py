@@ -6,7 +6,7 @@ import re
 import threading
 from datetime import date, datetime
 
-from . import moments
+from . import dossiers, moments
 
 from .db import sender_rule, thread_messages
 from .mailparse import strip_quotes
@@ -291,7 +291,7 @@ class AIWorker:
         else:
             raw = self._call(
                 "triage",
-                self._fmt(TRIAGE_SYSTEM),
+                self._fmt(TRIAGE_SYSTEM) + "\n" + dossiers.prompt(self.db),
                 thread_text(msgs) + self.context(t, msgs),
                 600,
             )
@@ -307,6 +307,7 @@ class AIWorker:
                 "action": act if act in ACTIONS else "lezen",
                 "deadline": dl if isinstance(dl, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", dl) else None,
             }
+            dossiers.assign(self.db, tid, dossiers.extract(raw))
         self.db.x(
             "UPDATE threads SET summary=?, priority=?, category=?, action=?, deadline=?, ai_count=? WHERE tid=?",
             (res["summary"], res["priority"], res["category"], res["action"], res["deadline"], len(msgs), tid),
@@ -334,7 +335,10 @@ class AIWorker:
         tz = self.notifier.tz
         system = moments.SYSTEM.format(owner=self.cfg.get("owner", "de gebruiker"), name=self.cfg.get("name", "de gebruiker"),
                                        now=datetime.now(tz).strftime("%Y-%m-%d %H:%M"), tz=tz.key)
-        items = moments.parse(self._call("triage", system, thread_text(msgs, per_msg=6000) + self.context(t, msgs), 900), tz)
+        system += '\nVoeg aan het JSON-object ook deze sleutel toe:\n' + dossiers.prompt(self.db)
+        raw = self._call("triage", system, thread_text(msgs, per_msg=6000) + self.context(t, msgs), 900)
+        items = moments.parse(raw, tz)
+        dossiers.assign(self.db, tid, dossiers.extract(raw))
         moments.save(self.db, tid, items)
         self.db.x("UPDATE threads SET moments_ai=? WHERE tid=?", (len(msgs), tid))
         return items

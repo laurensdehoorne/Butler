@@ -49,7 +49,17 @@ CREATE TABLE IF NOT EXISTS threads(
   done INTEGER DEFAULT 0,
   moments_ai INTEGER DEFAULT 0,  -- aantal berichten toen de momenten bepaald werden
   context TEXT,                  -- wat je Butler over deze mail vertelde
+  dossier_id INTEGER,
+  dossier_ai INTEGER DEFAULT 0,  -- 0 = nog niet bepaald, 1 = door de AI, -1 = door jou eruit gehaald
   UNIQUE(account, thread_key)
+);
+
+-- dossiers: mails die over hetzelfde gaan (zie dossiers.py)
+CREATE TABLE IF NOT EXISTS dossiers(
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  created_at TEXT,
+  last_at TEXT
 );
 
 -- momenten uit gemarkeerde mails: wanneer Butler een mail weer naar voren haalt (inchecken, concert, ...)
@@ -129,7 +139,8 @@ class DB:
             self.conn.executescript(SCHEMA)
             # migratie: vlag (Spark) en momenten
             for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0"),
-                               ("messages", "html TEXT"), ("threads", "context TEXT"), ("sender_rules", "context TEXT")):
+                               ("messages", "html TEXT"), ("threads", "context TEXT"), ("sender_rules", "context TEXT"),
+                               ("threads", "dossier_id INTEGER"), ("threads", "dossier_ai INTEGER DEFAULT 0")):
                 if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")

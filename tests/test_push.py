@@ -40,3 +40,20 @@ def test_service_worker_served(client):
     r = client.get("/sw.js")
     assert r.status_code == 200 and r.headers["service-worker-allowed"] == "/" and "showNotification" in r.text
     assert client.get("/badge-96.png").status_code == 200
+
+
+def test_bare_email_becomes_mailto():
+    from app.push import contact_uri
+
+    assert contact_uri("laurensdehoorne@gmail.com") == "mailto:laurensdehoorne@gmail.com"
+    assert contact_uri(" mailto:x@y.be ") == "mailto:x@y.be"
+    assert contact_uri("https://butler.example") == "https://butler.example"
+    assert contact_uri("") == "https://github.com"
+
+
+def test_push_error_is_reported_not_counted(app, client):
+    client.post("/api/push/subscribe", headers=H, json={"subscription": SUB})
+    with mock.patch("pywebpush.webpush", side_effect=ValueError("Missing 'sub' from claims")):
+        r = client.post("/api/push/test", headers=H)
+    assert r.status_code == 502 and "Missing 'sub'" in r.json()["detail"]
+    assert app.push.count() == 1  # het toestel blijft: het lag niet aan het toestel

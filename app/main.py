@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import actions, config, costs, moments
+from . import actions, config, costs, dossiers, moments
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
@@ -163,6 +163,7 @@ def _card(t, msgs, extra=None):
         "unread": sum(1 for m in msgs if m["in_inbox"] and not m["seen"]),
         "in_inbox": any(m["in_inbox"] for m in msgs),
         "flagged": any(m.get("flagged") for m in msgs),
+        "dossier": dossiers.get(db, t["dossier_id"]) if t.get("dossier_id") else None,
         "bulk": all(m["bulk"] for m in inc) if inc else False,
         "kind": (inc[-1]["kind"] if inc else "") or "",
         "last_outgoing": bool(last["outgoing"]),
@@ -420,6 +421,15 @@ def get_thread(tid: int):
     ]
     card["ai_available"] = ai.active_for(t["account"])
     card["context"] = t.get("context") or ""
+    card["dossier_threads"] = []
+    if t.get("dossier_id"):  # de andere mails uit hetzelfde dossier, nieuwste eerst
+        for r in db.q("""SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                         WHERE t.dossier_id=? AND t.tid!=? GROUP BY t.tid ORDER BY MAX(m.date) DESC LIMIT 12""",
+                      (t["dossier_id"], tid)):
+            ot, om = thread_messages(db, r["tid"])
+            if om:
+                c = _card(ot, om)
+                card["dossier_threads"].append({k: c[k] for k in ("tid", "subject", "who", "date", "avatar", "last_outgoing")})
     incoming = [m for m in msgs if not m["outgoing"]]
     if incoming:
         rule = sender_rule(db, t["account"], incoming[-1]["from_addr"]) or {}
@@ -487,6 +497,31 @@ def set_context(tid: int, body: ContextIn):
         _run(lambda: ai.triage(tid))
         if any(m.get("flagged") for m in msgs):
             ai.enqueue_moments(tid)
+    return get_thread(tid)
+
+
+@app.get("/api/dossiers/{did}", dependencies=[Depends(auth)])
+def get_dossier(did: int):
+    d = dossiers.get(db, did)
+    if not d:
+        raise HTTPException(404, "dossier niet gevonden")
+    cards = []
+    for r in db.q("""SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                     WHERE t.dossier_id=? GROUP BY t.tid ORDER BY MAX(m.date) DESC LIMIT 200""", (did,)):
+        t, msgs = thread_messages(db, r["tid"])
+        if msgs:
+            cards.append(_card(t, msgs))
+    tids = {c["tid"] for c in cards}
+    upcoming = [r for r in moments.unique([dict(r) for r in db.q("SELECT * FROM moments WHERE until > ? ORDER BY at, id",
+                                                                (_now().isoformat(),))]) if r["tid"] in tids]
+    by_tid = {c["tid"]: c for c in cards}
+    return {"dossier": d, "threads": cards, "moments": [{**by_tid[r["tid"]], "moment": _moment(r)} for r in upcoming]}
+
+
+@app.post("/api/threads/{tid}/dossier/remove", dependencies=[Depends(auth)])
+def remove_from_dossier(tid: int):
+    _thread_or_404(tid)
+    dossiers.remove(db, tid)
     return get_thread(tid)
 
 
@@ -769,6 +804,8 @@ def push_test():
     n = push.send({"title": "Butler", "body": "Meldingen werken. Zo ziet een melding van Butler eruit.",
                    "url": "/", "tag": "butler-test"})
     if not n:
+        if push.count():
+            raise HTTPException(502, f"Versturen mislukt: {push.last_error or 'onbekende fout'}")
         raise HTTPException(400, "Geen toestel met meldingen aan.")
     return {"ok": True, "sent": n}
 

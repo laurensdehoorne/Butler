@@ -70,7 +70,7 @@ SECTIONS = [
         F("notify.digest_time", "Ochtendsamenvatting om", "text", "Bv. 07:30. Leeg = geen ochtendsamenvatting.", "", pattern=r"^(\d{2}:\d{2})?$"),
         F("notify.digest_days", "Ochtendsamenvatting op", "days", "", [1, 2, 3, 4, 5]),
         F("notify.webpush", "Meldingen in de app", "bool", "Web Push naar de app op je beginscherm.", True),
-        F("notify.push_contact", "Contactadres voor pushdiensten", "text", "Bv. mailto:jij@voorbeeld.be. Apple vraagt er één.", ""),
+        F("notify.push_contact", "Contactadres voor pushdiensten", "text", "Je e-mailadres; Apple vraagt er één.", ""),
         F("notify.ntfy_server", "ntfy-server", "text", "", "https://ntfy.sh"),
         F("notify.ntfy_topic", "ntfy-topic", "secret", "Een lange, geheime naam. Leeg = geen ntfy.", ""),
         F("notify.ntfy_token", "ntfy-token", "secret", "Enkel voor een eigen ntfy-server met aanmelding.", ""),

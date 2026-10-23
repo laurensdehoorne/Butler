@@ -19,7 +19,7 @@ def test_catch_up_triage_once_for_untriaged_inbox(app, acc):
     old, _ = put(acc, "INBOX", 1, raw("Piet <piet@x.be>", "Oude vraag", "<o1@x>", days=120))
     put(acc, "INBOX", 2, raw("Shop <news@shop.be>", "Promo", "<p1@x>", unsub="<https://shop.be/u>"))  # nieuwsbrief: geen AI
     done, _ = put(acc, "INBOX", 3, raw("Ann <ann@y.be>", "Al gedaan", "<d1@x>"))
-    app.db.x("UPDATE threads SET ai_count=1 WHERE tid=?", (done,))
+    app.db.x("UPDATE threads SET ai_count=1, dossier_ai=1 WHERE tid=?", (done,))  # samengevat en dossier bepaald
     app.syncer._triage_tried.clear()
     with mock.patch.object(app.ai, "enqueue") as enqueue:
         app.syncer.queue_triage(acc)
