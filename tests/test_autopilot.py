@@ -87,3 +87,16 @@ def test_ads_after_a_day_logged_and_restorable(app, client, acc, monkeypatch):
     assert imap.search.call_args.args[0] == ["HEADER", "Message-ID", "<p1@x>"]
     assert imap.move.call_args.args == ([5], "INBOX")
     assert "<p1@x>" in A.restored(app.db)  # en die ruimt Butler niet opnieuw op
+
+
+def test_hard_rule_background_code_cannot_send_mail():
+    """Harde regel: alleen een tik van de gebruiker (HTTP-route in main.py) mag mail versturen. Achtergrondcode
+    (AI, autopilot, sync, momenten, meldingen) komt nooit bij verzenden, doorsturen of uitschrijven-per-mail."""
+    import pathlib
+    import re
+
+    forbidden = re.compile(r"smtp_send|send_reply|\.forward\(|\bunsubscribe\(|smtplib|send_message")
+    app_dir = pathlib.Path(__file__).resolve().parent.parent / "app"
+    for name in ("ai.py", "autopilot.py", "sync.py", "moments.py", "notify.py", "fatigue.py", "dossiers.py", "tone.py"):
+        hits = forbidden.findall((app_dir / name).read_text())
+        assert not hits, f"{name} mag nooit mail versturen: {hits}"
