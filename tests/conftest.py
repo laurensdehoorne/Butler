@@ -28,7 +28,7 @@ import app.main as M  # noqa: E402
 from app.mailparse import parse  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-TABLES = ("messages", "threads", "folder_state", "sender_rules", "settings", "push_subs", "ai_usage")
+TABLES = ("messages", "threads", "folder_state", "sender_rules", "settings", "push_subs", "ai_usage", "moments")
 H = {"Authorization": "Bearer t0k"}
 
 
@@ -76,6 +76,6 @@ def raw(frm, subject, mid, *, to="me@icloud.com", days=0, body="Hallo", irt=None
     return (h + body).encode()
 
 
-def put(acc, folder, uid, data, seen=False):
-    role = "inbox" if folder == "INBOX" else "sent"
-    return M.syncer.store(acc, folder, role, uid, parse(data), seen)
+def put(acc, folder, uid, data, seen=False, flagged=False):
+    role = {"INBOX": "inbox", "Archive": "archive"}.get(folder, "sent")
+    return M.syncer.store(acc, folder, role, uid, parse(data), seen, flagged=flagged)

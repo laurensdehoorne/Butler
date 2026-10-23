@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS messages(
   kind TEXT DEFAULT '',
   unsub TEXT DEFAULT '',
   unsub_post INTEGER DEFAULT 0,
+  flagged INTEGER DEFAULT 0,
   UNIQUE(account, folder, uid)
 );
 CREATE INDEX IF NOT EXISTS ix_m_thread ON messages(account, thread_key);
@@ -45,7 +46,21 @@ CREATE TABLE IF NOT EXISTS threads(
   tags TEXT DEFAULT '[]',
   snooze_until TEXT,
   done INTEGER DEFAULT 0,
+  moments_ai INTEGER DEFAULT 0,  -- aantal berichten toen de momenten bepaald werden
   UNIQUE(account, thread_key)
+);
+
+-- momenten uit gemarkeerde mails: wanneer Butler een mail weer naar voren haalt (inchecken, concert, ...)
+CREATE TABLE IF NOT EXISTS moments(
+  id INTEGER PRIMARY KEY,
+  tid INTEGER NOT NULL,
+  kind TEXT,
+  title TEXT NOT NULL,
+  detail TEXT,
+  at TEXT NOT NULL,          -- UTC: vanaf wanneer tonen en melden
+  until TEXT NOT NULL,       -- UTC: daarna verdwijnt het
+  notified INTEGER DEFAULT 0,
+  UNIQUE(tid, at, title)
 );
 
 CREATE TABLE IF NOT EXISTS sender_rules(
@@ -109,6 +124,10 @@ class DB:
                     self.conn.execute(f"ALTER TABLE messages ADD COLUMN {col}")
                 self.conn.execute("UPDATE messages SET kind='reclame' WHERE bulk=1")
             self.conn.executescript(SCHEMA)
+            # migratie: vlag (Spark) en momenten
+            for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0")):
+                if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")
 
     def q(self, sql, args=()):

@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from . import actions, costs
+from . import actions, costs, moments
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .ai import PROVIDERS, AIError, AIWorker
@@ -41,6 +41,7 @@ meter = costs.Meter(db)
 ai = AIWorker(db, AI_CFG, accounts, notifier, meter)
 syncer = Syncer(db, APP, AI_CFG, accounts, ai, notifier)
 FOLLOWUP_DAYS = int(APP.get("followup_days", 3))
+FOLLOWUP_WINDOW = 60  # "wacht op antwoord" kijkt niet verder terug, ook al staat alle mail in de cache
 STATIC = Path(__file__).parent / "static"
 
 
@@ -51,6 +52,7 @@ async def lifespan(_):
         syncer.start()
         import threading
         threading.Thread(target=digest_loop, daemon=True, name="digest").start()
+        moments.loop(db, notifier)
     yield
 
 
@@ -117,6 +119,7 @@ def _card(t, msgs, extra=None):
         "n": len(msgs),
         "unread": sum(1 for m in msgs if m["in_inbox"] and not m["seen"]),
         "in_inbox": any(m["in_inbox"] for m in msgs),
+        "flagged": any(m.get("flagged") for m in msgs),
         "bulk": all(m["bulk"] for m in inc) if inc else False,
         "kind": (inc[-1]["kind"] if inc else "") or "",
         "last_outgoing": bool(last["outgoing"]),
@@ -266,8 +269,10 @@ def inbox(account: str = "", filter: str = "alle", q: str = "", limit: int = 150
 def followup(account: str = ""):
     rows = db.q(
         """SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
-           WHERE t.done=0 AND (?='' OR t.account=?) GROUP BY t.tid ORDER BY MAX(m.date) DESC LIMIT 1500""",
-        (account, account),
+           WHERE t.done=0 AND (?='' OR t.account=?) GROUP BY t.tid
+           HAVING MAX(m.date) >= ? OR SUM(m.in_inbox) > 0 OR t.snooze_until IS NOT NULL
+           ORDER BY MAX(m.date) DESC LIMIT 1500""",
+        (account, account, (_now() - timedelta(days=FOLLOWUP_WINDOW)).isoformat()),
     )
     mine, theirs, reminders = [], [], []
     now = _now().isoformat()
@@ -297,7 +302,24 @@ def followup(account: str = ""):
     mine.sort(key=lambda c: (c["priority"] != "hoog", c["date"] or ""))
     theirs.sort(key=lambda c: c["date"] or "")
     return {"waiting_on_me": mine[:150], "waiting_on_them": theirs[:150], "reminders": reminders[:50],
-            "followup_days": FOLLOWUP_DAYS}
+            "followup_days": FOLLOWUP_DAYS, **moment_cards(account)}
+
+
+def _moment(r):
+    return {"id": r["id"], "kind": r["kind"], "title": r["title"], "detail": r["detail"], "at": r["at"], "until": r["until"]}
+
+
+def moment_cards(account=""):
+    """Gemarkeerde mail die nu nodig is, en wat binnen de week komt."""
+    out = {}
+    for key, rows in zip(("moments_now", "moments_soon"), moments.current(db)):
+        cards = []
+        for r in rows:
+            t, msgs = thread_messages(db, r["tid"])
+            if msgs and (not account or t["account"] == account):
+                cards.append(_card(t, msgs, {"moment": _moment(r)}))
+        out[key] = cards
+    return out
 
 
 @app.get("/api/threads/{tid}", dependencies=[Depends(auth)])
@@ -323,6 +345,8 @@ def get_thread(tid: int):
         for m in msgs
     ]
     card["ai_available"] = ai.active_for(t["account"])
+    card["moments"] = [_moment(r) for r in db.q("SELECT * FROM moments WHERE tid=? AND until > ? ORDER BY at",
+                                                  (tid, _now().isoformat()))]
     return card
 
 

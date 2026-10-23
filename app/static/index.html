@@ -150,6 +150,15 @@ a.item:hover::before,a.item:hover + .item::before{opacity:0}
 .badge .i{width:12px;height:12px}
 .badge.gold{background:var(--gold-tint);color:var(--gold);font-weight:600}
 .badge.tag{background:transparent;padding-inline:0 4px}
+.c-top .flag{width:13px;height:13px;color:var(--danger);align-self:center}
+/* gemarkeerde mail die nu nodig is: Butler haalt ze naar voren, dus met de gouden rand */
+.now .items{background:var(--raised);border:1px solid var(--rule);border-left:3px solid var(--tie);border-radius:4px 14px 14px 4px;padding:2px 12px 2px 10px}
+.now .item{margin:0;padding-inline:4px}
+.now .item + .item::before{left:54px;right:4px}
+.moment .who{white-space:normal}
+.moment .m-detail{white-space:normal;color:var(--ink)}
+.m-when{display:block;font-size:0.8125rem;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums}
+.info .tie{width:18px;height:9px}
 @container list (min-width:620px){
   .item{padding:14px 12px;margin-inline:-12px}
   .item + .item::before{left:66px}
@@ -555,10 +564,31 @@ function card(c, mode){
   return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}">
     ${avatar(c.who, c.last_outgoing, c.avatar)}
     <div class="c-main">
-      <div class="c-top"><span class="who">${esc(c.who)}</span>${c.n>1?`<span class="n">${c.n}</span>`:''}<time datetime="${esc(c.date)}">${esc(when(c.date))}</time></div>
+      <div class="c-top"><span class="who">${esc(c.who)}</span>${c.n>1?`<span class="n">${c.n}</span>`:''}${c.flagged?'<svg class="i flag" role="img" aria-label="Gemarkeerd"><use href="#i-flag"/></svg>':''}<time datetime="${esc(c.date)}">${esc(when(c.date))}</time></div>
       <div class="subj">${esc(c.subject || '(geen onderwerp)')}</div>
       <div class="sum">${c.summary ? TIE('Samenvatting door Butler')+esc(c.summary) : esc(c.snippet)}</div>
       ${badges.length?`<div class="meta">${badges.join('')}</div>`:''}
+    </div>
+  </a>`;
+}
+
+// wanneer een moment begint (binnenkort) of tot wanneer het loopt (nu)
+function momentWhen(m, active){
+  const d = new Date(active ? m.until : m.at), now = new Date(), tomorrow = new Date(Date.now()+864e5);
+  const t = d.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+  const day = d.toDateString()===now.toDateString() ? (active ? '' : 'vandaag ')
+    : d.toDateString()===tomorrow.toDateString() ? 'morgen ' : d.toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short'})+' ';
+  return (active ? 'tot ' : '') + day + t;
+}
+function momentCard(c, active){
+  const m = c.moment;
+  return `<a class="item moment" href="#t=${c.tid}" data-tid="${c.tid}">
+    ${avatar(c.who, false, c.avatar)}
+    <div class="c-main">
+      <div class="c-top"><span class="who"><b>${esc(m.title)}</b></span></div>
+      <time class="m-when" datetime="${esc(active ? m.until : m.at)}">${esc(momentWhen(m, active))}</time>
+      ${m.detail ? `<div class="subj m-detail">${esc(m.detail)}</div>` : ''}
+      <div class="sum">${TIE()}${esc(c.who)}: ${esc(c.subject || '(geen onderwerp)')}</div>
     </div>
   </a>`;
 }
@@ -598,12 +628,17 @@ async function load(animate=false){
       const d = await api(`/api/followup?account=${acc}`);
       const sec = (title, arr, mode, emptyTxt, hint='') => `<section><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</div>` +
         (arr.length ? `<div class="items">${arr.map(c=>card(c,mode)).join('')}</div>` : `<div class="quiet">${emptyTxt}</div>`) + '</section>';
-      $('#count-followup').textContent = (d.waiting_on_me.length + d.reminders.length) || '';
-      html = (!d.waiting_on_me.length && !d.waiting_on_them.length && !d.reminders.length)
+      const now = d.moments_now || [], soon = d.moments_soon || [];
+      const msec = (title, arr, active, cls='') => arr.length ? `<section class="${cls}"><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span></div>`
+        + `<div class="items">${arr.map(c=>momentCard(c, active)).join('')}</div></section>` : '';
+      $('#count-followup').textContent = (d.waiting_on_me.length + d.reminders.length + now.length) || '';
+      html = (!d.waiting_on_me.length && !d.waiting_on_them.length && !d.reminders.length && !now.length && !soon.length)
         ? empty('Alles afgehandeld', 'Er wacht niets op jou, en jij wacht op niemand.', TIE())
-        : (d.reminders.length ? sec('Herinneringen', d.reminders, 'rem', '') : '') +
+        : msec('Nu nodig', now, true, 'now') +
+          (d.reminders.length ? sec('Herinneringen', d.reminders, 'rem', '') : '') +
           sec('Wacht op jou', d.waiting_on_me, 'me', 'Niets dat op jou wacht.') +
-          sec('Wacht op antwoord', d.waiting_on_them, 'them', 'Geen openstaande vragen aan anderen.', `${d.followup_days} dagen of langer stil`);
+          sec('Wacht op antwoord', d.waiting_on_them, 'them', 'Geen openstaande vragen aan anderen.', `${d.followup_days} dagen of langer stil`) +
+          msec('Binnenkort', soon, false);
     }
   }catch(e){ html = empty('Laden mislukt', esc(e.message) + '. Probeer opnieuw met de vernieuwknop bovenaan.', I('x')); }
   if(seq!==S.seq) return;
@@ -725,6 +760,7 @@ function renderThread(){
   } else if(t.ai_available){
     note = `<button class="btn ask-butler" data-a="summarize">${TIE()}Laat Butler samenvatten</button>`;
   }
+  const upcoming = (t.moments || []).map(m => `<div class="info">${TIE()}<span><b>${esc(m.title)}</b>, ${esc(momentWhen(m, new Date(m.at) <= new Date()))}</span></div>`).join('');
   const snooze = t.snooze_until ? `<div class="info">${I('clock')}Gesnoozed tot ${esc(fullDate(t.snooze_until))}</div>` : '';
   const tags = t.tags.length ? `<div class="meta" style="margin:0 0 14px">${t.tags.map(x=>`<span class="badge tag">#${esc(x)}</span>`).join('')}</div>` : '';
 
@@ -763,7 +799,7 @@ function renderThread(){
     </section>`;
 
   const keep = $('#reply')?.value, keepInstr = $('#instr')?.value;
-  $('#s-body').innerHTML = note + snooze + tags + msgs + compose;
+  $('#s-body').innerHTML = note + upcoming + snooze + tags + msgs + compose;
   if(keep) $('#reply').value = keep;
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
 }
