@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import actions, config, costs, dossiers, forward, moments, tone
+from . import actions, config, costs, dossiers, forward, moments, shared, tone
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
@@ -309,6 +309,82 @@ def attachment(sig: str, mid: int, idx: int, e: int = 0):
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, max-age=3600",
     })
+
+
+# --- gedeeld tussen gebruikers (via de gateway) -----------------------------------
+@app.get("/api/threads/{tid}/export", dependencies=[Depends(auth)])
+def export_thread(tid: int):
+    t = _thread_or_404(tid)
+    acc = _acc(t["account"])
+    out = _run(lambda: shared.export(db, tid, lambda mid: actions.fetch_html(db, acc, mid),
+                                     lambda mid, idx: actions.fetch_attachment(db, acc, mid, idx)))
+    if not out:
+        raise HTTPException(404, "thread niet gevonden")
+    return out
+
+
+class SharedIn(BaseModel):
+    sender: str
+    note: str = ""
+    thread: dict
+
+
+@app.post("/api/shared", dependencies=[Depends(auth)])
+def receive_shared(body: SharedIn):
+    sid = shared.save(db, DATA_DIR, body.sender, body.note, body.thread)
+    subject = body.thread.get("subject") or "(geen onderwerp)"
+    try:
+        notifier.send(f"{body.sender} deelde een mail", (body.note + "\n" if body.note else "") + subject,
+                      extra={"type": "shared"}, force=True)
+    except Exception:
+        log.exception("melding over gedeelde mail mislukt")
+    return {"id": sid}
+
+
+@app.get("/api/shared", dependencies=[Depends(auth)])
+def list_shared():
+    return {"shared": shared.listing(db)}
+
+
+@app.get("/api/shared/{sid}", dependencies=[Depends(auth)])
+def get_shared(sid: int):
+    d = shared.get(db, sid)
+    if not d:
+        raise HTTPException(404, "niet gevonden")
+    for mi, m in enumerate(d["messages"]):
+        m["html"] = images.rewrite(m["html"]) if m.get("html") else ""
+        m["attachments"] = [{**a, "url": f"/api/shared/{sid}/att/{mi}/{ai}" if a.get("stored") else None,
+                             "inline": a["type"] in INLINE_TYPES} for ai, a in enumerate(m.get("attachments") or [])]
+    return d
+
+
+@app.get("/api/shared/{sid}/att/{mi}/{ai}", dependencies=[Depends(auth)])
+def shared_attachment(sid: int, mi: int, ai: int):
+    from urllib.parse import quote
+
+    got = shared.attachment(db, DATA_DIR, sid, mi, ai)
+    if not got:
+        raise HTTPException(404, "bijlage niet gevonden")
+    data, ctype, name = got
+    inline = ctype in INLINE_TYPES
+    return Response(data, media_type=ctype if inline else "application/octet-stream", headers={
+        "Content-Disposition": f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(name)}",
+        "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'" + ("" if inline else "; sandbox"),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=3600",
+    })
+
+
+@app.post("/api/shared/{sid}/done", dependencies=[Depends(auth)])
+def shared_done(sid: int, undo: bool = False):
+    db.x("UPDATE shared SET done=? WHERE id=?", (0 if undo else 1, sid))
+    return {"ok": True}
+
+
+@app.delete("/api/shared/{sid}", dependencies=[Depends(auth)])
+def shared_delete(sid: int):
+    shared.remove(db, DATA_DIR, sid)
+    return {"ok": True}
 
 
 @app.get("/health")

@@ -496,6 +496,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/></symbol>
   <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.2"/></symbol>
   <symbol id="i-read" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="m3 10 9 6 9-6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 8h5M19.5 5.5v5"/></symbol>
   <symbol id="i-fwd" viewBox="0 0 24 24"><path d="m15 5 6 6-6 6"/><path d="M21 11H10a6 6 0 0 0-6 6v2"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></symbol>
   <symbol id="i-draft" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
@@ -769,6 +770,40 @@ function momentWhen(m, active){
   return (active ? 'tot ' : '') + day + t;
 }
 /* agenda: alles wat aan een datum hangt, per dag */
+/* ---------- gedeeld door een andere gebruiker: een kopie, met de bijlagen ---------- */
+const sharedCard = x => `<a class="item" href="#" data-shared="${x.id}">
+    ${avatar(x.from_name)}
+    <div class="c-main"><div class="c-top"><span class="who"><b>${esc(x.subject || '(geen onderwerp)')}</b></span><time>${esc(when(x.created_at))}</time></div>
+      <div class="sum">Gedeeld door ${esc(x.from_name)}${x.note ? ': ' + esc(x.note) : ''}</div></div></a>`;
+async function sharedView(id){
+  const d = await api(`/api/shared/${id}`);
+  S.sharedMsgs = d.messages;
+  const names = l => l.map(([nm, a]) => nm || a).join(', ');
+  const msgs = d.messages.map((m, i) => `<article class="msg">
+      <div class="mh">${avatar(m.from_name || m.from_addr)}
+        <div class="c-main"><div class="c-top"><b>${esc(m.from_name || m.from_addr)}</b><span class="ln" style="flex:1">${esc(m.from_addr)}</span><time title="${esc(fullDate(m.date))}">${esc(when(m.date))}</time></div>
+          <div class="ln to">aan ${esc(names(m.to))}${m.cc.length ? ', cc ' + esc(names(m.cc)) : ''}</div></div></div>
+      <div class="mb" data-shared-mi="${i}">${esc(m.body)}</div>
+      <div class="atts">${attList({attachments: m.attachments.filter(a => a.url)})}${m.attachments.filter(a => !a.url).map(a => `<span class="att">${I('file')}<span class="att-name">${esc(a.name)}</span><span class="att-size">te groot om te delen</span></span>`).join('')}</div></article>`).join('');
+  return `<button class="backbtn" data-shared-back>${I('back')}<span>${TAB_NAMES[S.tab]}</span></button>
+    <div class="sec-h"><h2>${esc(d.subject || '(geen onderwerp)')}</h2></div>
+    <div class="info">${I('share')}<span>Gedeeld door <b>${esc(d.from_name)}</b>, ${esc(fullDate(d.created_at))}${d.note ? `<span class="sub">${esc(d.note)}</span>` : ''}</span></div>
+    ${d.summary ? `<div class="note-card"><div class="head">${TIE('Samenvatting door Butler')}<span class="muted">Butler vat samen</span></div><p>${esc(d.summary)}</p></div>` : ''}
+    <div class="shared-msgs">${msgs}</div>
+    <div class="actions" style="margin-top:18px">
+      <button class="btn primary" data-shared-done="${d.done ? 'undo' : 'done'}">${I(d.done ? 'undo' : 'check')}${d.done ? 'Terugzetten' : 'Klaar'}</button>
+      <button class="btn danger" data-shared-del>${I('trash')}Verwijderen</button></div>`;
+}
+function mountShared(){
+  for(const el of document.querySelectorAll('#list .mb[data-shared-mi]')){
+    const m = S.sharedMsgs?.[+el.dataset.sharedMi];
+    if(m?.html && !el.dataset.done){ el.dataset.done = '1'; mountHtml(el, m.html); }
+  }
+}
+// met wie je het laatst deelde, eerst (zoals in CellarPeaks)
+const sharedWith = () => { try{ return JSON.parse(localStorage.getItem('butler_shared_with') || '[]'); }catch(e){ return []; } };
+const rememberShare = id => { try{ localStorage.setItem('butler_shared_with', JSON.stringify([id, ...sharedWith().filter(x => x !== id)].slice(0, 10))); }catch(e){} };
+
 const dossierBadge = d => `<span class="badge dossier" data-dossier="${d.id}">${I('folder')}${esc(d.name)}</span>`;
 // een deadline met uur is een afspraak ("10 nov om 11:00"), zonder uur een uiterste datum ("tegen 10 nov")
 const dueLabel = dl => dl.length > 10 ? `${dayMonth(dl)} om ${dl.slice(11, 16)}` : `tegen ${dayMonth(dl)}`;
@@ -866,7 +901,7 @@ const vis = arr => (arr || []).filter(c => !S.hidden.has(c.tid));
 function inBackground(tid, path, done, failed){
   S.hidden.add(tid);
   toast(done);
-  post(path).catch(e => toast(`${failed}: ${e.message}`)).finally(() => { S.hidden.delete(tid); load(); });
+  post(path).catch(e => toast(`${failed}: ${e.message}`)).finally(() => { S.hidden.delete(tid); const back = keepScroll(); load().then(back); });
 }
 
 function swapList(html, animate){
@@ -877,12 +912,14 @@ function swapList(html, animate){
 
 async function load(animate=false){
   renderChips();
-  const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q+'|'+(S.dossier||'')+(S.quick?'|q':''), seq = ++S.seq;
+  const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q+'|'+(S.dossier||'')+(S.quick?'|q':'')+(S.shared?'|s'+S.shared:''), seq = ++S.seq;
   if(!S.loaded[key]) $('#list').innerHTML = placeholder();
   const acc = encodeURIComponent(S.account);
   let html;
   try{
-    if(S.quick){  // snel antwoorden: per mail een paar woorden, Butler schrijft het uit als concept
+    if(S.shared){  // gedeeld door een andere gebruiker: een kopie om te lezen
+      html = await sharedView(S.shared);
+    } else if(S.quick){  // snel antwoorden: per mail een paar woorden, Butler schrijft het uit als concept
       const d = await api(`/api/followup?account=${acc}`);
       html = quickView(vis(d.waiting_on_me));
     } else if(S.dossier){  // alle mail die over hetzelfde gaat, met wat eraan komt bovenaan
@@ -930,7 +967,10 @@ async function load(animate=false){
         + (d.senders.length ? `<div class="items">${d.senders.map((x,i)=>senderCard(x,i)).join('')}</div>`
           : empty('Niets op te ruimen', 'Geen afzenders in deze categorie.', I('check')));
     } else {
-      const d = await api(`/api/followup?account=${acc}`);
+      const [d, sh] = await Promise.all([api(`/api/followup?account=${acc}`), api('/api/shared').catch(() => ({shared: []}))]);
+      const fresh = sh.shared.filter(x => !x.done);
+      const sharedSec = S.sharedSec = !fresh.length ? '' : `<section><div class="sec-h"><h2>Gedeeld met jou</h2><span class="num">${fresh.length}</span></div>
+        <div class="items">${fresh.map(sharedCard).join('')}</div></section>`;
       for(const k of ['waiting_on_me', 'waiting_on_them', 'reminders', 'moments_now', 'moments_soon']) d[k] = vis(d[k]);
       // een vlak verschijnt pas als er iets in staat
       const sec = (title, arr, mode, hint='') => !arr.length ? '' : `<section><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</div>`
@@ -941,22 +981,24 @@ async function load(animate=false){
       const waiting = d.waiting_on_me.length + d.reminders.length + now.length;
       $('#count-followup').textContent = waiting || '';
       setBadge(waiting);
-      html = (!d.waiting_on_me.length && !d.waiting_on_them.length && !d.reminders.length && !now.length && !soon.length)
-        ? empty('Alles afgehandeld', 'Er wacht niets op jou, en jij wacht op niemand.', TIE())
+      html = sharedSec + ((!d.waiting_on_me.length && !d.waiting_on_them.length && !d.reminders.length && !now.length && !soon.length)
+        ? (sharedSec ? '' : empty('Alles afgehandeld', 'Er wacht niets op jou, en jij wacht op niemand.', TIE()))
         : msec('Nu nodig', now, true, 'now') +
           sec('Herinneringen', d.reminders, 'rem') +
           (d.waiting_on_me.length && S.ai ? `<div class="actions quick-cta"><button class="btn" data-quick-open>${TIE()}Snel antwoorden</button></div>` : '') +
           sec('Wacht op jou', d.waiting_on_me, 'me') +
           sec('Wacht op antwoord', d.waiting_on_them, 'them', `${d.followup_days} dagen of langer stil`) +
-          msec('Binnenkort', soon, false);
+          msec('Binnenkort', soon, false));
     }
   }catch(e){ html = empty('Laden mislukt', esc(e.message) + '. Probeer opnieuw met de vernieuwknop bovenaan.', I('x')); }
   if(seq!==S.seq) return;
   if(S.accountsLoaded && !S.accounts.length)  // nog niets ingesteld: meteen naar het eerste account
-    html = empty('Nog geen mailaccount', 'Voeg je Gmail- of iCloud-account toe; daarna haalt Butler je mail op.', I('inbox'))
+    html = (S.tab === 'followup' && !S.shared && !S.dossier ? S.sharedSec || '' : '')
+      + empty('Nog geen mailaccount', 'Voeg je Gmail- of iCloud-account toe; daarna haalt Butler je mail op.', I('inbox'))
       + `<div class="actions" style="justify-content:center"><button class="btn primary" id="add-first">${I('plus')}Account toevoegen</button></div>`;
   S.loaded[key] = true;
   swapList(html, animate);
+  if(S.shared) mountShared();
 }
 
 function senderCard(x, i){
@@ -1035,6 +1077,7 @@ async function senderAction(a, i, btn){
 }
 
 async function loadAccounts(){
+  if(!S.me) fetch('/api/me').then(r => r.ok ? r.json() : null).then(me => { S.me = me; }).catch(() => {});  // achter de gateway
   try{
     const d = await api('/api/accounts'); S.accounts=d.accounts; S.ai=d.ai;
     S.ai_provider = d.ai_provider; S.ai_providers = d.ai_providers; S.accountsLoaded = true;
@@ -1044,7 +1087,11 @@ async function loadAccounts(){
 
 /* ---------- thread ---------- */
 const sheet = $('#sheet');
+// terug uit een mail (ook na verwijderen of archiveren): op dezelfde plek in de lijst, niet bovenaan
+if('scrollRestoration' in history) history.scrollRestoration = 'manual';
+const keepScroll = (y = scrollY) => () => { if(Math.abs(scrollY - y) > 2) scrollTo(0, Math.min(y, document.documentElement.scrollHeight)); };
 async function openThread(tid, push=true){
+  if(!sheet.open) S.keepY = scrollY;
   if(push) history.pushState({tid}, '', '#t='+tid);
   const fresh = !sheet.open || S.thread?.tid !== tid;
   $('#back-label').textContent = TAB_NAMES[S.tab];
@@ -1060,7 +1107,8 @@ function closeThread(){
 sheet.addEventListener('close', () => {
   S.thread = null;
   if(location.hash.startsWith('#t=')) history.replaceState(null, '', location.pathname + location.search);
-  load();
+  const back = keepScroll(S.keepY ?? scrollY);
+  back(); load().then(back);
 });
 wireDialog(sheet, closeThread);
 
@@ -1082,6 +1130,7 @@ function renderThread(){
   $('#more-menu').innerHTML = [
     t.unread ? `<button data-a="read">${I('read')}Markeer als gelezen</button>` : '',
     `<button data-a="forward">${I('fwd')}Doorsturen…</button>`,
+    (S.me?.users || []).length > 1 ? `<button data-a="share">${I('share')}Delen met…</button>` : '',
     `<button data-a="tags">${I('tag')}Tags bewerken</button>`,
     `<button data-a="dossier-choose">${I('folder')}${(t.dossiers || []).length ? 'Ander dossier…' : 'In een dossier zetten…'}</button>`,
     (t.dossiers || []).length ? `<button data-a="dossier-remove">${I('folder')}Uit ${t.dossiers.length > 1 ? 'de dossiers' : 'het dossier'} halen</button>` : '',
@@ -1285,6 +1334,23 @@ async function doAction(a, btn){
       const r = await post(p+'/forward', {message_id: inv.message_id, to: [inv.to]});
       toast(`Doorgestuurd naar ${inv.to}` + (r.attachments ? ` (${r.attachments} bijlage${r.attachments > 1 ? 'n' : ''})` : ''));
       S.thread = await api(p); return renderThread(); }
+    if(a==='share'){
+      const recent = sharedWith(), rank = u => { const i = recent.indexOf(u.id); return i < 0 ? 99 : i; };
+      const others = S.me.users.filter(u => u.id !== S.me.id).sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name));
+      let to = others[0];
+      if(others.length > 1){
+        const v = await ask({title: 'Delen met wie?', msg: others.map(u => u.name).join(', '), input: true, value: others[0].name, ok: 'Verder', list: others.map(u => u.name)});
+        if(v === null) return;
+        to = others.find(u => u.name.toLowerCase() === v.trim().toLowerCase() || u.id === v.trim().toLowerCase());
+        if(!to) return toast('Onbekende gebruiker');
+      }
+      const note = await ask({title: `Delen met ${to.name}`, msg: 'Ze krijgt meteen een kopie met de bijlagen, en een melding. Een woordje erbij? (niet verplicht)', input: true, ok: 'Delen'});
+      if(note === null) return;
+      toast(`Wordt gedeeld met ${to.name}…`);
+      api('/api/share', {method: 'POST', body: JSON.stringify({tid: t.tid, to: to.id, note})})
+        .then(() => { rememberShare(to.id); toast(`Gedeeld met ${to.name}`); })
+        .catch(err => toast('Delen mislukt: ' + err.message));
+      return; }
     if(a==='forward'){
       const incoming = t.messages.filter(m => !m.outgoing), m = incoming[incoming.length - 1] || t.messages[t.messages.length - 1];
       const n = (m.attachments || []).length;
@@ -1334,7 +1400,7 @@ async function doAction(a, btn){
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e=>{
-  const el = e.target.closest('[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
+  const el = e.target.closest('[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
   if(el.hasAttribute('data-quick-open')){ S.quick = true; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-quick-go')) return quickGo(el);
@@ -1345,8 +1411,18 @@ document.addEventListener('click', async e=>{
     return load(true);
   }
   if(el.dataset.dossier){ e.preventDefault(); if(S.thread) closeThread(); S.dossier = +el.dataset.dossier; scrollTo(0, 0); return load(true); }
+  if(el.dataset.shared){ e.preventDefault(); S.shared = +el.dataset.shared; scrollTo(0, 0); return load(true); }
+  if(el.hasAttribute('data-shared-back')){ S.shared = null; return load(true); }
+  if(el.dataset.sharedDone){
+    await post(`/api/shared/${S.shared}/done${el.dataset.sharedDone === 'undo' ? '?undo=true' : ''}`);
+    toast(el.dataset.sharedDone === 'undo' ? 'Terug bij Gedeeld met jou' : 'Klaar'); S.shared = null; return load(true);
+  }
+  if(el.hasAttribute('data-shared-del')){
+    if(!await ask({title: 'Gedeelde mail verwijderen?', msg: 'Enkel je kopie verdwijnt; bij wie ze deelde, blijft de mail.', ok: 'Verwijderen', danger: true})) return;
+    await api(`/api/shared/${S.shared}`, {method: 'DELETE'}); toast('Verwijderd'); S.shared = null; return load(true);
+  }
   if(el.hasAttribute('data-dossier-back')){ S.dossier = null; S.quick = false; return load(true); }
-  if(el.dataset.tab){ if(S.tab!==el.dataset.tab || S.dossier || S.quick){ S.tab=el.dataset.tab; S.dossier = null; S.quick = false; load(true); } }
+  if(el.dataset.tab){ if(S.tab!==el.dataset.tab || S.dossier || S.quick || S.shared){ S.tab=el.dataset.tab; S.dossier = null; S.quick = false; S.shared = null; load(true); } }
   else if(el.dataset.acc!==undefined){ S.account=el.dataset.acc; load(true); }
   else if(el.dataset.f){ S.filter=el.dataset.f; load(true); }
   else if(el.dataset.cf){ S.cfilter=el.dataset.cf; load(true); }

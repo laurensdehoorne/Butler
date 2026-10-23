@@ -283,10 +283,41 @@ def create_app(users=None, key=None, backends=None, transport=None):
         u = current(request)
         if not u:
             return need_login(request)
-        out = {"id": u["id"], "name": u["name"], "admin": u["admin"]}
-        if u["admin"]:
-            out["users"] = [{"id": x["id"], "name": x["name"], "admin": x["admin"]} for x in users.all()]
-        return out
+        # iedereen ziet de anderen (om mail mee te delen); enkel de beheerder beheert ze
+        return {"id": u["id"], "name": u["name"], "admin": u["admin"],
+                "users": [{"id": x["id"], "name": x["name"], "admin": x["admin"]} for x in users.all()]}
+
+    class ShareIn(BaseModel):
+        tid: int
+        to: str
+        note: str = ""
+
+    @app.post("/api/share")
+    async def share(body: ShareIn, request: Request):
+        """Een kopie van een thread naar de Butler van een andere gebruiker: tekst, HTML en bijlagen."""
+        u = current(request)
+        if not u:
+            return need_login(request)
+        to = users.get(body.to)
+        if not to or to["id"] == u["id"]:
+            raise HTTPException(400, "Kies iemand anders om mee te delen.")
+        h = {"x-butler-gateway": secret}
+        r = await client.get(f"http://127.0.0.1:{u['port']}/api/threads/{body.tid}/export", headers=h)
+        if r.status_code != 200:
+            raise HTTPException(r.status_code, "Kon de mail niet ophalen om te delen.")
+        backends.start(to)
+        for _ in range(40):
+            try:
+                r2 = await client.post(f"http://127.0.0.1:{to['port']}/api/shared", headers=h,
+                                       json={"sender": u["name"], "note": body.note, "thread": r.json()})
+                break
+            except httpx.ConnectError:
+                await asyncio.sleep(0.5)
+        else:
+            raise HTTPException(503, f"De Butler van {to['name']} start nog op; probeer zo opnieuw.")
+        if r2.status_code != 200:
+            raise HTTPException(502, "Delen mislukte.")
+        return {"ok": True, "to": to["name"]}
 
     class UserIn(BaseModel):
         name: str = ""

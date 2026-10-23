@@ -97,3 +97,17 @@ def test_first_visit_creates_admin(tmp_path, monkeypatch):
     assert 'const setup = "1"' in c.get("/login").text
     assert login(c, "Laurens", "een-goed-wachtwoord").status_code == 200
     assert users.get("laurens")["admin"] and c.get("/api/me").json()["admin"]
+
+
+def test_share_copies_straight_to_the_other_butler(gw):
+    c, users, backends, seen = gw
+    login(c, "laurens", "oud-token-123")
+    c.post("/api/users", json={"name": "Marie-Elisabeth", "password": "geheim-wachtwoord"})
+    r = c.post("/api/share", json={"tid": 7, "to": "marie-elisabeth", "note": "Kijk eens"})
+    assert r.json() == {"ok": True, "to": "Marie-Elisabeth"}
+    export, receive = seen[-2], seen[-1]
+    assert (export.url.port, export.url.path) == (9101, "/api/threads/7/export")
+    assert (receive.url.port, receive.url.path) == (9102, "/api/shared")
+    body = json.loads(receive.content)
+    assert body["sender"] == "Laurens" and body["note"] == "Kijk eens" and receive.headers["x-butler-gateway"] == "geheim"
+    assert c.post("/api/share", json={"tid": 7, "to": "laurens"}).status_code == 400  # niet met jezelf

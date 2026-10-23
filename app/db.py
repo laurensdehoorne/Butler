@@ -55,6 +55,18 @@ CREATE TABLE IF NOT EXISTS threads(
   UNIQUE(account, thread_key)
 );
 
+-- gedeeld door een andere gebruiker (zie shared.py): een kopie, los van je eigen mail
+CREATE TABLE IF NOT EXISTS shared(
+  id INTEGER PRIMARY KEY,
+  from_name TEXT,
+  note TEXT,
+  subject TEXT,
+  summary TEXT,
+  messages TEXT,
+  created_at TEXT,
+  done INTEGER DEFAULT 0
+);
+
 -- dossiers: mails die over hetzelfde gaan (zie dossiers.py); een thread kan in meerdere dossiers zitten
 CREATE TABLE IF NOT EXISTS thread_dossiers(
   tid INTEGER NOT NULL,
