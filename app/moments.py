@@ -96,8 +96,20 @@ def current(db, now=None, horizon_days=7):
     now = now or datetime.now(timezone.utc)
     later = (now + timedelta(days=horizon_days)).isoformat()
     n = now.isoformat()
-    rows = [dict(r) for r in db.q("SELECT * FROM moments WHERE until > ? AND at <= ? ORDER BY at", (n, later))]
+    rows = unique([dict(r) for r in db.q("SELECT * FROM moments WHERE until > ? AND at <= ? ORDER BY at, id", (n, later))])
     return [r for r in rows if r["at"] <= n], [r for r in rows if r["at"] > n]
+
+
+def unique(rows):
+    """Eén moment per soort en tijdstip: een bevestiging en een herinnering voor hetzelfde webinar zijn twee threads,
+    maar één afspraak. De eerste blijft (die met de uitgebreidste uitleg als ze tegelijk komen)."""
+    best = {}
+    for r in rows:
+        k = (r["kind"], r["at"])
+        if k not in best or len(r.get("detail") or "") > len(best[k].get("detail") or ""):
+            best[k] = r
+    keep = {id(r) for r in best.values()}
+    return [r for r in rows if id(r) in keep]
 
 
 def hold_for_night(local_now, until_utc):
@@ -114,15 +126,21 @@ def hold_for_night(local_now, until_utc):
 def due(db, notifier, now=None):
     """Meld wat nu begint (één keer per moment). Geeft het aantal verstuurde meldingen terug."""
     now = now or datetime.now(timezone.utc)
-    sent = 0
-    for r in db.q("SELECT * FROM moments WHERE notified=0 AND at <= ? AND until > ? ORDER BY at", (now.isoformat(),) * 2):
+    sent, done = 0, set()
+    rows = unique([dict(r) for r in db.q("SELECT * FROM moments WHERE notified=0 AND at <= ? AND until > ? ORDER BY at, id",
+                                         (now.isoformat(),) * 2)])
+    for r in rows:
+        if (r["kind"], r["at"]) in done:
+            continue
+        done.add((r["kind"], r["at"]))
         if notifier.mode != "off":
             if hold_for_night(now.astimezone(notifier.tz), r["until"]):
                 continue
             notifier.send(r["title"], r["detail"] or "", tid=r["tid"], high=True,
                           extra={"type": "moment", "kind": r["kind"]}, force=True)
             sent += 1
-        db.x("UPDATE moments SET notified=1 WHERE id=?", (r["id"],))
+        # dezelfde afspraak uit een andere thread: niet nog eens melden
+        db.x("UPDATE moments SET notified=1 WHERE id=? OR (notified=0 AND kind=? AND at=?)", (r["id"], r["kind"], r["at"]))
     return sent
 
 

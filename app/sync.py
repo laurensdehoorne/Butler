@@ -42,6 +42,7 @@ class Syncer:
         # oude mail ophalen (archief, verzonden) spreiden over dagen: Gmail laat ~2,5 GB IMAP-download per dag toe
         self.daily_bytes = int(app_cfg.get("sync_daily_mb", 1000) or 0) * 1024 * 1024
         self.tz = ZoneInfo(app_cfg.get("timezone", "Europe/Brussels"))
+        self._triage_tried = set()  # inhaal-triage: één poging per thread per opstart
         self.poll = int(app_cfg.get("poll_seconds", 300))
         self.ai_initial_days = int(ai_cfg.get("initial_days", 7))
         cl = app_cfg.get("cleanup") or {}
@@ -94,6 +95,7 @@ class Syncer:
     def sync_account(self, c, acc):
         self.sync_folder(c, acc, "inbox")
         self.apply_rules(c, acc)
+        self.queue_triage(acc)
         if acc.folders.get("sent"):
             self.sync_folder(c, acc, "sent")
         if self.archive and acc.folders.get("archive"):
@@ -290,7 +292,8 @@ class Syncer:
         return (p["refs"][0] if p["refs"] else p["in_reply_to"]) or p["message_id"] or f"uid:{acc.id}:{folder}:{uid}"
 
     def store(self, acc, folder, role, uid, p, seen, thrid=None, flagged=False):
-        outgoing = acc.is_me(p["from_addr"])
+        # van jou, ook vanuit een ander account (Gmail naar je eigen iCloud)
+        outgoing = any(a.is_me(p["from_addr"]) for a in self.accounts.values())
         rule = sender_rule(self.db, acc.id, p["from_addr"])
         if rule and rule["kind"] is not None:  # handmatige correctie per afzender
             p["kind"] = rule["kind"]
@@ -348,6 +351,24 @@ class Syncer:
         if len(out) < len(uids):
             log.info("%s: dagbudget op, %d oude berichten volgen later", acc.id, len(uids) - len(out))
         return out, len(uids) - len(out)
+
+    # --- inhaal-triage --------------------------------------------------------
+    def queue_triage(self, acc):
+        """Inbox-threads die nog nooit door de AI gingen, bv. omdat de AI pas na de eerste sync aangezet werd.
+
+        Zonder triage telt een thread als "wacht op jou"; de inbox is klein, dus dit kost weinig."""
+        if not self.ai.active_for(acc.id):
+            return
+        rows = self.db.q(
+            """SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+               WHERE t.account=? AND t.ai_count=0 GROUP BY t.tid
+               HAVING SUM(m.in_inbox) > 0 AND MIN(m.bulk) = 0 ORDER BY MAX(m.date) DESC LIMIT 300""",
+            (acc.id,),
+        )
+        for r in rows:
+            if r["tid"] not in self._triage_tried:
+                self._triage_tried.add(r["tid"])
+                self.ai.enqueue(r["tid"])
 
     # --- momenten uit gemarkeerde mail -------------------------------------
     def queue_moments(self, acc):

@@ -117,3 +117,19 @@ def test_followup_ignores_old_sent_threads(app, client, acc):
     put(acc, "Sent Messages", 2, raw("Me <me@icloud.com>", "Recent", "<r1@me>", to="ann@y.be", days=10))
     theirs = client.get("/api/followup", headers=H).json()["waiting_on_them"]
     assert [c["subject"] for c in theirs] == ["Recent"]
+
+
+def test_same_appointment_from_two_threads_counts_once(app, acc):
+    a, _ = put(acc, "INBOX", 1, raw("Org <info@webinar.be>", "Bevestiging webinar", "<w1@x>"), flagged=True)
+    b, _ = put(acc, "INBOX", 2, raw("Org <info@webinar.be>", "Herinnering webinar", "<w2@x>"), flagged=True)
+    now = datetime.now(timezone.utc)
+    at, until = (now - timedelta(minutes=1)).isoformat(), (now + timedelta(hours=2)).isoformat()
+    MO.save(app.db, a, [{"kind": "evenement", "title": "Webinar", "detail": "Zoom", "at": at, "until": until}])
+    MO.save(app.db, b, [{"kind": "evenement", "title": "Deelnemen aan webinar", "detail": "Zoom, link in de mail", "at": at, "until": until},
+                        {"kind": "afspraak", "title": "Iets anders", "detail": "", "at": at, "until": until}])
+    active, _ = MO.current(app.db, now)
+    assert sorted(m["title"] for m in active) == ["Deelnemen aan webinar", "Iets anders"]  # uitgebreidste uitleg blijft
+    with mock.patch.object(app.notifier, "send") as send, mock.patch.object(MO, "hold_for_night", return_value=False):
+        assert MO.due(app.db, app.notifier, now) == 2
+        assert MO.due(app.db, app.notifier, now) == 0
+    assert app.db.one("SELECT COUNT(*) n FROM moments WHERE notified=0")["n"] == 0

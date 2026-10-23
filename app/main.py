@@ -2,6 +2,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import signal
 import threading
 import time
@@ -36,6 +37,9 @@ RESTART = os.environ.get("BUTLER_RESTART", "1") != "0"  # na bewaren herstarten;
 SAVED = {"cfg": CFG}  # laatst bewaarde config; CFG zelf geldt tot de herstart
 db = DB(DB_PATH)
 accounts = {str(a["id"]): Account(a) for a in (CFG.get("accounts") or [])}
+_mine = sorted(set().union(*(a.aliases for a in accounts.values())))
+if _mine:  # mail van je eigen andere account telt als van jou (ook wat al in de cache staat)
+    db.x(f"UPDATE messages SET outgoing=1, seen=1 WHERE outgoing=0 AND from_addr IN ({','.join('?' * len(_mine))})", _mine)
 push = Push(db, DATA_DIR, (CFG.get("notify") or {}).get("push_contact", ""))
 notifier = Notifier(CFG.get("notify") or {}, APP, push)
 costs.load_overrides(DATA_DIR)
@@ -45,6 +49,9 @@ ai = AIWorker(db, AI_CFG, accounts, notifier, meter)
 syncer = Syncer(db, APP, AI_CFG, accounts, ai, notifier)
 FOLLOWUP_DAYS = int(APP.get("followup_days", 3))
 FOLLOWUP_WINDOW = 60  # "wacht op antwoord" kijkt niet verder terug, ook al staat alle mail in de cache
+# antwoorden op agenda-uitnodigingen: daar komt geen antwoord meer op
+CALENDAR_REPLY = re.compile(r"^(accepted|declined|tentative|tentatively accepted|geaccepteerd|geweigerd|afgewezen|voorlopig"
+                            r"|voorlopig geaccepteerd|akzeptiert|abgelehnt|accepté|refusé)\s*:", re.I)
 STATIC = Path(__file__).parent / "static"
 
 
@@ -81,6 +88,11 @@ def _age_days(iso):
         return (_now() - datetime.fromisoformat(iso)).total_seconds() / 86400
     except Exception:
         return 0
+
+
+def is_me(addr):
+    """Een adres van jou, in eender welk account (mail van Gmail naar je eigen iCloud wacht op niemand)."""
+    return any(a.is_me(addr) for a in accounts.values())
 
 
 def _snoozed(t):
@@ -289,7 +301,6 @@ def followup(account: str = ""):
             reminders.append(_card(t, msgs))
             continue
         last = msgs[-1]
-        acc = accounts.get(t["account"])
         if not last["outgoing"]:
             if last["bulk"] or not any(m["in_inbox"] for m in msgs):
                 continue
@@ -299,7 +310,7 @@ def followup(account: str = ""):
             if _age_days(last["date"]) < FOLLOWUP_DAYS:
                 continue
             to = [a for _, a in json.loads(last["to_addrs"] or "[]")]
-            if acc and not [a for a in to if not acc.is_me(a)]:
+            if not [a for a in to if not is_me(a)] or CALENDAR_REPLY.match(last["subject"] or ""):
                 continue
             theirs.append(_card(t, msgs))
     mine.sort(key=lambda c: (c["priority"] != "hoog", c["date"] or ""))
