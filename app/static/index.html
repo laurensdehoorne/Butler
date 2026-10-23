@@ -30,6 +30,13 @@
   --display:"Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
   --text: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   accent-color: var(--lapel);
+  /* Liquid Glass voor de navigatielaag (tabbalk, werkbalk, menu's, melding): nooit voor de inhoud zelf */
+  --glass-bg: color-mix(in oklab, var(--paper) 62%, transparent);
+  --glass-blur: blur(22px) saturate(1.9);
+  --glass-edge: rgb(255 255 255 / .6);
+  --glass-shadow: 0 10px 34px -10px rgb(20 30 25 / .32), inset 0 1px 0 rgb(255 255 255 / .7);
+  --glass-pill: color-mix(in oklab, var(--lapel) 13%, transparent);
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -40,6 +47,10 @@
     --danger:#f08a73; --danger-tint:#3a1f19; --out:#15241e;
     --elev:0 24px 60px -18px rgb(0 0 0 / .75), 0 2px 6px rgb(0 0 0 / .3);
     --av-l:30%; --av-c:.04; --av-ink:88%;
+    --glass-bg: color-mix(in oklab, var(--raised) 58%, transparent);
+    --glass-edge: rgb(255 255 255 / .12);
+    --glass-shadow: 0 12px 36px -10px rgb(0 0 0 / .7), inset 0 1px 0 rgb(255 255 255 / .1);
+    --glass-pill: rgb(255 255 255 / .1);
   }
 }
 *,*::before,*::after{box-sizing:border-box}
@@ -58,12 +69,17 @@ a{color:inherit;text-decoration:none}
 .wrap{max-width:760px;margin:0 auto}
 
 /* ---------- het jasje ---------- */
-header{position:sticky;top:0;z-index:5;background:var(--jacket);color:var(--on-jacket);padding:calc(env(safe-area-inset-top) + 14px) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
+header{position:sticky;top:0;z-index:5;background:var(--jacket);color:var(--on-jacket);transition:padding .3s ease,box-shadow .3s ease;padding:calc(env(safe-area-inset-top) + 14px) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
 .brand{display:flex;align-items:center;gap:10px}
 .wordmark{flex:1;min-width:0;display:flex;flex-direction:column}
-.wordmark h1{display:flex;align-items:center;gap:10px;margin:0;font:600 1.875rem/1 var(--display);letter-spacing:.005em}
+.wordmark h1{display:flex;align-items:center;gap:10px;margin:0;font:600 1.875rem/1 var(--display);letter-spacing:.005em;transform-origin:left center;transition:scale .3s ease}
+/* bij scrollen klapt de grote titel in tot een compacte balk */
+header.compact{padding-top:calc(env(safe-area-inset-top) + 6px);box-shadow:0 6px 20px -12px rgb(0 0 0 / .5)}
+header.compact .wordmark h1{scale:.72}
+header.compact .status{max-height:0;margin-top:0;opacity:0;min-height:0}
+@media (max-width:699px){header.compact{padding-bottom:6px}}
 .wordmark .tie{width:32px;height:15px}
-.status{margin:6px 0 0 42px;font-size:0.7812rem;color:var(--on-jacket-muted);min-height:18px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.status{margin:6px 0 0 42px;font-size:0.7812rem;color:var(--on-jacket-muted);min-height:18px;max-height:24px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:max-height .3s ease,opacity .2s ease,margin .3s ease}
 .status .err{color:#f3b3a3}
 .status .busy{animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.4}}
@@ -80,28 +96,32 @@ header .iconbtn:hover{background:rgb(255 255 255 / .08)}
 .tab .count{font-size:0.75rem;font-weight:700;min-width:20px;padding:0 6px;border-radius:99px;background:var(--tie);color:#1c2a20;text-align:center}
 .tab .count:empty{display:none}
 .tab .i{display:none}
-/* op een gsm horen de drie secties in een tabbalk onderaan, in het navigatiemateriaal (glas) */
+/* op een gsm horen de secties in een tabbalk onderaan: een zwevende capsule van glas (navigatielaag),
+   enkel de gekozen tab getint, met een pil die concentrisch in de capsule valt */
 @media (max-width:699px){
   header{padding-bottom:14px}
-  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;margin:0;gap:0;justify-content:space-around;
-    padding:6px max(8px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 4px) max(8px,env(safe-area-inset-left));
-    background:color-mix(in oklab,var(--paper) 74%,transparent);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);
-    border-top:1px solid color-mix(in oklab,var(--rule) 80%,transparent)}
-  .tab{flex:1;flex-direction:column;gap:2px;min-height:49px;padding:4px 0 2px;font-size:10.5px;color:var(--muted)}
+  .tabs{position:fixed;z-index:6;margin:0;gap:2px;justify-content:space-between;
+    left:max(14px,env(safe-area-inset-left));right:max(14px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 8px);
+    padding:5px;border-radius:999px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-edge);box-shadow:var(--glass-shadow)}
+  .tab{flex:1;flex-direction:column;gap:1px;min-height:52px;padding:5px 0 4px;border-radius:999px;font-size:10.5px;color:var(--muted);
+    transition:background .25s,color .25s}
   .tab:hover{color:var(--muted)}
-  .tab[aria-selected=true]{color:var(--lapel)}
+  .tab[aria-selected=true]{color:var(--lapel);background:var(--glass-pill)}
   .tab[aria-selected=true]::after{display:none}
-  .tab .i{display:block;width:25px;height:25px}
-  .tab .count{position:absolute;top:1px;left:calc(50% + 7px);font-size:11px;min-width:18px;line-height:18px;padding:0 5px}
-  main{padding-bottom:calc(env(safe-area-inset-bottom) + 96px)}
-  .toast{bottom:calc(env(safe-area-inset-bottom) + 76px)}
+  .tab .i{display:block;width:24px;height:24px}
+  .tab[aria-selected=true] .i{animation:tab-bounce .45s cubic-bezier(.34,1.56,.64,1)}
+  .tab .count{position:absolute;top:2px;left:calc(50% + 7px);font-size:11px;min-width:18px;line-height:18px;padding:0 5px}
+  main{padding-bottom:calc(env(safe-area-inset-bottom) + 104px)}
+  .toast{bottom:calc(env(safe-area-inset-bottom) + 84px)}
 }
+@keyframes tab-bounce{40%{scale:1.18}}
 
 /* ---------- papier ---------- */
 main{padding:14px max(16px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 56px) max(16px,env(safe-area-inset-left))}
 .searchbox{position:relative;display:block}
-.searchbox .i{position:absolute;left:12px;top:50%;translate:0 -50%;color:var(--muted);pointer-events:none}
-.searchbox input{width:100%;font-size:max(1rem,16px);padding:10px 40px 10px 38px;border-radius:12px;border:1px solid var(--rule);background:var(--raised);outline:none}
+.searchbox .i{position:absolute;left:14px;top:50%;translate:0 -50%;color:var(--muted);pointer-events:none}
+.searchbox input{width:100%;font-size:max(1rem,16px);padding:10px 40px 10px 40px;border-radius:999px;border:1px solid var(--rule);background:var(--raised);outline:none}
 .searchbox input:focus{border-color:var(--lapel);box-shadow:0 0 0 3px color-mix(in oklab,var(--lapel) 20%,transparent)}
 .searchbox kbd{position:absolute;right:10px;top:50%;translate:0 -50%;font:0.75rem var(--text);color:var(--muted);border:1px solid var(--rule);border-radius:6px;padding:0 6px}
 @media (hover:none){.searchbox kbd{display:none}}
@@ -224,7 +244,11 @@ a.item{touch-action:pan-y}
 
 /* ---------- knoppen ---------- */
 .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center}
-.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--raised);border-radius:10px;padding:7px 12px;font-size:0.875rem;font-weight:500;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--raised);border-radius:10px;padding:7px 12px;font-size:0.875rem;font-weight:500;white-space:nowrap;transition:scale .35s var(--spring),background .15s}
+.btn:active,.iconbtn:active,.chip:active,.tb:active{scale:.94;transition-duration:.08s}
+a.item{transition:scale .35s var(--spring),background .15s}
+a.item:active{scale:.985;transition-duration:.08s}
+.iconbtn,.chip{transition:scale .35s var(--spring),background .15s}
 .btn:hover{border-color:color-mix(in oklab,var(--ink) 30%,var(--rule))}
 .btn:active{background:var(--tint)}
 .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary);font-weight:600}
@@ -269,6 +293,20 @@ dialog.sheet.center .shead{padding-top:14px}
 .shead h2{flex:1;min-width:0;margin:2px 0 0;font:600 1.5625rem/1.2 var(--display);letter-spacing:-.01em;text-wrap:balance;overflow-wrap:anywhere}
 .shead .sub{display:flex;gap:12px;font-size:0.8125rem;color:var(--muted);margin-top:4px}
 .sbody{padding:16px max(16px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 64px) max(16px,env(safe-area-inset-left));max-width:760px;margin:0 auto}
+#sheet .sbody{padding-bottom:calc(env(safe-area-inset-bottom) + 40px)}
+/* acties binnen duimbereik: een zwevende werkbalk van glas, enkel de hoofdactie getint */
+.toolbar{position:sticky;bottom:calc(env(safe-area-inset-bottom) + 10px);z-index:3;display:flex;gap:2px;justify-content:space-between;
+  width:min(520px,calc(100% - 28px));margin:0 auto calc(env(safe-area-inset-bottom) + 10px);padding:5px;border-radius:999px;
+  background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);border:1px solid var(--glass-edge);box-shadow:var(--glass-shadow)}
+.toolbar:empty{display:none}
+.tb{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:52px;padding:6px 2px 4px;border:0;border-radius:999px;background:transparent;
+  color:var(--ink);font-size:10.5px;font-weight:600;transition:scale .35s var(--spring),background .15s}
+.tb .i{width:22px;height:22px}
+.tb:hover{background:var(--glass-pill)}
+.tb.primary{background:var(--primary);color:var(--on-primary)}
+.tb.on{color:var(--danger)}
+.tb.on .i{fill:currentColor}
+.tb:disabled{opacity:.5}
 .sbody:focus{outline:none}
 
 #ask{width:min(420px,calc(100% - 32px));border-radius:18px;--off:0 0;--sc:.96}
@@ -284,7 +322,7 @@ dialog.sheet.center .shead{padding-top:14px}
 textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto;min-height:180px;min-block-size:7lh;max-height:480px;max-block-size:22lh}
 
 /* menu's bij snoozen en meer */
-.menu{margin:0;padding:6px;border:1px solid var(--rule);border-radius:14px;background:var(--raised);color:var(--ink);box-shadow:var(--elev);min-width:230px;
+.menu{margin:0;padding:6px;border:1px solid var(--glass-edge);border-radius:18px;background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);color:var(--ink);box-shadow:var(--elev);min-width:230px;
   inset:auto 0 calc(env(safe-area-inset-bottom) + 12px) 0;margin-inline:auto;width:min(420px,calc(100% - 24px));
   opacity:0;translate:0 6px;transition-property:opacity,translate,display,overlay;transition-duration:.16s;transition-behavior:allow-discrete}
 .menu:popover-open{opacity:1;translate:0 0;
@@ -366,7 +404,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
 .days{display:flex;gap:6px;flex-wrap:wrap}
 #set-body > .backbtn{margin-bottom:8px}
 
-.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);translate:-50% 14px;background:var(--jacket);color:var(--on-jacket);padding:10px 16px;border-radius:12px;z-index:20;font-size:0.9062rem;
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);translate:-50% 14px;background:color-mix(in oklab,var(--jacket) 88%,transparent);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);color:var(--on-jacket);padding:11px 18px;border-radius:999px;z-index:20;font-size:0.9062rem;
   opacity:0;transition:opacity .2s,translate .25s cubic-bezier(.2,.8,.2,1);pointer-events:none;max-width:min(92vw,520px);box-shadow:var(--elev)}
 .toast.on{opacity:1;translate:-50% 0}
 
@@ -385,12 +423,14 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
 }
 @media (prefers-contrast:more){:root{--muted:#3e4843;--rule:#b8af9d;--on-jacket-muted:#d4e2db}}
 @media (prefers-contrast:more) and (prefers-color-scheme:dark){:root{--muted:#c6d1cb;--rule:#4d5d55}}
-@media (prefers-reduced-transparency:reduce){.tabs{background:var(--paper) !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important}}
+@media (prefers-reduced-transparency:reduce){.tabs,.toolbar,.menu,.toast{background:var(--paper) !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important}.toast{background:var(--jacket) !important}}
+@media (prefers-contrast:more){.tabs,.toolbar,.menu{border-color:var(--ink)}}
 @media (prefers-reduced-motion:reduce){
   dialog,.menu,.toast{translate:none !important;scale:none !important;transition-duration:.1s}
   @starting-style{dialog[open],.menu:popover-open{translate:none;scale:none}}
   ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none !important}
-  .spinning .i,.status .busy{animation:none}
+  .spinning .i,.status .busy,.tab[aria-selected=true] .i{animation:none}
+  .btn,.tb,a.item,.iconbtn,.chip,header,.wordmark h1,.status{transition:none}
 }
 </style>
 </head>
@@ -461,9 +501,10 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     <button class="backbtn" id="back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span id="back-label">Opvolgen</span></button>
     <h2 id="s-title"></h2>
     <div class="sub" id="s-meta"></div>
-    <div class="actions" id="s-actions"></div>
+
   </div>
   <div class="sbody" id="s-body" tabindex="-1"></div>
+  <div class="toolbar" id="s-actions" role="toolbar" aria-label="Acties"></div>
   <div class="menu" id="snooze-menu" popover>
     <button data-a="snooze1"><svg class="i"><use href="#i-clock"/></svg>Morgen <small id="sn1"></small></button>
     <button data-a="snooze3"><svg class="i"><use href="#i-clock"/></svg>Over 3 dagen <small id="sn3"></small></button>
@@ -868,13 +909,14 @@ function renderThread(){
   $('#s-meta').innerHTML = [S.accounts.length>1 ? t.account_name : '', `${t.n} bericht${t.n>1?'en':''}`, t.done?'afgehandeld':'']
     .filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('')
     + (t.dossier ? `<button class="linkbtn" data-dossier="${t.dossier.id}">${I('folder')}${esc(t.dossier.name)}</button>` : '');
-  const A = (id, icon, label, cls='') => `<button class="btn ${cls}" data-a="${id}">${I(icon)}${label}</button>`;
+  // werkbalk onderaan: binnen duimbereik, enkel de hoofdactie getint
+  const T = (id, icon, label, cls='', extra='') => `<button class="tb ${cls}" data-a="${id}" ${extra}>${I(icon)}<span>${label}</span></button>`;
   $('#s-actions').innerHTML = [
-    t.in_inbox ? A('archive','archive','Archiveer','primary') : '',
-    t.done ? A('undone','undo','Heropen') : A('done','check','Klaar'),
-    `<button class="btn ${t.flagged?'flagged':''}" data-a="${t.flagged?'unflag':'flag'}" aria-label="${t.flagged?'Markering weghalen':'Markeren'}" aria-pressed="${!!t.flagged}">${I('flag')}</button>`,
-    `<button class="btn" popovertarget="snooze-menu">${I('clock')}Snooze${I('down')}</button>`,
-    `<button class="btn" popovertarget="more-menu" aria-label="Meer acties">${I('more')}</button>`
+    t.in_inbox ? T('archive','archive','Archiveer','primary') : '',
+    t.done ? T('undone','undo','Heropen') : T('done','check','Klaar'),
+    T(t.flagged ? 'unflag' : 'flag', 'flag', t.flagged ? 'Gemarkeerd' : 'Markeer', t.flagged ? 'on' : '', `aria-pressed="${!!t.flagged}"`),
+    `<button class="tb" popovertarget="snooze-menu">${I('clock')}<span>Snooze</span></button>`,
+    `<button class="tb" popovertarget="more-menu">${I('more')}<span>Meer</span></button>`
   ].join('');
   $('#more-menu').innerHTML = [
     t.unread ? `<button data-a="read">${I('read')}Markeer als gelezen</button>` : '',
@@ -1347,6 +1389,16 @@ async function refreshNow(){
   finally{ b.classList.remove('spinning'); }
 }
 $('#refresh').onclick = refreshNow;
+
+// de grote titel klapt in bij scrollen (met wat speling, zodat hij niet flikkert rond de drempel)
+(() => {
+  const head = document.querySelector('header');
+  let compact = false;
+  addEventListener('scroll', () => {
+    const next = compact ? scrollY > 8 : scrollY > 48;
+    if(next !== compact){ compact = next; head.classList.toggle('compact', compact); }
+  }, {passive: true});
+})();
 
 /* ---------- aanraken: naar beneden trekken = vernieuwen, rij naar links vegen = verwijderen ---------- */
 (() => {
