@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#1c4237" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#173a2f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f9f9f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Butler">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg">
@@ -18,39 +18,42 @@
 /* Butler draagt smoking: de kop is het groene jasje, de inhoud het papier van de envelop,
    en goud (de vlinderdas uit het icoon) is voorbehouden aan wat Butler zelf doet. */
 @font-face{font-family:"Bodoni Moda";src:url(/fonts/bodoni-moda-latin.woff2) format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
+/* kleuren van Apple Mail en Spark: de systeemkleuren van iOS. Wit en lichtgrijs (zwart en donkergrijs in donkere modus),
+   blauw voor alles wat je kunt tikken, rood voor verwijderen en tellers, oranje voor vlaggen.
+   Goud blijft voor wat Butler zelf doet: de vlinderdas bij samenvattingen en wat nu nodig is. */
 :root{
   color-scheme: light dark;
-  --paper:#fbf8f1; --raised:#ffffff; --tint:#f1ece1; --ink:#17201c; --muted:#5d6862; --rule:#e5dece;
-  --jacket:#1c4237; --on-jacket:#f4eedf; --on-jacket-muted:#a3bfb2; --lapel:#2f6455;
-  --primary:#1c4237; --on-primary:#f4eedf;
-  --gold:#8a5f12; --tie:#d9a647; --gold-tint:#f6ead0;
-  --danger:#a8321c; --danger-tint:#f8e1da; --out:#eef3ef;
-  --elev:0 20px 50px -18px rgb(14 30 24 / .35), 0 2px 6px rgb(14 30 24 / .08);
-  --av-l:91%; --av-c:.035; --av-ink:32%;
+  --paper:#ffffff; --raised:#ffffff; --grouped:#f2f2f7; --tint:#f2f2f7; --ink:#000000; --muted:#6e6e73; --rule:#e5e5ea;
+  --jacket:rgb(249 249 249 / .86); --on-jacket:#000000; --on-jacket-muted:#6e6e73; --lapel:#007aff;
+  --primary:#007aff; --on-primary:#ffffff;
+  --gold:#946200; --tie:#d9a647; --gold-tint:#fff4d6;
+  --danger:#ff3b30; --danger-tint:#ffe5e3; --out:#e5f0ff; --flag:#ff9500; --badge:#ff3b30;
+  --elev:0 16px 44px -14px rgb(0 0 0 / .22), 0 1px 3px rgb(0 0 0 / .06);
+  --av-l:90%; --av-c:.04; --av-ink:34%;
   --display:"Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
   --text: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   accent-color: var(--lapel);
   /* Liquid Glass voor de navigatielaag (tabbalk, werkbalk, menu's, melding): nooit voor de inhoud zelf */
-  --glass-bg: color-mix(in oklab, var(--paper) 62%, transparent);
+  --glass-bg: rgb(250 250 250 / .72);
   --glass-blur: blur(22px) saturate(1.9);
-  --glass-edge: rgb(255 255 255 / .6);
-  --glass-shadow: 0 10px 34px -10px rgb(20 30 25 / .32), inset 0 1px 0 rgb(255 255 255 / .7);
-  --glass-pill: color-mix(in oklab, var(--lapel) 13%, transparent);
+  --glass-edge: rgb(255 255 255 / .7);
+  --glass-shadow: 0 10px 34px -10px rgb(0 0 0 / .22), inset 0 1px 0 rgb(255 255 255 / .8);
+  --glass-pill: rgb(0 122 255 / .12);
   --spring: cubic-bezier(.34, 1.56, .64, 1);
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --paper:#0f1613; --raised:#151f1b; --tint:#1f2b26; --ink:#e9ede9; --muted:#98a69f; --rule:#25322c;
-    --jacket:#173a2f; --on-jacket:#efe7d4; --on-jacket-muted:#7f9a8e; --lapel:#86c3ad;
-    --primary:#86c3ad; --on-primary:#0c1f19;
-    --gold:#e8bd62; --tie:#e8bd62; --gold-tint:#33291a;
-    --danger:#f08a73; --danger-tint:#3a1f19; --out:#15241e;
-    --elev:0 24px 60px -18px rgb(0 0 0 / .75), 0 2px 6px rgb(0 0 0 / .3);
-    --av-l:30%; --av-c:.04; --av-ink:88%;
-    --glass-bg: color-mix(in oklab, var(--raised) 58%, transparent);
+    --paper:#000000; --raised:#1c1c1e; --grouped:#000000; --tint:#2c2c2e; --ink:#ffffff; --muted:#98989d; --rule:#38383a;
+    --jacket:rgb(22 22 24 / .84); --on-jacket:#ffffff; --on-jacket-muted:#98989d; --lapel:#0a84ff;
+    --primary:#0a84ff; --on-primary:#ffffff;
+    --gold:#e8bd62; --tie:#e8bd62; --gold-tint:#3a2e10;
+    --danger:#ff453a; --danger-tint:#3a1714; --out:#0b2545; --flag:#ff9f0a; --badge:#ff453a;
+    --elev:0 24px 60px -18px rgb(0 0 0 / .8), 0 2px 6px rgb(0 0 0 / .4);
+    --av-l:32%; --av-c:.05; --av-ink:90%;
+    --glass-bg: rgb(40 40 42 / .7);
     --glass-edge: rgb(255 255 255 / .12);
-    --glass-shadow: 0 12px 36px -10px rgb(0 0 0 / .7), inset 0 1px 0 rgb(255 255 255 / .1);
-    --glass-pill: rgb(255 255 255 / .1);
+    --glass-shadow: 0 12px 36px -10px rgb(0 0 0 / .8), inset 0 1px 0 rgb(255 255 255 / .1);
+    --glass-pill: rgb(255 255 255 / .12);
   }
 }
 *,*::before,*::after{box-sizing:border-box}
@@ -69,22 +72,27 @@ a{color:inherit;text-decoration:none}
 .wrap{max-width:760px;margin:0 auto}
 
 /* ---------- het jasje ---------- */
-header{position:sticky;top:0;z-index:5;background:var(--jacket);color:var(--on-jacket);transition:padding .3s ease,box-shadow .3s ease;padding:calc(env(safe-area-inset-top) + 14px) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
+header{position:sticky;top:0;z-index:5;color:var(--on-jacket);transition:padding .3s ease;padding:calc(env(safe-area-inset-top) + 14px) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
+/* de doorschijnende balk zit op een laag achter de kop: een backdrop-filter op de kop zelf zou hem het
+   vertrekpunt maken voor de vaste tabbalk erin, die dan bovenaan zou hangen */
+header::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--jacket);
+  -webkit-backdrop-filter:saturate(1.8) blur(20px);backdrop-filter:saturate(1.8) blur(20px);box-shadow:0 .5px 0 var(--rule)}
 .brand{display:flex;align-items:center;gap:10px}
 .wordmark{flex:1;min-width:0;display:flex;flex-direction:column}
 .wordmark h1{display:flex;align-items:center;gap:10px;margin:0;font:600 1.875rem/1 var(--display);letter-spacing:.005em;transform-origin:left center;transition:scale .3s ease}
 /* bij scrollen klapt de grote titel in tot een compacte balk */
-header.compact{padding-top:calc(env(safe-area-inset-top) + 6px);box-shadow:0 6px 20px -12px rgb(0 0 0 / .5)}
+header.compact{padding-top:calc(env(safe-area-inset-top) + 6px)}
 header.compact .wordmark h1{scale:.72}
 header.compact .status{max-height:0;margin-top:0;opacity:0;min-height:0}
 @media (max-width:699px){header.compact{padding-bottom:6px}}
 .wordmark .tie{width:32px;height:15px}
 .status{margin:6px 0 0 42px;font-size:0.7812rem;color:var(--on-jacket-muted);min-height:18px;max-height:24px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:max-height .3s ease,opacity .2s ease,margin .3s ease}
-.status .err{color:#f3b3a3}
+.status .err{color:var(--danger)}
 .status .busy{animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.4}}
 .iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;border:0;background:transparent;color:inherit}
-header .iconbtn:hover{background:rgb(255 255 255 / .08)}
+header .iconbtn{color:var(--lapel)}
+header .iconbtn:hover{background:var(--tint)}
 .spinning .i{animation:spin 1s linear infinite}
 @keyframes spin{to{rotate:360deg}}
 
@@ -92,8 +100,8 @@ header .iconbtn:hover{background:rgb(255 255 255 / .08)}
 .tab{position:relative;border:0;background:transparent;padding:10px 0 12px;font-size:0.9375rem;font-weight:600;color:var(--on-jacket-muted);display:flex;align-items:center;gap:7px}
 .tab:hover{color:var(--on-jacket)}
 .tab[aria-selected=true]{color:var(--on-jacket)}
-.tab[aria-selected=true]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--tie)}
-.tab .count{font-size:0.75rem;font-weight:700;min-width:20px;padding:0 6px;border-radius:99px;background:var(--tie);color:#1c2a20;text-align:center}
+.tab[aria-selected=true]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--lapel)}
+.tab .count{font-size:0.75rem;font-weight:700;min-width:20px;padding:0 6px;border-radius:99px;background:var(--badge);color:#fff;text-align:center}
 .tab .count:empty{display:none}
 .tab .i{display:none}
 /* op een gsm horen de secties in een tabbalk onderaan: een zwevende capsule van glas (navigatielaag),
@@ -131,7 +139,7 @@ main{padding:14px max(16px,env(safe-area-inset-right)) calc(env(safe-area-inset-
 .chips:empty{display:none}
 .chip{position:relative;border:1px solid var(--rule);background:transparent;border-radius:999px;padding:4px 12px;white-space:nowrap;font-size:0.8438rem;color:var(--muted)}
 .chip:hover{color:var(--ink)}
-.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.chip[aria-pressed=true]{background:var(--lapel);border-color:var(--lapel);color:#fff}
 
 #list{container:list/inline-size;view-transition-name:list}
 .sec-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:26px 0 4px}
@@ -170,7 +178,7 @@ a.item:hover::before,a.item:hover + .item::before{opacity:0}
 .badge .i{width:12px;height:12px}
 .badge.gold{background:var(--gold-tint);color:var(--gold);font-weight:600}
 .badge.tag{background:transparent;padding-inline:0 4px}
-.c-top .flag{width:13px;height:13px;color:var(--danger);align-self:center}
+.c-top .flag{width:13px;height:13px;color:var(--flag);fill:currentColor;align-self:center}
 /* gemarkeerde mail die nu nodig is: Butler haalt ze naar voren, dus met de gouden rand */
 .now .items{background:var(--raised);border:1px solid var(--rule);border-left:3px solid var(--tie);border-radius:4px 14px 14px 4px;padding:2px 12px 2px 10px}
 .now .item{margin:0;padding-inline:4px}
@@ -191,9 +199,9 @@ a.item{touch-action:pan-y}
 .swipe-bg{position:absolute;z-index:0;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-right:20px;
   border-radius:12px;background:color-mix(in oklab,var(--danger) 55%,var(--paper));color:#fff;font-weight:600;transition:background .15s}
 .swipe-bg.ready{background:var(--danger)}
-.swipe-bg.flag{justify-content:flex-start;padding:0 0 0 20px;background:color-mix(in oklab,#e8890c 55%,var(--paper))}
-.swipe-bg.flag.ready{background:#e8890c}
-.btn.flagged{color:var(--danger)}
+.swipe-bg.flag{justify-content:flex-start;padding:0 0 0 20px;background:color-mix(in oklab,var(--flag) 55%,var(--paper))}
+.swipe-bg.flag.ready{background:var(--flag)}
+.btn.flagged{color:var(--flag)}
 .btn.flagged .i{fill:currentColor}
 .now .item.swiping{background:var(--raised)}
 .sender-head{display:block;width:100%;padding:0;border:0;background:none;text-align:left;color:inherit}
@@ -215,7 +223,7 @@ a.item{touch-action:pan-y}
 .rel:first-of-type{border-top:0}
 .rel span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rel time{color:var(--muted);font-size:0.8125rem;white-space:nowrap}
-.item.agenda .ag-time{flex:none;width:52px;padding-top:2px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--gold)}
+.item.agenda .ag-time{flex:none;width:52px;padding-top:2px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
 .item.agenda .ag-time.allday{font-weight:500;font-size:0.8125rem;color:var(--muted)}
 .item.agenda .who{white-space:normal}
 .ag-rem{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:0.8125rem;color:var(--muted)}
@@ -290,7 +298,7 @@ dialog.sheet.center .shead{padding-top:14px}
   dialog.sheet{width:min(720px,62vw);margin:0 0 0 auto}
   dialog.sheet.center{width:min(560px,92vw);height:auto;max-height:min(86dvh,860px);margin:auto;border-radius:20px;--off:0 20px}
 }
-.shead{position:sticky;top:0;z-index:2;padding:calc(env(safe-area-inset-top) + 10px) max(16px,env(safe-area-inset-right)) 14px max(16px,env(safe-area-inset-left));background:var(--paper);border-bottom:1px solid var(--rule)}
+.shead{position:sticky;top:0;z-index:2;padding:calc(env(safe-area-inset-top) + 10px) max(16px,env(safe-area-inset-right)) 14px max(16px,env(safe-area-inset-left));background:var(--jacket);-webkit-backdrop-filter:saturate(1.8) blur(20px);backdrop-filter:saturate(1.8) blur(20px);border-bottom:1px solid var(--rule)}
 @media (min-width:900px){.shead{padding-top:16px}}
 .shead .top{display:flex;align-items:flex-start;gap:8px}
 .backbtn{display:inline-flex;align-items:center;gap:2px;min-height:44px;margin-left:-10px;padding:0 10px 0 4px;border:0;background:transparent;color:var(--lapel);font-size:1.0625rem;border-radius:10px}
@@ -299,6 +307,8 @@ dialog.sheet.center .shead{padding-top:14px}
 .done{font-weight:600;color:var(--lapel);font-size:1.0625rem;margin-right:-10px}
 .shead h2{flex:1;min-width:0;margin:2px 0 0;font:600 1.5625rem/1.2 var(--display);letter-spacing:-.01em;text-wrap:balance;overflow-wrap:anywhere}
 .shead .sub{display:flex;gap:12px;font-size:0.8125rem;color:var(--muted);margin-top:4px}
+#settings{background:var(--grouped)}
+#settings .shead{background:color-mix(in oklab,var(--grouped) 86%,transparent)}
 .sbody{padding:16px max(16px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 64px) max(16px,env(safe-area-inset-left));max-width:760px;margin:0 auto}
 #sheet .sbody{padding-bottom:calc(env(safe-area-inset-bottom) + 40px)}
 /* acties binnen duimbereik: een zwevende werkbalk van glas, enkel de hoofdactie getint */
@@ -311,7 +321,7 @@ dialog.sheet.center .shead{padding-top:14px}
 .tb .i{width:22px;height:22px}
 .tb:hover{background:var(--glass-pill)}
 .tb.primary{background:var(--primary);color:var(--on-primary)}
-.tb.on{color:var(--danger)}
+.tb.on{color:var(--flag)}
 .tb.on .i{fill:currentColor}
 .tb:disabled{opacity:.5}
 .sbody:focus{outline:none}
@@ -414,7 +424,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
 .days{display:flex;gap:6px;flex-wrap:wrap}
 #set-body > .backbtn{margin-bottom:8px}
 
-.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);translate:-50% 14px;background:color-mix(in oklab,var(--jacket) 88%,transparent);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);color:var(--on-jacket);padding:11px 18px;border-radius:999px;z-index:20;font-size:0.9062rem;
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);translate:-50% 14px;background:rgb(30 30 32 / .88);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);color:#fff;padding:11px 18px;border-radius:999px;z-index:20;font-size:0.9062rem;
   opacity:0;transition:opacity .2s,translate .25s cubic-bezier(.2,.8,.2,1);pointer-events:none;max-width:min(92vw,520px);box-shadow:var(--elev)}
 .toast.on{opacity:1;translate:-50% 0}
 
@@ -431,9 +441,9 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   .menu button{min-height:44px}
   .opts label{min-height:44px}
 }
-@media (prefers-contrast:more){:root{--muted:#3e4843;--rule:#b8af9d;--on-jacket-muted:#d4e2db}}
-@media (prefers-contrast:more) and (prefers-color-scheme:dark){:root{--muted:#c6d1cb;--rule:#4d5d55}}
-@media (prefers-reduced-transparency:reduce){.tabs,.toolbar,.menu,.toast{background:var(--paper) !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important}.toast{background:var(--jacket) !important}}
+@media (prefers-contrast:more){:root{--muted:#3a3a3c;--rule:#c6c6c8;--on-jacket-muted:#3a3a3c}}
+@media (prefers-contrast:more) and (prefers-color-scheme:dark){:root{--muted:#d1d1d6;--rule:#545458;--on-jacket-muted:#d1d1d6}}
+@media (prefers-reduced-transparency:reduce){.tabs,.toolbar,.menu,header::before,.shead{background:var(--paper) !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important}.toast{background:#1e1e20 !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important}}
 @media (prefers-contrast:more){.tabs,.toolbar,.menu{border-color:var(--ink)}}
 @media (prefers-reduced-motion:reduce){
   dialog,.menu,.toast{translate:none !important;scale:none !important;transition-duration:.1s}
