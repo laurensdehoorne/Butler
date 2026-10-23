@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="text-scale" content="scale">
 <meta name="theme-color" content="#f9f9f9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -124,7 +125,6 @@ header .iconbtn:hover{background:var(--tint)}
   .tab[aria-selected=true] .i{animation:tab-bounce .45s cubic-bezier(.34,1.56,.64,1)}
   .tab .count{position:absolute;top:2px;left:calc(50% + 7px);font-size:var(--fs-caption2);min-width:18px;line-height:18px;padding:0 5px}
   main{padding-bottom:calc(env(safe-area-inset-bottom) + 104px)}
-  .toast{bottom:calc(env(safe-area-inset-bottom) + 84px)}
 }
 @keyframes tab-bounce{40%{scale:1.18}}
 
@@ -404,7 +404,7 @@ textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto
 .mb details.q-text{margin-top:10px;white-space:pre-wrap;color:var(--muted)}
 .mb details.q-text summary,.butler-q summary{display:inline-block;margin:4px 0;padding:4px 10px;border-radius:99px;background:var(--tint);color:var(--muted);font-size:var(--fs-footnote);cursor:pointer;list-style:none;white-space:normal}
 .mb details summary::-webkit-details-marker{display:none}
-.mb{padding:0 0 18px 46px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--fs-body);line-height:1.6;max-width:72ch}
+.mb{padding:0 0 18px 46px;white-space:pre-wrap;overflow-wrap:anywhere;text-wrap:pretty;font-size:var(--fs-body);line-height:1.6;max-width:72ch}
 .msg.out .mb{border-left:2px solid color-mix(in oklab,var(--lapel) 50%,transparent);margin-left:46px;padding-left:14px}
 .msg.collapsed .mb,.msg.collapsed .atts{display:none}
 .atts{display:flex;flex-wrap:wrap;gap:8px;padding:0 0 16px 46px}
@@ -480,9 +480,11 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
 .days{display:flex;gap:6px;flex-wrap:wrap}
 #set-body > .backbtn{margin-bottom:8px}
 
-.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);translate:-50% 14px;background:rgb(30 30 32 / .88);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);color:#fff;padding:11px 18px;border-radius:999px;z-index:20;font-size:var(--fs-subhead);
+/* popover="manual": in de top layer, dus ook zichtbaar (en voorgelezen) boven een open mail of venster */
+.toast{position:fixed;inset:auto auto calc(env(safe-area-inset-bottom) + 20px) 50%;margin:0;border:0;overflow:visible;translate:-50% 14px;width:max-content;background:rgb(30 30 32 / .88);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);color:#fff;padding:11px 18px;border-radius:999px;z-index:20;font-size:var(--fs-subhead);
   opacity:0;transition:opacity .2s,translate .25s cubic-bezier(.2,.8,.2,1);pointer-events:none;max-width:min(92vw,520px);box-shadow:var(--elev)}
 .toast.on{opacity:1;translate:-50% 0}
+@media (max-width:699px){.toast{bottom:calc(env(safe-area-inset-bottom) + 84px)}}  /* boven de tabbalk en de werkbalk */
 
 ::view-transition-old(list){animation:.14s ease-in both vt-out}
 ::view-transition-new(list){animation:.22s cubic-bezier(.2,.8,.2,1) both vt-in}
@@ -641,7 +643,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     <button class="iconbtn viewer-share" aria-label="Delen of bewaren"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg></button></div>
   <div class="viewer-body" tabindex="0"></div>
 </dialog>
-<div class="toast" id="toast" role="status"></div>
+<div class="toast" id="toast" role="status" popover="manual"></div>
 
 <script>
 const S = { tab:'followup', filter:'alle', cfilter:'reclame', account:'', q:'', accounts:[], ai:false, thread:null, loaded:{}, seq:0, hidden:new Set() };
@@ -655,7 +657,14 @@ const TAB_NAMES = {followup:'Opvolgen', agenda:'Agenda', dossiers:'Dossiers', in
 const RULES = [['none','Geen regel'],['archive_after','Archiveren na … dagen'],['archive','Altijd meteen archiveren'],['trash','Altijd meteen verwijderen'],['keep','Nooit automatisch opruimen']];
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
-function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2800); }
+const canPopover = 'popover' in HTMLElement.prototype;
+function toast(msg){
+  const t = $('#toast');
+  clearTimeout(t._h);
+  if(canPopover){ if(t.matches(':popover-open')) t.hidePopover(); t.showPopover(); }  // opnieuw: bovenaan, ook boven een venster dat net openging
+  requestAnimationFrame(() => { t.textContent = msg; t.classList.add('on'); });  // na het tonen, zodat role=status het voorleest
+  t._h = setTimeout(() => { t.classList.remove('on'); if(canPopover) t._h = setTimeout(() => t.hidePopover(), 250); }, 2800);
+}
 
 /* ---------- dialogen: animatie bij sluiten, light dismiss ook zonder closedby ---------- */
 let displayTransition;
@@ -1512,6 +1521,11 @@ body{display:flow-root!important;box-sizing:border-box!important;height:auto!imp
 ${dark ? '<style>html,body{background:#1c1c1e;color:#fff}.butler-q>summary{background:#2c2c2e;color:#98989d}</style>' : ''}
 </head><body>${html}</body></html>`;
 
+// het systeem wisselt tussen licht en donker terwijl een mail openstaat: de HTML-mails opnieuw tekenen
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  for(const el of document.querySelectorAll('#s-body .mb.html[data-mid]')){ el.dataset.done = ''; el.classList.remove('html'); }
+  showHtmlMessages();
+});
 function showHtmlMessages(){
   for(const el of $('#s-body').querySelectorAll('.mb[data-mid]')){
     if(!el.dataset.done && !el.closest('.msg').classList.contains('collapsed')) showHtml(el);
