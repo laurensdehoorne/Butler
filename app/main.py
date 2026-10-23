@@ -1007,15 +1007,33 @@ def draft(tid: int, body: DraftIn):
     return {"draft": text}
 
 
+class FileIn(BaseModel):
+    name: str
+    type: str = ""
+    data: str  # base64
+
+
+def _files(files):
+    """Bijlagen uit de app → [(naam, type, bytes)], met het type van de bestandsnaam als de browser het niet weet."""
+    import base64
+
+    try:
+        return [(f.name[:200] or "bijlage", att_type(f.type, f.name), base64.b64decode(f.data, validate=True)) for f in files]
+    except ValueError:
+        raise HTTPException(400, "bijlage onleesbaar")
+
+
 class SendIn(BaseModel):
     body: str
     reply_all: bool = False
     archive: bool = False
+    files: list[FileIn] = []
 
 
 class DraftSaveIn(BaseModel):
     body: str
     reply_all: bool = False
+    files: list[FileIn] = []
 
 
 @app.post("/api/threads/{tid}/save-draft", dependencies=[Depends(auth)])
@@ -1023,7 +1041,8 @@ def save_draft(tid: int, body: DraftSaveIn):
     t = _thread_or_404(tid)
     if not body.body.strip():
         raise HTTPException(400, "Leeg bericht")
-    res = _run(lambda: actions.save_draft(db, _acc(t["account"]), tid, body.body, body.reply_all))
+    files = _files(body.files)
+    res = _run(lambda: actions.save_draft(db, _acc(t["account"]), tid, body.body, body.reply_all, files))
     return {"ok": True, **res}
 
 
@@ -1356,7 +1375,8 @@ def send(tid: int, body: SendIn):
     if not body.body.strip():
         raise HTTPException(400, "Leeg bericht")
     acc = _acc(t["account"])
-    res = _run(lambda: actions.send_reply(db, acc, tid, body.body, body.reply_all))
+    files = _files(body.files)
+    res = _run(lambda: actions.send_reply(db, acc, tid, body.body, body.reply_all, files))
     if body.archive:
         _run(lambda: actions.move_thread(db, acc, tid, "archive"))
     return {"ok": True, **res}

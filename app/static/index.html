@@ -440,6 +440,10 @@ textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto
 .compose .ins .field{flex:1;min-width:0}
 .opts{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:0.875rem;color:var(--muted);margin:12px 2px 0}
 .opts label{display:inline-flex;gap:7px;align-items:center;cursor:pointer}
+.reply-files{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.reply-files .btn{width:auto}
+.att-x{display:grid;place-items:center;width:28px;height:28px;margin:-6px -8px -6px -4px;border:0;border-radius:99px;background:transparent;color:var(--muted);cursor:pointer}
+.att-x .i{width:14px;height:14px;color:inherit}
 .compose .hint{font-size:0.8125rem;color:var(--muted);margin-top:12px}
 
 /* instellingen */
@@ -1304,6 +1308,8 @@ function renderThread(){
       ${t.ai_available?`<div class="ins"><input type="text" class="field" id="instr" placeholder="Wat wil je zeggen? Bv. akkoord, voorstel dinsdag 14u" enterkeyhint="go">
         <button class="btn" data-a="draft">${TIE()}Stel voor</button></div>`:''}
       <textarea class="field" id="reply" placeholder="Je antwoord" aria-label="Je antwoord"></textarea>
+      <div class="reply-files" id="reply-files">${replyFiles()}</div>
+      <input type="file" id="reply-pick" multiple hidden>
       <div class="opts">
         <label><input type="checkbox" switch id="replyall"> Allen beantwoorden</label>
         <label><input type="checkbox" switch id="arch" ${t.in_inbox?'checked':''}> Archiveren na rechtstreeks versturen</label>
@@ -1330,6 +1336,34 @@ function renderThread(){
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
   showHtmlMessages();
 }
+
+/* ---------- bijlagen bij je antwoord: blijven tot je verstuurt of een andere mail opent ---------- */
+const MAX_UPLOAD = 18 * 1048576;  // zoals de server: Gmail en iCloud weigeren mail boven ~25 MB
+S.files = {tid: null, list: []};
+const filesFor = tid => (S.files.tid === tid ? S.files : (S.files = {tid, list: []})).list;
+function replyFiles(){
+  const list = filesFor(S.thread?.tid);
+  return list.map((f, i) => `<span class="att">${I('file')}<span class="att-name">${esc(f.name)}</span><span class="att-size">${attSize(f.size)}</span>
+      <button class="att-x" data-a="unattach" data-i="${i}" aria-label="${esc(f.name)} weghalen">${I('x')}</button></span>`).join('')
+    + `<button class="btn ghost" data-a="attach">${I('clip')}Bijlage toevoegen</button>`;
+}
+$('#s-body').addEventListener('change', e => {
+  if(e.target.id !== 'reply-pick' || !S.thread) return;
+  const list = filesFor(S.thread.tid);
+  for(const f of e.target.files){
+    if(list.reduce((n, x) => n + x.size, 0) + f.size > MAX_UPLOAD){ toast(`${f.name} past er niet meer bij: samen hoogstens 18 MB`); continue; }
+    list.push(f);
+  }
+  e.target.value = '';
+  $('#reply-files').innerHTML = replyFiles();
+});
+const b64 = f => new Promise((ok, fail) => {
+  const r = new FileReader();
+  r.onload = () => ok(r.result.slice(r.result.indexOf(',') + 1));
+  r.onerror = () => fail(new Error(`${f.name} kon niet gelezen worden`));
+  r.readAsDataURL(f);
+});
+const filesPayload = tid => Promise.all(filesFor(tid).map(async f => ({name: f.name, type: f.type, data: await b64(f)})));
 
 /* ---------- context voor Butler: wat je zelf weet over deze mail of afzender ---------- */
 function contextView(t){
@@ -1652,12 +1686,15 @@ async function doAction(a, btn){
     if(a==='draft'){ btn.innerHTML = TIE()+'Bezig…';
       const d = await post(p+'/draft',{instruction:$('#instr').value}); $('#reply').value = d.draft; $('#reply').focus();
       btn.innerHTML = TIE()+'Opnieuw'; return; }
+    if(a==='attach'){ $('#reply-pick').click(); return; }
+    if(a==='unattach'){ filesFor(t.tid).splice(+btn.dataset.i, 1); $('#reply-files').innerHTML = replyFiles(); return; }
     if(a==='savedraft'){ const body=$('#reply').value.trim(); if(!body) return toast('Schrijf eerst een antwoord');
-      const r = await post(p+'/save-draft',{body, reply_all:$('#replyall').checked});
-      toast('Concept staat in '+r.folder+'. Verstuur het vanuit Spark.'); $('#reply').value=''; return; }
+      const r = await post(p+'/save-draft',{body, reply_all:$('#replyall').checked, files: await filesPayload(t.tid)});
+      toast('Concept staat in '+r.folder+'. Verstuur het vanuit Spark.'); $('#reply').value=''; filesFor(t.tid).length = 0; $('#reply-files').innerHTML = replyFiles(); return; }
     if(a==='send'){ const body=$('#reply').value.trim(); if(!body) return toast('Schrijf eerst een antwoord');
       if(!await ask({title:'Rechtstreeks versturen?', msg:$('#replyall').checked ? 'Naar alle ontvangers van deze thread.' : 'Naar de afzender van het laatste bericht.', ok:'Versturen'})) return;
-      const r = await post(p+'/send',{body, reply_all:$('#replyall').checked, archive:$('#arch').checked});
+      const r = await post(p+'/send',{body, reply_all:$('#replyall').checked, archive:$('#arch').checked, files: await filesPayload(t.tid)});
+      filesFor(t.tid).length = 0;
       toast('Verstuurd naar '+r.to.join(', ')); return closeThread(); }
     S.thread = await api(p); renderThread();
   }catch(e){ toast('Mislukt: '+e.message); if(btn?.isConnected && label) btn.innerHTML = label; }

@@ -74,3 +74,30 @@ def test_inbox_badge_counts_unread_personal_mail_only(app, client, acc):
     app.db.x("UPDATE messages SET seen=1 WHERE subject='Gelezen'")
     assert client.get("/api/inbox", headers=H).json()["unread"] == 1
     assert client.get("/api/followup", headers=H).json()["inbox_unread"] == 1
+
+
+def test_reply_with_attachments(client, acc):
+    """Bijlagen bij een antwoord: rechtstreeks versturen en als concept, met het type van de bestandsnaam."""
+    import base64
+
+    tA, _, _ = seed(acc)
+    pdf = b"%PDF-1.4 test"
+    files = [{"name": "offerte.pdf", "type": "", "data": base64.b64encode(pdf).decode()}]
+    with mock.patch("smtplib.SMTP") as smtp, mock.patch.object(acc, "run_imap"):
+        r = client.post(f"/api/threads/{tA}/send", headers=H, json={"body": "Zie bijlage.", "files": files})
+    assert r.status_code == 200
+    sent = smtp.return_value.__enter__.return_value.send_message.call_args[0][0]
+    att = next(sent.iter_attachments())
+    assert att.get_filename() == "offerte.pdf" and att.get_content_type() == "application/pdf"
+    assert att.get_payload(decode=True) == pdf
+    shown = client.get(f"/api/threads/{tA}", headers=H).json()["messages"][-1]["attachments"]
+    assert [a["name"] for a in shown] == ["offerte.pdf"]
+
+    calls = []
+    fake = mock.MagicMock(append=lambda folder, data, flags: calls.append(data))
+    with mock.patch.object(acc, "run_imap", side_effect=lambda fn: fn(fake)):
+        client.post(f"/api/threads/{tA}/save-draft", headers=H, json={"body": "Concept.", "files": files})
+    assert b'filename="offerte.pdf"' in calls[0]
+
+    bad = client.post(f"/api/threads/{tA}/send", headers=H, json={"body": "x", "files": [{"name": "a", "data": "!!"}]})
+    assert bad.status_code == 400

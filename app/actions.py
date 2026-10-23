@@ -192,7 +192,19 @@ def smtp_send(acc, em):
             s.send_message(em)
 
 
-def build_reply(db, acc, tid, body, reply_all=False):
+MAX_UPLOAD = 18 * 1024 * 1024  # bijlagen samen: Gmail en iCloud weigeren mail boven ~25 MB (met base64-overhead)
+
+
+def add_files(em, files):
+    """Bijlagen die je zelf toevoegt: [(naam, type, bytes)]."""
+    if sum(len(d) for _, _, d in files) > MAX_UPLOAD:
+        raise ValueError(f"bijlagen samen groter dan {MAX_UPLOAD // 1024 // 1024} MB")
+    for name, ctype, data in files:
+        main, _, sub = (ctype or "application/octet-stream").partition("/")
+        em.add_attachment(data, maintype=main, subtype=sub or "octet-stream", filename=name)
+
+
+def build_reply(db, acc, tid, body, reply_all=False, files=()):
     t, msgs = thread_messages(db, tid)
     if not t or not msgs:
         raise ValueError("thread niet gevonden")
@@ -235,12 +247,13 @@ def build_reply(db, acc, tid, body, reply_all=False):
     if refs:
         em["References"] = " ".join(refs[-20:])
     em.set_content(body.rstrip() + _quote(base))
+    add_files(em, files)
     return t, em, mid, to, cc, subject, refs
 
 
-def save_draft(db, acc, tid, body, reply_all=False):
+def save_draft(db, acc, tid, body, reply_all=False, files=()):
     """Zet het antwoord als concept in de Concepten-map: verschijnt in Spark/Apple Mail/Gmail om daar te versturen."""
-    _, em, _, to, cc, subject, _ = build_reply(db, acc, tid, body, reply_all)
+    _, em, _, to, cc, subject, _ = build_reply(db, acc, tid, body, reply_all, files)
     folder = acc.folders.get("drafts")
     if not folder:
         raise RuntimeError(f"geen Concepten-map gevonden voor {acc.name}")
@@ -267,8 +280,8 @@ def forward(db, acc, mid, to, note=""):
     return fw.send(db, acc, dict(row), rows, to, note, _raw, smtp_send, lambda em: append_sent(acc, em))
 
 
-def send_reply(db, acc, tid, body, reply_all=False):
-    t, em, mid, to, cc, subject, refs = build_reply(db, acc, tid, body, reply_all)
+def send_reply(db, acc, tid, body, reply_all=False, files=()):
+    t, em, mid, to, cc, subject, refs = build_reply(db, acc, tid, body, reply_all, files)
 
     smtp_send(acc, em)
     append_sent(acc, em)
@@ -276,11 +289,12 @@ def send_reply(db, acc, tid, body, reply_all=False):
     now = datetime.now(timezone.utc).isoformat()
     db.x(
         """INSERT INTO messages(account, folder, uid, message_id, thread_key, refs, from_addr, from_name, to_addrs,
-           cc_addrs, reply_to, subject, date, snippet, body, seen, outgoing, in_inbox, bulk)
-           VALUES(?, '_pending', ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, 1, 1, 0, 0)""",
+           cc_addrs, reply_to, subject, date, snippet, body, seen, outgoing, in_inbox, bulk, attachments)
+           VALUES(?, '_pending', ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, 1, 1, 0, 0, ?)""",
         (acc.id, -int(time.time() * 1000), mid, t["thread_key"], " ".join(refs), acc.email,
          acc.display_name or acc.email, json.dumps([["", a] for a in to]), json.dumps([["", a] for a in cc]),
-         subject, now, make_snippet(body), body),
+         subject, now, make_snippet(body), body,
+         json.dumps([{"name": n, "type": c, "size": len(d)} for n, c, d in files])),
     )
     return {"to": to, "cc": cc, "subject": subject}
 
