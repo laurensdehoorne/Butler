@@ -4,297 +4,292 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f4efe4" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0f1513" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#1c4237" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#173a2f" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Butler">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/fonts/bodoni-moda-latin.woff2" as="font" type="font/woff2" crossorigin>
 <title>Butler</title>
 <style>
-/* ---------- tokens: papier, smokinggroen en goud uit het app-icoon ---------- */
+/* Butler draagt smoking: de kop is het groene jasje, de inhoud het papier van de envelop,
+   en goud (de vlinderdas uit het icoon) is voorbehouden aan wat Butler zelf doet. */
+@font-face{font-family:"Bodoni Moda";src:url(/fonts/bodoni-moda-latin.woff2) format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
 :root{
   color-scheme: light dark;
-  --bg:#f4efe4; --surface:#fffdf8; --surface-2:#ece6d8; --ink:#1b2320; --muted:#68706b; --line:#e2dacb;
-  --brand:#2f6455; --brand-strong:#1c4237; --brand-ink:#ffffff; --brand-soft:#e3ede8;
-  --gold:#b98222; --gold-soft:#f7ead0; --gold-ink:#7f5711;
-  --danger:#b4361f; --danger-soft:#f9e3dd; --out:#eaf2ee; --ok:#2f8a5f;
-  --shadow:0 1px 2px rgb(40 30 10 / .05), 0 4px 16px -6px rgb(40 30 10 / .12);
-  --shadow-lg:0 24px 60px -20px rgb(20 30 25 / .35);
-  --av-l:92%; --av-c:.05; --av-ink:30%;
-  --radius:16px;
-  --serif: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, serif;
-  --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  accent-color: var(--brand);
+  --paper:#fbf8f1; --raised:#ffffff; --tint:#f1ece1; --ink:#17201c; --muted:#5d6862; --rule:#e5dece;
+  --jacket:#1c4237; --on-jacket:#f4eedf; --on-jacket-muted:#a3bfb2; --lapel:#2f6455;
+  --primary:#1c4237; --on-primary:#f4eedf;
+  --gold:#8a5f12; --tie:#d9a647; --gold-tint:#f6ead0;
+  --danger:#a8321c; --danger-tint:#f8e1da; --out:#eef3ef;
+  --elev:0 20px 50px -18px rgb(14 30 24 / .35), 0 2px 6px rgb(14 30 24 / .08);
+  --av-l:91%; --av-c:.035; --av-ink:32%;
+  --display:"Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
+  --text: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  accent-color: var(--lapel);
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#0f1513; --surface:#161e1b; --surface-2:#1f2925; --ink:#e8ece9; --muted:#93a099; --line:#26312d;
-    --brand:#86c3ad; --brand-strong:#b2dccb; --brand-ink:#0c1f19; --brand-soft:#1b2e27;
-    --gold:#e3b75c; --gold-soft:#33291a; --gold-ink:#f1d08c;
-    --danger:#f08a73; --danger-soft:#3a1f19; --out:#15241e; --ok:#6fcf9b;
-    --shadow:0 1px 2px rgb(0 0 0 / .3), 0 6px 18px -8px rgb(0 0 0 / .5);
-    --shadow-lg:0 30px 70px -20px rgb(0 0 0 / .7);
-    --av-l:34%; --av-c:.06; --av-ink:90%;
+    --paper:#0f1613; --raised:#151f1b; --tint:#1f2b26; --ink:#e9ede9; --muted:#98a69f; --rule:#25322c;
+    --jacket:#173a2f; --on-jacket:#efe7d4; --on-jacket-muted:#7f9a8e; --lapel:#86c3ad;
+    --primary:#86c3ad; --on-primary:#0c1f19;
+    --gold:#e8bd62; --tie:#e8bd62; --gold-tint:#33291a;
+    --danger:#f08a73; --danger-tint:#3a1f19; --out:#15241e;
+    --elev:0 24px 60px -18px rgb(0 0 0 / .75), 0 2px 6px rgb(0 0 0 / .3);
+    --av-l:30%; --av-c:.04; --av-ink:88%;
   }
 }
 *,*::before,*::after{box-sizing:border-box}
-html{background:var(--bg);-webkit-text-size-adjust:100%;scrollbar-width:thin;scrollbar-color:color-mix(in oklab,var(--muted) 45%,transparent) transparent}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased;min-height:100dvh}
+html{background:var(--paper);-webkit-text-size-adjust:100%;scrollbar-width:thin;scrollbar-color:color-mix(in oklab,var(--muted) 45%,transparent) transparent}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--text);-webkit-font-smoothing:antialiased;min-height:100dvh}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 a{color:inherit;text-decoration:none}
-:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:10px}
+:focus-visible{outline:2px solid var(--lapel);outline-offset:2px;border-radius:8px}
 .i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tie{width:20px;height:10px;flex:none;fill:var(--tie)}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.wrap{max-width:760px;margin:0 auto}
 
-/* ---------- kop ---------- */
-header{position:sticky;top:0;z-index:5;padding:calc(env(safe-area-inset-top) + 12px) 16px 10px;
-  background:color-mix(in oklab,var(--bg) 84%,transparent);
-  -webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);
-  border-bottom:1px solid color-mix(in oklab,var(--line) 70%,transparent)}
-.wrap{max-width:780px;margin:0 auto}
-.brand{display:flex;align-items:center;gap:12px}
-.brand img{width:36px;height:36px;border-radius:10px;box-shadow:var(--shadow)}
-.brand-text{flex:1;min-width:0}
-.brand h1{font:600 22px/1.1 var(--serif);margin:0;letter-spacing:-.01em}
-.status{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px;min-height:18px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.status .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
-.status .dot.busy{background:var(--gold);animation:pulse 1.2s ease-in-out infinite}
-.status .err{color:var(--danger)}
-@keyframes pulse{50%{opacity:.35}}
-.iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);box-shadow:var(--shadow);transition:background .15s,transform .15s}
-.iconbtn:hover{background:var(--surface-2)}
-.iconbtn:active{transform:scale(.94)}
-.iconbtn.ghost{border-color:transparent;background:transparent;box-shadow:none}
+/* ---------- het jasje ---------- */
+header{position:sticky;top:0;z-index:5;background:var(--jacket);color:var(--on-jacket);padding:calc(env(safe-area-inset-top) + 14px) 16px 0}
+.brand{display:flex;align-items:center;gap:10px}
+.wordmark{flex:1;min-width:0;display:flex;flex-direction:column}
+.wordmark h1{display:flex;align-items:center;gap:10px;margin:0;font:600 30px/1 var(--display);letter-spacing:.005em}
+.wordmark .tie{width:32px;height:15px}
+.status{margin:6px 0 0 42px;font-size:12.5px;color:var(--on-jacket-muted);min-height:18px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.status .err{color:#f3b3a3}
+.status .busy{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.4}}
+.iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;border:0;background:transparent;color:inherit}
+header .iconbtn:hover{background:rgb(255 255 255 / .08)}
 .spinning .i{animation:spin 1s linear infinite}
 @keyframes spin{to{rotate:360deg}}
 
-.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:14px;padding:4px;background:var(--surface-2);border-radius:14px}
-.tab{border:0;background:transparent;padding:8px 6px;border-radius:10px;font-weight:600;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;transition:background .2s,color .2s,box-shadow .2s}
-.tab[aria-selected=true]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
-.tab .count{font-size:11.5px;font-weight:700;min-width:20px;padding:1px 6px;border-radius:99px;background:var(--brand);color:var(--brand-ink)}
+.tabs{display:flex;gap:22px;margin-top:14px}
+.tab{position:relative;border:0;background:transparent;padding:10px 0 12px;font-size:15px;font-weight:600;color:var(--on-jacket-muted);display:flex;align-items:center;gap:7px}
+.tab:hover{color:var(--on-jacket)}
+.tab[aria-selected=true]{color:var(--on-jacket)}
+.tab[aria-selected=true]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--tie)}
+.tab .count{font-size:12px;font-weight:700;min-width:20px;padding:0 6px;border-radius:99px;background:var(--tie);color:#1c2a20;text-align:center}
 .tab .count:empty{display:none}
 
-.searchbox{position:relative;margin-top:10px}
+/* ---------- papier ---------- */
+main{padding:14px 16px calc(env(safe-area-inset-bottom) + 56px)}
+.searchbox{position:relative;display:block}
 .searchbox .i{position:absolute;left:12px;top:50%;translate:0 -50%;color:var(--muted);pointer-events:none}
-.searchbox input{width:100%;padding:10px 12px 10px 38px;border-radius:12px;border:1px solid var(--line);background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s}
-.searchbox input:focus{border-color:var(--brand);box-shadow:0 0 0 4px color-mix(in oklab,var(--brand) 18%,transparent)}
-.searchbox kbd{position:absolute;right:10px;top:50%;translate:0 -50%;font:12px var(--sans);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 6px}
+.searchbox input{width:100%;padding:10px 40px 10px 38px;border-radius:12px;border:1px solid var(--rule);background:var(--raised);outline:none}
+.searchbox input:focus{border-color:var(--lapel);box-shadow:0 0 0 3px color-mix(in oklab,var(--lapel) 20%,transparent)}
+.searchbox kbd{position:absolute;right:10px;top:50%;translate:0 -50%;font:12px var(--text);color:var(--muted);border:1px solid var(--rule);border-radius:6px;padding:0 6px}
 @media (hover:none){.searchbox kbd{display:none}}
 
-.row{display:flex;gap:6px;margin-top:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
-.row::-webkit-scrollbar{display:none}
-.row:empty{display:none}
-.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;white-space:nowrap;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s}
+.chips{display:flex;gap:6px;margin-top:10px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips:empty{display:none}
+.chip{border:1px solid var(--rule);background:transparent;border-radius:999px;padding:4px 12px;white-space:nowrap;font-size:13.5px;color:var(--muted)}
 .chip:hover{color:var(--ink)}
-.chip[aria-pressed=true]{background:var(--brand-soft);border-color:color-mix(in oklab,var(--brand) 45%,transparent);color:var(--brand-strong);font-weight:600}
+.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 
-/* ---------- lijst ---------- */
-main{padding:6px 16px calc(env(safe-area-inset-bottom) + 48px)}
 #list{container:list/inline-size;view-transition-name:list}
-.sec-h{display:flex;align-items:baseline;gap:8px;margin:22px 4px 8px}
-.sec-h h2{font:600 17px/1.2 var(--serif);margin:0}
-.sec-h .pill{font-size:12px;font-weight:600;color:var(--muted);background:var(--surface-2);border-radius:99px;padding:1px 8px}
-.sec-h .hint{margin-left:auto;font-size:12px;color:var(--muted)}
-.note{font-size:13px;color:var(--muted);margin:4px 4px 10px}
-.stack{display:flex;flex-direction:column;gap:8px}
+.sec-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:26px 0 4px}
+.sec-h h2{font:600 23px/1.2 var(--display);letter-spacing:-.01em;margin:0}
+.sec-h .num{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sec-h .hint{flex-basis:100%;font-size:13.5px;color:var(--muted)}
+.note{font-size:13.5px;color:var(--muted);margin:2px 0 6px}
 
-.card{position:relative;display:flex;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);transition:border-color .15s,transform .15s,box-shadow .15s}
-a.card:hover{border-color:color-mix(in oklab,var(--brand) 35%,var(--line))}
-a.card:active{transform:scale(.99)}
-.card.hi{border-color:color-mix(in oklab,var(--gold) 45%,var(--line))}
-.card.hi::before{content:"";position:absolute;inset:12px auto 12px -1px;width:3px;border-radius:0 3px 3px 0;background:var(--gold)}
-.av{width:38px;height:38px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;letter-spacing:.02em;
-  background:oklch(var(--av-l) var(--av-c) var(--h,160));color:oklch(var(--av-ink) .07 var(--h,160))}
-.av.me{background:var(--brand-soft);color:var(--brand)}
+/* rijen zoals in een mailapp: geen kaartjes, wel lijnen */
+.items{display:flex;flex-direction:column}
+.item{position:relative;display:flex;gap:12px;padding:13px 10px;margin:0 -10px;border-radius:12px}
+.item + .item::before{content:"";position:absolute;top:0;left:60px;right:10px;border-top:1px solid var(--rule)}
+a.item:hover{background:var(--tint)}
+a.item:hover::before,a.item:hover + .item::before{opacity:0}
+.av{width:38px;height:38px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:14px;
+  background:oklch(var(--av-l) var(--av-c) var(--h,160));color:oklch(var(--av-ink) .05 var(--h,160))}
+.av.me{background:var(--out);color:var(--lapel)}
+.av .i{width:16px;height:16px}
 .c-main{flex:1;min-width:0}
-.c-top{display:flex;align-items:center;gap:6px;min-width:0}
-.who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14.5px}
-.n{font-size:11.5px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:0 6px}
+.c-top{display:flex;align-items:baseline;gap:6px;min-width:0}
+.who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+.n{font-size:12.5px;color:var(--muted)}
 .c-top time{font-size:12.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
-.subj{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
-.sum{color:var(--muted);font-size:13.5px;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-clamp:2}
-.sum .i{width:13px;height:13px;color:var(--brand);vertical-align:-2px;margin-right:4px}
-.card.unread .who{font-weight:700}
-.card.unread .c-top::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--brand);order:-1;flex:none}
-.badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
-.badge{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:500;border-radius:7px;padding:2px 7px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.subj{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sum{color:var(--muted);font-size:14px;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;overflow:hidden}
+.sum .tie{width:17px;height:8px;margin-right:6px;vertical-align:1px}
+.item.unread .who,.item.unread .subj{font-weight:650}
+.item.unread .who::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--lapel);margin-right:7px;vertical-align:1px}
+.meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;border-radius:6px;padding:1px 7px;background:var(--tint);color:var(--muted);white-space:nowrap}
 .badge .i{width:12px;height:12px}
-.badge.hoog{background:var(--gold-soft);color:var(--gold-ink);font-weight:700}
-.badge.warn{background:var(--gold-soft);color:var(--gold-ink)}
-.badge.ok{background:var(--brand-soft);color:var(--brand)}
-.badge.tag{background:transparent;border:1px dashed var(--line)}
+.badge.gold{background:var(--gold-tint);color:var(--gold);font-weight:600}
+.badge.tag{background:transparent;padding-inline:0 4px}
 @container list (min-width:620px){
-  .card{padding:14px 18px;gap:14px}
+  .item{padding:14px 12px;margin-inline:-12px}
+  .item + .item::before{left:66px}
   .av{width:42px;height:42px}
 }
 
-.empty{display:grid;justify-items:center;gap:6px;text-align:center;color:var(--muted);padding:56px 16px}
-.empty .bubble{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);margin-bottom:6px}
-.empty .bubble .i{width:26px;height:26px}
-.empty b{color:var(--ink);font:600 17px var(--serif)}
-.empty.small{padding:14px;border:1px dashed var(--line);border-radius:var(--radius);display:block;font-size:13.5px}
-
-.skel{height:92px;border-radius:var(--radius);background:linear-gradient(100deg,var(--surface) 30%,var(--surface-2) 50%,var(--surface) 70%) 0 0/300% 100%;border:1px solid var(--line);animation:shimmer 1.4s ease-in-out infinite}
-@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+.empty{display:grid;justify-items:center;gap:4px;text-align:center;color:var(--muted);padding:64px 16px}
+.empty .mark{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--tint);margin-bottom:10px;color:var(--muted)}
+.empty .mark .tie{width:36px;height:17px}
+.empty .mark .i{width:26px;height:26px}
+.empty b{color:var(--ink);font:600 22px/1.25 var(--display)}
+.quiet{padding:12px 0;color:var(--muted);font-size:14px}
+.ph{height:64px;margin:6px 0;border-radius:12px;background:var(--tint);opacity:.7}
 
 /* afzenders */
-.addr{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.stats{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--muted);margin-top:6px}
+.addr{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stats{display:flex;flex-wrap:wrap;gap:2px 14px;font-size:13.5px;color:var(--muted);margin-top:6px}
 .stats b{color:var(--ink);font-weight:600}
-.meter{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--muted)}
-.meter span{flex:1;max-width:180px;height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden}
-.meter span::after{content:"";display:block;height:100%;width:var(--p);background:var(--brand);border-radius:inherit}
+.meter{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12.5px;color:var(--muted)}
+.meter span{flex:1;max-width:160px;height:5px;border-radius:99px;background:var(--tint);overflow:hidden}
+.meter span::after{content:"";display:block;height:100%;width:var(--p);background:var(--lapel)}
 
 /* ---------- knoppen ---------- */
-.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
-.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:7px 12px;font-size:13.5px;font-weight:500;white-space:nowrap;transition:background .15s,border-color .15s,transform .1s}
-.btn:hover{background:var(--surface-2)}
-.btn:active{transform:scale(.97)}
-.btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
-.btn.primary:hover{background:color-mix(in oklab,var(--brand) 88%,var(--ink))}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--raised);border-radius:10px;padding:7px 12px;font-size:14px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:color-mix(in oklab,var(--ink) 30%,var(--rule))}
+.btn:active{background:var(--tint)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary);font-weight:600}
 .btn.danger{color:var(--danger)}
 .btn.danger.solid{background:var(--danger);border-color:var(--danger);color:#fff}
 .btn.ghost{border-color:transparent;background:transparent}
 .btn:disabled{opacity:.5;pointer-events:none}
 .btn .i{width:16px;height:16px}
-select.btn{appearance:none;-webkit-appearance:none;padding-right:28px;max-inline-size:100%;flex:1 1 130px;min-width:0;
+.btn .tie{width:18px;height:9px}
+select.btn{appearance:none;-webkit-appearance:none;padding-right:28px;flex:1 1 130px;min-width:0;max-inline-size:100%;
   background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
   background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
 
 /* ---------- dialogen ---------- */
-dialog{border:0;padding:0;color:var(--ink);background:var(--bg);box-shadow:var(--shadow-lg);
+dialog{border:0;padding:0;color:var(--ink);background:var(--paper);box-shadow:var(--elev);
   opacity:0;translate:var(--off,0 16px);scale:var(--sc,1);
   transition-property:opacity,translate,scale,display,overlay;transition-duration:.28s;transition-timing-function:cubic-bezier(.2,.8,.2,1);
   transition-behavior:allow-discrete}
 dialog:modal{overscroll-behavior:contain}
 :is(dialog[open]):where(:not([data-closing])){opacity:1;translate:0 0;scale:1;
   @starting-style{opacity:0;translate:var(--off,0 16px);scale:var(--sc,1)}
-  &::backdrop{background-color:rgb(8 16 12 / .42);
+  &::backdrop{background-color:rgb(6 16 12 / .45);
     @starting-style{background-color:transparent}}
 }
 dialog::backdrop{background-color:transparent;overflow:hidden;overscroll-behavior:contain;
-  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
   transition-property:background-color,display,overlay;transition-duration:.28s;transition-behavior:allow-discrete}
 
-/* volledig scherm op gsm, lade rechts op groot scherm */
 dialog.sheet{width:100%;max-width:none;height:100dvh;max-height:none;margin:0;overflow-y:auto;--off:28px 0}
 @media (min-width:900px){
-  dialog.sheet{width:min(720px,62vw);margin:0 0 0 auto;border-left:1px solid var(--line)}
-  dialog.sheet.center{width:min(560px,92vw);height:auto;max-height:min(86dvh,860px);margin:auto;border:1px solid var(--line);border-radius:22px;--off:0 20px}
+  dialog.sheet{width:min(720px,62vw);margin:0 0 0 auto}
+  dialog.sheet.center{width:min(560px,92vw);height:auto;max-height:min(86dvh,860px);margin:auto;border-radius:20px;--off:0 20px}
 }
-.shead{position:sticky;top:0;z-index:2;padding:calc(env(safe-area-inset-top) + 10px) 16px 12px;
-  background:color-mix(in oklab,var(--bg) 86%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
-@media (min-width:900px){.shead{padding-top:14px}}
-.shead .top{display:flex;align-items:flex-start;gap:10px}
-.shead h2{flex:1;min-width:0;margin:6px 0 0;font:600 19px/1.25 var(--serif);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-wrap:balance}
-.shead .meta{font-size:12.5px;color:var(--muted);margin-top:2px}
-.sbody{padding:14px 16px calc(env(safe-area-inset-bottom) + 64px);max-width:780px;margin:0 auto}
+.shead{position:sticky;top:0;z-index:2;padding:calc(env(safe-area-inset-top) + 10px) 16px 14px;background:var(--paper);border-bottom:1px solid var(--rule)}
+@media (min-width:900px){.shead{padding-top:16px}}
+.shead .top{display:flex;align-items:flex-start;gap:8px}
+.shead .iconbtn{margin-left:-8px}
+.shead h2{flex:1;min-width:0;margin:4px 0 0;font:600 25px/1.2 var(--display);letter-spacing:-.01em;text-wrap:balance;overflow-wrap:anywhere}
+.shead .sub{display:flex;gap:12px;font-size:13px;color:var(--muted);margin-top:4px}
+.sbody{padding:16px 16px calc(env(safe-area-inset-bottom) + 64px);max-width:760px;margin:0 auto}
 .sbody:focus{outline:none}
 
-/* kleine vraag-dialoog */
-#ask{width:min(420px,calc(100% - 32px));border-radius:20px;border:1px solid var(--line);--off:0 0;--sc:.96}
-#ask form{padding:20px}
-#ask h2{font:600 18px/1.3 var(--serif);margin:0 0 6px}
-#ask p{margin:0 0 12px;color:var(--muted);font-size:14px}
+#ask{width:min(420px,calc(100% - 32px));border-radius:18px;--off:0 0;--sc:.96}
+#ask form{padding:22px}
+#ask h2{font:600 22px/1.25 var(--display);margin:0 0 6px}
+#ask p{margin:0 0 14px;color:var(--muted);font-size:14.5px}
 #ask p:empty{display:none}
-#ask .actions{justify-content:flex-end;margin-top:16px}
+#ask .actions{justify-content:flex-end;margin-top:18px}
 
-.field{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s}
-.field:focus{border-color:var(--brand);box-shadow:0 0 0 4px color-mix(in oklab,var(--brand) 18%,transparent)}
-textarea.field{resize:vertical;line-height:1.5;field-sizing:content;height:auto;min-height:180px;min-block-size:7lh;max-height:480px;max-block-size:22lh}
+.field{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--rule);background:var(--raised);outline:none}
+.field:focus{border-color:var(--lapel);box-shadow:0 0 0 3px color-mix(in oklab,var(--lapel) 20%,transparent)}
+textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto;min-height:180px;min-block-size:7lh;max-height:480px;max-block-size:22lh}
 
-/* menu's (popover) bij snoozen / meer */
-.menu{margin:0;padding:6px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow-lg);min-width:220px;
+/* menu's bij snoozen en meer */
+.menu{margin:0;padding:6px;border:1px solid var(--rule);border-radius:14px;background:var(--raised);color:var(--ink);box-shadow:var(--elev);min-width:230px;
   inset:auto 0 calc(env(safe-area-inset-bottom) + 12px) 0;margin-inline:auto;width:min(420px,calc(100% - 24px));
-  opacity:0;translate:0 8px;transition-property:opacity,translate,display,overlay;transition-duration:.18s;transition-behavior:allow-discrete}
+  opacity:0;translate:0 6px;transition-property:opacity,translate,display,overlay;transition-duration:.16s;transition-behavior:allow-discrete}
 .menu:popover-open{opacity:1;translate:0 0;
-  @starting-style{opacity:0;translate:0 8px}}
+  @starting-style{opacity:0;translate:0 6px}}
 @supports (position-area:block-end){
   .menu{inset:auto;width:auto;margin:6px 0 0;position-area:block-end span-inline-end;position-try-fallbacks:flip-block,flip-inline,flip-block flip-inline}
 }
-.menu button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;text-align:left;padding:10px 12px;border-radius:10px;font-size:14.5px}
-.menu button:hover{background:var(--surface-2)}
-.menu button small{margin-left:auto;color:var(--muted);font-size:12.5px}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;text-align:left;padding:10px 12px;border-radius:9px;font-size:15px}
+.menu button:hover{background:var(--tint)}
+.menu button small{margin-left:auto;color:var(--muted);font-size:13px}
 .menu .danger{color:var(--danger)}
-.menu hr{border:0;border-top:1px solid var(--line);margin:4px 6px}
+.menu hr{border:0;border-top:1px solid var(--rule);margin:4px 8px}
 .menu .pick{display:flex;gap:6px;padding:6px}
 .menu .pick input{flex:1;min-width:0;padding:7px 10px}
 
 /* ---------- thread ---------- */
-.ai{position:relative;border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;
-  background:linear-gradient(135deg,color-mix(in oklab,var(--brand-soft) 90%,transparent),var(--surface));border:1px solid color-mix(in oklab,var(--brand) 25%,var(--line))}
-.ai .lbl{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--brand);margin-bottom:6px}
-.ai .lbl .btn{margin-left:auto;text-transform:none;letter-spacing:0;font-size:12.5px;padding:4px 8px;color:var(--brand)}
-.ai p{margin:0;font-size:15px}
-.ai-cta{width:100%;justify-content:center;padding:12px;border-style:dashed;color:var(--brand);margin-bottom:12px}
-.info{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin:0 2px 12px}
-.msg{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin:10px 0;overflow:hidden;box-shadow:var(--shadow)}
-.msg.out{background:var(--out)}
-.mh{display:flex;gap:12px;align-items:flex-start;width:100%;border:0;background:transparent;text-align:left;padding:12px 14px}
+.note-card{position:relative;padding:14px 16px 14px 18px;margin-bottom:18px;border-radius:4px 14px 14px 4px;background:var(--raised);border:1px solid var(--rule);border-left:3px solid var(--tie)}
+.note-card .head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.note-card .head .btn{margin-left:auto;margin-right:-8px;padding:4px 8px;font-size:13px;color:var(--muted)}
+.note-card p{margin:0;font-size:16px;line-height:1.55}
+.ask-butler{width:100%;justify-content:center;padding:12px;margin-bottom:18px;border-style:dashed}
+.info{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);margin:0 0 14px}
+.msg{border-top:1px solid var(--rule)}
+.msg:first-of-type{border-top:0}
+.mh{display:flex;gap:12px;align-items:flex-start;width:100%;border:0;background:transparent;text-align:left;padding:14px 0 10px}
 .mh .av{width:34px;height:34px;font-size:13px}
-.mh .c-main{font-size:12.5px;color:var(--muted)}
-.mh .c-top b{font-size:14.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mh .to{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mh .peek{display:none;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mb{padding:2px 16px 16px 60px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px;line-height:1.6}
+.mh .c-main{font-size:13px;color:var(--muted)}
+.mh .c-top b{font-size:15px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mh .ln{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mh .peek{display:none}
+.mb{padding:0 0 18px 46px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.6;max-width:72ch}
+.msg.out .mb{border-left:2px solid color-mix(in oklab,var(--lapel) 50%,transparent);margin-left:46px;padding-left:14px}
 .msg.collapsed .mb{display:none}
 .msg.collapsed .mh .peek{display:block}
 .msg.collapsed .mh .to{display:none}
-@container (max-width:480px){.mb{padding-left:16px}}
 #s-body{container-type:inline-size}
+@container (max-width:480px){.mb{padding-left:0}.msg.out .mb{margin-left:0}}
 
-.compose{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-top:18px;box-shadow:var(--shadow)}
-.compose h3{font:600 16px var(--serif);margin:0 0 10px}
+.compose{background:var(--raised);border:1px solid var(--rule);border-radius:14px;padding:16px;margin-top:22px}
+.compose h3{font:600 20px var(--display);margin:0 0 12px}
 .compose .ins{display:flex;gap:6px;margin-bottom:8px}
 .compose .ins .field{flex:1;min-width:0}
-.opts{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:13.5px;color:var(--muted);margin:10px 2px 0}
-.opts label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
-.compose .hint{font-size:12.5px;color:var(--muted);margin-top:10px}
+.opts{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin:12px 2px 0}
+.opts label{display:inline-flex;gap:7px;align-items:center;cursor:pointer}
+.compose .hint{font-size:13px;color:var(--muted);margin-top:12px}
 
 /* instellingen */
-.group{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:4px 14px;margin:0 0 14px;box-shadow:var(--shadow)}
-.group-h{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:18px 6px 6px}
-.group-h:first-child{margin-top:0}
-.line{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);font-size:14px}
+.group-h{font:600 19px/1.3 var(--display);margin:22px 2px 8px}
+.group-h:first-child{margin-top:4px}
+.group{background:var(--raised);border:1px solid var(--rule);border-radius:14px;padding:2px 14px}
+.line{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--rule);font-size:14.5px}
 .line:first-child{border-top:0}
-.line .sub{display:block;color:var(--muted);font-size:12.5px}
+.line .sub{display:block;color:var(--muted);font-size:13px}
 .line .group-actions{display:flex;gap:6px;flex-wrap:wrap}
-label.line{cursor:pointer}
-label.line input{margin:0 4px 0 0}
-details.month{border-top:1px solid var(--line)}
-details.month:first-of-type{border-top:0}
-details.month summary{display:flex;justify-content:space-between;padding:11px 0;cursor:pointer;list-style:none}
+label.line{cursor:pointer;justify-content:flex-start}
+details.month{border-top:1px solid var(--rule)}
+details.month:first-child{border-top:0}
+details.month summary{display:flex;gap:8px;padding:12px 0;cursor:pointer;list-style:none}
 details.month summary::-webkit-details-marker{display:none}
-details.month summary::before{content:"›";color:var(--muted);margin-right:8px;transition:rotate .2s;display:inline-block}
+details.month summary::before{content:"›";color:var(--muted);transition:rotate .2s;display:inline-block}
 details.month[open] summary::before{rotate:90deg}
 details.month summary span{flex:1}
-.muted{color:var(--muted);font-size:13px}
-.group > .muted{padding:11px 0}
+.muted{color:var(--muted);font-size:13.5px}
+.group > .muted{padding:12px 0}
+.fine{color:var(--muted);font-size:13px;margin:10px 2px 0}
 
-/* melding onderaan */
-.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);translate:-50% 16px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:14px;z-index:20;font-size:14px;font-weight:500;
-  opacity:0;transition:opacity .2s,translate .25s cubic-bezier(.2,.8,.2,1);pointer-events:none;max-width:min(92vw,520px);box-shadow:var(--shadow-lg)}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);translate:-50% 14px;background:var(--jacket);color:var(--on-jacket);padding:10px 16px;border-radius:12px;z-index:20;font-size:14.5px;
+  opacity:0;transition:opacity .2s,translate .25s cubic-bezier(.2,.8,.2,1);pointer-events:none;max-width:min(92vw,520px);box-shadow:var(--elev)}
 .toast.on{opacity:1;translate:-50% 0}
 
-/* weergave-overgangen */
 ::view-transition-old(list){animation:.14s ease-in both vt-out}
-::view-transition-new(list){animation:.24s cubic-bezier(.2,.8,.2,1) both vt-in}
+::view-transition-new(list){animation:.22s cubic-bezier(.2,.8,.2,1) both vt-in}
 @keyframes vt-out{to{opacity:0}}
-@keyframes vt-in{from{opacity:0;translate:0 8px}}
+@keyframes vt-in{from{opacity:0;translate:0 6px}}
 
 @media (prefers-reduced-motion:reduce){
   dialog,.menu,.toast{translate:none !important;scale:none !important;transition-duration:.1s}
   @starting-style{dialog[open],.menu:popover-open{translate:none;scale:none}}
   ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none !important}
-  .skel,.spinning .i,.status .dot.busy{animation:none}
+  .spinning .i,.status .busy{animation:none}
 }
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="tie" viewBox="-90 -42 180 84"><path d="M-10 -6 L-74 -38 Q-88 0 -74 38 L-10 6 Z"/><path d="M10 -6 L74 -38 Q88 0 74 38 L10 6 Z"/><rect x="-17" y="-17" width="34" height="34" rx="10"/></symbol>
   <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-3.9L4 8.5"/><path d="M4 4v4.5h4.5"/><path d="M4 13a8 8 0 0 0 14.9 3.9l1.1-1.4"/><path d="M20 20v-4.5h-4.5"/></symbol>
   <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
@@ -305,7 +300,6 @@ details.month summary span{flex:1}
   <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/></symbol>
   <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.2"/></symbol>
-  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
   <symbol id="i-read" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="m3 10 9 6 9-6"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></symbol>
   <symbol id="i-draft" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
@@ -315,18 +309,17 @@ details.month summary span{flex:1}
   <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
-  <symbol id="i-inbox"viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
 </svg>
 
 <header>
   <div class="wrap">
     <div class="brand">
-      <img src="/icon.svg" alt="">
-      <div class="brand-text">
-        <h1>Butler</h1>
+      <div class="wordmark">
+        <h1><svg class="tie" aria-hidden="true"><use href="#tie"/></svg>Butler</h1>
         <div class="status" id="status" aria-live="polite"></div>
       </div>
-      <button class="iconbtn ghost" id="refresh" title="Vernieuwen" aria-label="Vernieuwen"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+      <button class="iconbtn" id="refresh" title="Vernieuwen" aria-label="Vernieuwen"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></button>
       <button class="iconbtn" id="gear" title="Instellingen" aria-label="Instellingen"><svg class="i" aria-hidden="true"><use href="#i-sliders"/></svg></button>
     </div>
     <div class="tabs" role="tablist" aria-label="Weergave">
@@ -334,17 +327,17 @@ details.month summary span{flex:1}
       <button class="tab" role="tab" aria-selected="false" data-tab="inbox">Inbox</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="cleanup">Opruimen</button>
     </div>
-    <label class="searchbox">
-      <span class="visually-hidden">Zoeken in alle mail</span>
-      <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
-      <input type="search" id="q" placeholder="Zoeken in alle mail…" autocomplete="off" enterkeyhint="search">
-      <kbd>/</kbd>
-    </label>
-    <div class="row" id="accounts"></div>
-    <div class="row" id="filters"></div>
   </div>
 </header>
 <main class="wrap">
+  <label class="searchbox">
+    <span class="visually-hidden">Zoeken in alle mail</span>
+    <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+    <input type="search" id="q" placeholder="Zoeken in alle mail" autocomplete="off" enterkeyhint="search">
+    <kbd>/</kbd>
+  </label>
+  <div class="chips" id="accounts"></div>
+  <div class="chips" id="filters"></div>
   <div id="list" role="tabpanel"></div>
 </main>
 
@@ -354,7 +347,7 @@ details.month summary span{flex:1}
       <button class="iconbtn" id="back" aria-label="Terug"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button>
       <div style="flex:1;min-width:0">
         <h2 id="s-title"></h2>
-        <div class="meta" id="s-meta"></div>
+        <div class="sub" id="s-meta"></div>
       </div>
     </div>
     <div class="actions" id="s-actions"></div>
@@ -395,6 +388,7 @@ const S = { tab:'followup', filter:'alle', cfilter:'reclame', account:'', q:'', 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const I = n => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const TIE = label => `<svg class="tie" ${label?`role="img" aria-label="${label}"`:'aria-hidden="true"'}><use href="#tie"/></svg>`;
 const FILTERS = [['alle','Alles'],['ongelezen','Ongelezen'],['belangrijk','Belangrijk'],['persoonlijk','Persoonlijk'],['reclame','Reclame'],['notificaties','Notificaties']];
 const CFILTERS = [['reclame','Reclame'],['notificatie','Notificaties'],['alle','Alles']];
 const RULES = [['none','Geen regel'],['archive_after','Archiveren na … dagen'],['archive','Altijd meteen archiveren'],['trash','Altijd meteen verwijderen'],['keep','Nooit automatisch opruimen']];
@@ -476,6 +470,7 @@ function when(iso){
 }
 const fullDate = iso => iso ? new Date(iso).toLocaleString('nl-BE',{dateStyle:'medium',timeStyle:'short'}) : '';
 const shortDay = d => new Date(Date.now()+d*864e5).toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short'});
+const dayMonth = iso => new Date(iso).toLocaleDateString('nl-BE',{day:'numeric',month:'short'});
 
 function avatar(name, me=false){
   const s = String(name||'?').replace(/^Jij → /,'').replace(/<.*>/,'').trim();
@@ -498,34 +493,33 @@ function renderChips(){
 function renderStatus(syncing=false){
   const bad = S.accounts.filter(a=>a.status==='fout');
   const last = S.accounts.map(a=>a.last_sync).filter(Boolean).sort().pop();
-  const busy = syncing || !last;
-  $('#status').innerHTML = `<span class="dot ${busy?'busy':''}" ${bad.length?'style="background:var(--danger)"':''}></span>`
-    + (bad.length ? bad.map(a=>`<span class="err">${esc(a.name)}: ${esc(a.error||'fout')}</span>`).join(' · ')+' · ' : '')
-    + (busy ? 'Synchroniseren…' : 'Bijgewerkt '+esc(when(last)));
+  const errs = bad.map(a=>`<span class="err">${esc(a.name)}: ${esc(a.error||'fout')}</span>`).join(', ');
+  $('#status').innerHTML = errs ? errs
+    : (syncing || !last) ? '<span class="busy">Synchroniseren…</span>' : 'Bijgewerkt om '+esc(new Date(last).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}));
 }
 
 function card(c, mode){
   const badges = [];
-  if(S.accounts.length>1) badges.push(`<span class="badge">${esc(c.account_name)}</span>`);
-  if(c.priority==='hoog') badges.push('<span class="badge hoog">Belangrijk</span>');
+  if(c.priority==='hoog') badges.push('<span class="badge gold">Belangrijk</span>');
+  if(c.deadline) badges.push(`<span class="badge">${I('clock')}tegen ${esc(dayMonth(c.deadline))}</span>`);
+  if(mode==='them'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge">${d} dagen stil</span>`); }
+  if(mode==='me'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge">${d} dagen oud</span>`); }
   if(c.category && c.category!=='overig') badges.push(`<span class="badge">${esc(c.category)}</span>`);
-  if(c.deadline) badges.push(`<span class="badge warn">${I('clock')}${esc(new Date(c.deadline).toLocaleDateString('nl-BE',{day:'numeric',month:'short'}))}</span>`);
-  if(mode==='them' || mode==='me'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge warn">${d} d</span>`); }
+  if(S.accounts.length>1) badges.push(`<span class="badge">${esc(c.account_name)}</span>`);
   c.tags.forEach(t => badges.push(`<span class="badge tag">#${esc(t)}</span>`));
-  const text = c.summary || c.snippet;
-  return `<a class="card ${c.unread?'unread':''} ${c.priority==='hoog'?'hi':''}" href="#t=${c.tid}" data-tid="${c.tid}">
+  return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}">
     ${avatar(c.who, c.last_outgoing)}
     <div class="c-main">
       <div class="c-top"><span class="who">${esc(c.who)}</span>${c.n>1?`<span class="n">${c.n}</span>`:''}<time datetime="${esc(c.date)}">${esc(when(c.date))}</time></div>
       <div class="subj">${esc(c.subject || '(geen onderwerp)')}</div>
-      <div class="sum">${c.summary?I('spark'):''}${esc(text)}</div>
-      ${badges.length?`<div class="badges">${badges.join('')}</div>`:''}
+      <div class="sum">${c.summary ? TIE('Samenvatting door Butler')+esc(c.summary) : esc(c.snippet)}</div>
+      ${badges.length?`<div class="meta">${badges.join('')}</div>`:''}
     </div>
   </a>`;
 }
 
-const empty = (title, sub='', icon='check') => `<div class="empty"><span class="bubble">${I(icon)}</span><b>${title}</b>${sub?`<span>${sub}</span>`:''}</div>`;
-const skeleton = () => `<div class="stack" style="margin-top:16px">${'<div class="skel"></div>'.repeat(5)}</div>`;
+const empty = (title, sub='', mark=I('inbox')) => `<div class="empty"><span class="mark">${mark}</span><b>${title}</b>${sub?`<span>${sub}</span>`:''}</div>`;
+const placeholder = () => '<div style="margin-top:22px">' + '<div class="ph"></div>'.repeat(5) + '</div>';
 
 function swapList(html, animate){
   const run = () => { $('#list').innerHTML = html; };
@@ -536,55 +530,56 @@ function swapList(html, animate){
 async function load(animate=false){
   renderChips();
   const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q, seq = ++S.seq;
-  if(!S.loaded[key]) $('#list').innerHTML = skeleton();
+  if(!S.loaded[key]) $('#list').innerHTML = placeholder();
   const acc = encodeURIComponent(S.account);
   let html;
   try{
     if(S.tab==='inbox'){
       const d = await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
-      html = d.threads.length ? `<div class="stack" style="margin-top:14px">${d.threads.map(c=>card(c)).join('')}</div>`
-        : S.q ? empty('Niets gevonden', `Geen mail met “${esc(S.q)}”.`, 'search') : empty('Inbox leeg', 'Tijd voor koffie.', 'inbox');
+      html = d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c)).join('')}</div>`
+        : S.q ? empty('Niets gevonden', `Geen mail met “${esc(S.q)}”. Zoeken gaat over onderwerp, afzender en tekst.`, I('search'))
+        : empty('Inbox leeg', 'Nieuwe mail verschijnt hier vanzelf.');
     } else if(S.tab==='cleanup'){
       const d = await api(`/api/senders?account=${acc}&kind=${S.cfilter}`);
       if(seq!==S.seq) return;
       S.senders = d.senders;
       const dflt = S.cfilter==='notificatie' ? d.defaults.notificatie_days : S.cfilter==='reclame' ? d.defaults.reclame_days : 0;
       const inInbox = d.senders.reduce((a,x)=>a+x.in_inbox,0);
-      html = `<div class="sec-h"><h2>Afzenders</h2><span class="pill">${d.senders.length}</span><span class="hint">${inInbox} mails in je inbox</span></div>`
+      html = `<div class="sec-h"><h2>Afzenders</h2><span class="num">${d.senders.length}</span><span class="hint">${inInbox} mails in je inbox</span></div>`
         + (dflt ? `<div class="note">Zonder regel wordt na ${dflt} dagen automatisch gearchiveerd.</div>` : '')
-        + (d.senders.length ? `<div class="stack">${d.senders.map((x,i)=>senderCard(x,i)).join('')}</div>` : empty('Niets op te ruimen', 'Geen afzenders in deze categorie.'));
+        + (d.senders.length ? `<div class="items">${d.senders.map((x,i)=>senderCard(x,i)).join('')}</div>`
+          : empty('Niets op te ruimen', 'Geen afzenders in deze categorie.', I('check')));
     } else {
       const d = await api(`/api/followup?account=${acc}`);
-      const sec = (title, arr, mode, emptyTxt, hint='') => `<section><div class="sec-h"><h2>${title}</h2><span class="pill">${arr.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</div>` +
-        (arr.length ? `<div class="stack">${arr.map(c=>card(c,mode)).join('')}</div>` : `<div class="empty small">${emptyTxt}</div>`) + '</section>';
+      const sec = (title, arr, mode, emptyTxt, hint='') => `<section><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</div>` +
+        (arr.length ? `<div class="items">${arr.map(c=>card(c,mode)).join('')}</div>` : `<div class="quiet">${emptyTxt}</div>`) + '</section>';
       $('#count-followup').textContent = (d.waiting_on_me.length + d.reminders.length) || '';
       html = (!d.waiting_on_me.length && !d.waiting_on_them.length && !d.reminders.length)
-        ? empty('Alles afgehandeld', 'Niets wacht op jou, en niemand is je een antwoord schuldig.')
+        ? empty('Alles afgehandeld', 'Er wacht niets op jou, en jij wacht op niemand.', TIE())
         : (d.reminders.length ? sec('Herinneringen', d.reminders, 'rem', '') : '') +
           sec('Wacht op jou', d.waiting_on_me, 'me', 'Niets dat op jou wacht.') +
-          sec('Wacht op antwoord', d.waiting_on_them, 'them', 'Geen openstaande vragen aan anderen.', `na ≥ ${d.followup_days} dagen`);
+          sec('Wacht op antwoord', d.waiting_on_them, 'them', 'Geen openstaande vragen aan anderen.', `${d.followup_days} dagen of langer stil`);
     }
-  }catch(e){ html = empty('Er ging iets mis', esc(e.message), 'x'); }
+  }catch(e){ html = empty('Laden mislukt', esc(e.message) + '. Probeer opnieuw met de vernieuwknop bovenaan.', I('x')); }
   if(seq!==S.seq) return;
   S.loaded[key] = true;
   swapList(html, animate);
 }
 
 function senderCard(x, i){
-  const b = [];
+  const b = [`<span class="badge">${x.kind==='reclame'?'reclame':x.kind==='notificatie'?'notificatie':'persoonlijk'}</span>`];
+  if(x.unsubscribed_at) b.push(`<span class="badge">${I('check')}uitgeschreven</span>`);
   if(S.accounts.length>1) b.push(`<span class="badge">${esc(x.account_name)}</span>`);
-  b.push(`<span class="badge">${x.kind==='reclame'?'reclame':x.kind==='notificatie'?'notificatie':'persoonlijk'}</span>`);
-  if(x.unsubscribed_at) b.push(`<span class="badge ok">${I('check')}uitgeschreven</span>`);
   const rule = RULES.map(([k,n])=>`<option value="${k}" ${x.action===k?'selected':''}>${n.replace('…', x.after_days)}</option>`).join('');
   const unsub = x.unsub_method && !x.unsubscribed_at
     ? `<button class="btn" data-s="unsub" data-i="${i}">${I(x.unsub_method==='link'?'ext':'bell-off')}Uitschrijven</button>` : '';
-  return `<article class="card">
+  return `<article class="item">
     ${avatar(x.name)}
     <div class="c-main">
-      <div class="c-top"><span class="who"><b>${esc(x.name)}</b></span></div>
+      <div class="c-top"><span class="who"><b>${esc(x.name)}</b></span><time>${esc(when(x.last_date))}</time></div>
       <div class="addr">${esc(x.addr)}</div>
-      <div class="badges" style="margin-top:6px">${b.join('')}</div>
-      <div class="stats"><span><b>${x.n}</b> mails</span><span><b>${x.in_inbox}</b> in inbox</span><span>laatste ${esc(when(x.last_date))}</span></div>
+      <div class="meta">${b.join('')}</div>
+      <div class="stats"><span><b>${x.n}</b> mails</span><span><b>${x.in_inbox}</b> in je inbox</span></div>
       ${x.read_pct!==null?`<div class="meter" style="--p:${x.read_pct}%"><span></span>${x.read_pct}% gelezen</div>`:''}
       <div class="actions">
         ${unsub}
@@ -605,15 +600,15 @@ async function senderAction(a, i, btn){
   try{
     if(a==='unsub'){
       if(x.unsub_method==='link'){
-        if(!await ask({title:`Uitschrijven bij ${x.name}`, msg:'Deze afzender heeft enkel een uitschrijfpagina. Openen in een nieuw venster?', ok:'Openen'})) return;
+        if(!await ask({title:`Uitschrijven bij ${x.name}`, msg:'Deze afzender heeft enkel een uitschrijfpagina. Die opent in een nieuw venster.', ok:'Pagina openen'})) return;
         const r = await post('/api/senders/unsubscribe', who); window.open(r.url, '_blank', 'noopener'); return;
       }
-      if(!await ask({title:`Uitschrijven bij ${x.name}?`, msg:'Nieuwe mails van deze afzender worden daarna automatisch gearchiveerd.', ok:'Uitschrijven'})) return;
+      if(!await ask({title:`Uitschrijven bij ${x.name}?`, msg:'Nieuwe mails van deze afzender gaan daarna automatisch naar het archief.', ok:'Uitschrijven'})) return;
       const r = await post('/api/senders/unsubscribe', who);
       toast(r.method==='one-click' ? 'Uitgeschreven' : 'Uitschrijfmail verstuurd');
     }
     if(a==='archive'){ const r = await post('/api/senders/archive', who); toast(`${r.moved} gearchiveerd`); }
-    if(a==='trash'){ if(!await ask({title:`${x.in_inbox} mails verwijderen?`, msg:`Alle mails van ${x.name} uit je inbox gaan naar de prullenbak.`, ok:'Verwijderen', danger:true})) return;
+    if(a==='trash'){ if(!await ask({title:`${x.in_inbox} mails verwijderen?`, msg:`Alle mails van ${x.name} in je inbox gaan naar de prullenbak.`, ok:'Verwijderen', danger:true})) return;
       const r = await post('/api/senders/trash', who); toast(`${r.moved} verwijderd`); }
     load();
   }catch(e){ toast('Mislukt: '+e.message); }
@@ -633,10 +628,10 @@ const sheet = $('#sheet');
 async function openThread(tid, push=true){
   if(push) history.pushState({tid}, '', '#t='+tid);
   const fresh = !sheet.open || S.thread?.tid !== tid;
-  if(fresh){ $('#s-title').textContent=''; $('#s-meta').textContent=''; $('#s-body').innerHTML=skeleton(); $('#s-actions').innerHTML=''; }
+  if(fresh){ $('#s-title').textContent=''; $('#s-meta').innerHTML=''; $('#s-body').innerHTML=placeholder(); $('#s-actions').innerHTML=''; }
   openDialog(sheet);
   try{ S.thread = await api('/api/threads/'+tid); renderThread(); if(fresh){ sheet.scrollTop = 0; $('#s-body').focus({preventScroll:true}); } }
-  catch(e){ $('#s-body').innerHTML = empty('Kon deze mail niet openen', esc(e.message), 'x'); }
+  catch(e){ $('#s-body').innerHTML = empty('Deze mail opent niet', esc(e.message), I('x')); }
 }
 function closeThread(){
   if(history.state?.tid && location.hash.startsWith('#t=')) history.back(); // popstate sluit de dialoog
@@ -652,7 +647,8 @@ wireDialog(sheet, closeThread);
 function renderThread(){
   const t = S.thread;
   $('#s-title').textContent = t.subject || '(geen onderwerp)';
-  $('#s-meta').textContent = [S.accounts.length>1 ? t.account_name : '', `${t.n} bericht${t.n>1?'en':''}`, t.done?'klaar':''].filter(Boolean).join(' · ');
+  $('#s-meta').innerHTML = [S.accounts.length>1 ? t.account_name : '', `${t.n} bericht${t.n>1?'en':''}`, t.done?'afgehandeld':'']
+    .filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('');
   const A = (id, icon, label, cls='') => `<button class="btn ${cls}" data-a="${id}">${I(icon)}${label}</button>`;
   $('#s-actions').innerHTML = [
     t.in_inbox ? A('archive','archive','Archiveer','primary') : '',
@@ -668,31 +664,37 @@ function renderThread(){
   [1,3,7].forEach(d => $('#sn'+d).textContent = shortDay(d));
   $('#snooze-date').min = new Date(Date.now()+864e5).toISOString().slice(0,10);
 
-  let ai = '';
+  let note = '';
   if(t.summary){
-    ai = `<div class="ai"><div class="lbl">${I('spark')}Samenvatting${t.ai_available?`<button class="btn ghost" data-a="summarize">${I('refresh')}Opnieuw</button>`:''}</div>
-      <p>${esc(t.summary)}</p>
-      <div class="badges">${t.priority?`<span class="badge ${t.priority==='hoog'?'hoog':''}">prioriteit ${esc(t.priority)}</span>`:''}${t.category?`<span class="badge">${esc(t.category)}</span>`:''}
-      ${t.action?`<span class="badge">actie: ${esc(t.action)}</span>`:''}${t.deadline?`<span class="badge warn">${I('clock')}${esc(t.deadline)}</span>`:''}
-      ${t.summary_stale?'<span class="badge warn">nieuwe berichten sinds samenvatting</span>':''}</div></div>`;
+    const facts = [
+      t.priority==='hoog' ? '<span class="badge gold">Belangrijk</span>' : t.priority ? `<span class="badge">prioriteit ${esc(t.priority)}</span>` : '',
+      t.action ? `<span class="badge">${esc(t.action)}</span>` : '',
+      t.deadline ? `<span class="badge">${I('clock')}tegen ${esc(dayMonth(t.deadline))}</span>` : '',
+      t.category ? `<span class="badge">${esc(t.category)}</span>` : '',
+      t.summary_stale ? '<span class="badge">nieuwe berichten sinds deze samenvatting</span>' : ''
+    ].join('');
+    note = `<div class="note-card"><div class="head">${TIE('Samenvatting door Butler')}<span class="muted">Butler vat samen</span>
+        ${t.ai_available?`<button class="btn ghost" data-a="summarize">${I('refresh')}Opnieuw</button>`:''}</div>
+      <p>${esc(t.summary)}</p>${facts?`<div class="meta">${facts}</div>`:''}</div>`;
   } else if(t.ai_available){
-    ai = `<button class="btn ai-cta" data-a="summarize">${I('spark')}Samenvatten met AI</button>`;
+    note = `<button class="btn ask-butler" data-a="summarize">${TIE()}Laat Butler samenvatten</button>`;
   }
   const snooze = t.snooze_until ? `<div class="info">${I('clock')}Gesnoozed tot ${esc(fullDate(t.snooze_until))}</div>` : '';
-  const tags = t.tags.length ? `<div class="badges" style="margin:0 2px 12px">${t.tags.map(x=>`<span class="badge tag">#${esc(x)}</span>`).join('')}</div>` : '';
+  const tags = t.tags.length ? `<div class="meta" style="margin:0 0 14px">${t.tags.map(x=>`<span class="badge tag">#${esc(x)}</span>`).join('')}</div>` : '';
 
   const n = t.messages.length;
   const msgs = t.messages.map((m,i)=>{
-    const to = m.to.map(([nm,a])=>nm||a).join(', ');
+    const names = l => l.map(([nm,a])=>nm||a).join(', ');
     const collapsed = i < n-2 ? 'collapsed' : '';
     const name = m.outgoing ? 'Jij' : (m.from_name||m.from_addr);
+    const to = 'aan ' + names(m.to) + (m.cc.length ? ', cc ' + names(m.cc) : '');
     return `<article class="msg ${m.outgoing?'out':''} ${collapsed}">
       <button class="mh" data-toggle aria-expanded="${!collapsed}">
         ${avatar(name, m.outgoing)}
         <div class="c-main">
-          <div class="c-top"><b>${esc(name)}</b>${m.outgoing?'':`<span class="to" style="flex:1">&lt;${esc(m.from_addr)}&gt;</span>`}<time style="margin-left:auto">${esc(when(m.date))}</time></div>
-          <div class="to">aan ${esc(to)}${m.cc.length?' · cc '+esc(m.cc.map(([nm,a])=>nm||a).join(', ')):''} · ${esc(fullDate(m.date))}${m.pending?' · verzonden':''}</div>
-          <div class="peek">${esc((m.body||'').replace(/\s+/g,' ').slice(0,160))}</div>
+          <div class="c-top"><b>${esc(name)}</b><span class="ln" style="flex:1">${m.outgoing?'':esc(m.from_addr)}</span><time title="${esc(fullDate(m.date))}">${esc(when(m.date))}</time></div>
+          <div class="ln to">${esc(to)}${m.pending?', verzonden':''}</div>
+          <div class="ln peek">${esc((m.body||'').replace(/\s+/g,' ').slice(0,160))}</div>
         </div>
       </button>
       <div class="mb">${esc(m.body)}</div></article>`;
@@ -700,22 +702,22 @@ function renderThread(){
 
   const compose = `<section class="compose">
       <h3>Antwoorden</h3>
-      ${t.ai_available?`<div class="ins"><input type="text" class="field" id="instr" placeholder="Instructie, bv. ‘akkoord, voorstel dinsdag 14u’" enterkeyhint="go">
-        <button class="btn" data-a="draft">${I('spark')}Stel voor</button></div>`:''}
-      <textarea class="field" id="reply" placeholder="Je antwoord…" aria-label="Je antwoord"></textarea>
+      ${t.ai_available?`<div class="ins"><input type="text" class="field" id="instr" placeholder="Wat wil je zeggen? Bv. akkoord, voorstel dinsdag 14u" enterkeyhint="go">
+        <button class="btn" data-a="draft">${TIE()}Stel voor</button></div>`:''}
+      <textarea class="field" id="reply" placeholder="Je antwoord" aria-label="Je antwoord"></textarea>
       <div class="opts">
         <label><input type="checkbox" id="replyall"> Allen beantwoorden</label>
-        <label><input type="checkbox" id="arch" ${t.in_inbox?'checked':''}> Archiveer na rechtstreeks versturen</label>
+        <label><input type="checkbox" id="arch" ${t.in_inbox?'checked':''}> Archiveren na rechtstreeks versturen</label>
       </div>
       <div class="actions">
         <button class="btn primary" data-a="savedraft">${I('draft')}Zet als concept</button>
         <button class="btn" data-a="send">${I('send')}Rechtstreeks versturen</button>
       </div>
-      <div class="hint">Een concept verschijnt in je Concepten-map, dus ook in Spark: daar nakijken en versturen.</div>
+      <div class="hint">Een concept komt in je Concepten-map, dus ook in Spark. Daar kijk je het na en verstuur je het.</div>
     </section>`;
 
   const keep = $('#reply')?.value, keepInstr = $('#instr')?.value;
-  $('#s-body').innerHTML = ai + snooze + tags + msgs + compose;
+  $('#s-body').innerHTML = note + snooze + tags + msgs + compose;
   if(keep) $('#reply').value = keep;
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
 }
@@ -730,23 +732,23 @@ async function doAction(a, btn){
     if(a==='archive'){ await post(p+'/archive'); toast('Gearchiveerd'); return closeThread(); }
     if(a==='trash'){ if(!await ask({title:'Naar de prullenbak?', msg:t.subject, ok:'Verwijderen', danger:true})) return;
       await post(p+'/trash'); toast('Verwijderd'); return closeThread(); }
-    if(a==='read'){ await post(p+'/read'); toast('Gelezen'); }
-    if(a==='done'){ await post(p+'/done',{done:true}); toast('Klaar — uit de opvolglijst'); return closeThread(); }
+    if(a==='read'){ await post(p+'/read'); toast('Gemarkeerd als gelezen'); }
+    if(a==='done'){ await post(p+'/done',{done:true}); toast('Klaar, uit de opvolglijst'); return closeThread(); }
     if(a==='undone'){ await post(p+'/done',{done:false}); toast('Heropend'); }
     if(a.startsWith('snooze')){
       const until = a==='snoozedate' ? $('#snooze-date').value : new Date(Date.now()+{snooze1:1,snooze3:3,snooze7:7}[a]*864e5).toISOString().slice(0,10);
       if(!until) return toast('Kies eerst een datum');
-      await post(p+'/snooze',{until}); toast(`Komt terug op ${new Date(until).toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'short'})}`); return closeThread(); }
-    if(a==='tags'){ const v = await ask({title:'Tags', msg:'Komma-gescheiden, bv. offerte, klant-x', input:true, value:t.tags.join(', '), ok:'Bewaren'}); if(v===null) return;
+      await post(p+'/snooze',{until}); toast(`Gesnoozed tot ${new Date(until).toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'short'})}`); return closeThread(); }
+    if(a==='tags'){ const v = await ask({title:'Tags bewerken', msg:'Scheid tags met een komma, bv. offerte, klant-x', input:true, value:t.tags.join(', '), ok:'Bewaren'}); if(v===null) return;
       await post(p+'/tags',{tags:v.split(',')}); }
-    if(a==='summarize'){ btn.innerHTML = I('spark')+'Bezig…'; S.thread = await post(p+'/summarize'); return renderThread(); }
-    if(a==='draft'){ btn.innerHTML = I('spark')+'Bezig…';
+    if(a==='summarize'){ btn.innerHTML = TIE()+'Bezig met samenvatten…'; S.thread = await post(p+'/summarize'); return renderThread(); }
+    if(a==='draft'){ btn.innerHTML = TIE()+'Bezig…';
       const d = await post(p+'/draft',{instruction:$('#instr').value}); $('#reply').value = d.draft; $('#reply').focus();
-      btn.innerHTML = I('spark')+'Opnieuw'; return; }
-    if(a==='savedraft'){ const body=$('#reply').value.trim(); if(!body) return toast('Leeg bericht');
+      btn.innerHTML = TIE()+'Opnieuw'; return; }
+    if(a==='savedraft'){ const body=$('#reply').value.trim(); if(!body) return toast('Schrijf eerst een antwoord');
       const r = await post(p+'/save-draft',{body, reply_all:$('#replyall').checked});
-      toast('Concept klaar in '+r.folder+' — verstuur via Spark'); $('#reply').value=''; return; }
-    if(a==='send'){ const body=$('#reply').value.trim(); if(!body) return toast('Leeg bericht');
+      toast('Concept staat in '+r.folder+'. Verstuur het vanuit Spark.'); $('#reply').value=''; return; }
+    if(a==='send'){ const body=$('#reply').value.trim(); if(!body) return toast('Schrijf eerst een antwoord');
       if(!await ask({title:'Rechtstreeks versturen?', msg:$('#replyall').checked ? 'Naar alle ontvangers van deze thread.' : 'Naar de afzender van het laatste bericht.', ok:'Versturen'})) return;
       const r = await post(p+'/send',{body, reply_all:$('#replyall').checked, archive:$('#arch').checked});
       toast('Verstuurd naar '+r.to.join(', ')); return closeThread(); }
@@ -774,13 +776,13 @@ document.addEventListener('change', async e=>{
     const x = S.senders[+el.dataset.rule]; let body = {account:x.account, addr:x.addr, action:el.value};
     if(el.value==='archive_after'){ const d = await ask({title:'Na hoeveel dagen archiveren?', msg:`Voor mails van ${x.name}.`, input:true, type:'number', value:x.after_days, ok:'Bewaren'});
       if(!d) return load(); body.after_days = parseInt(d,10)||7; }
-    if(el.value==='trash' && !await ask({title:'Automatisch verwijderen?', msg:`Alle huidige én toekomstige mails van ${x.name} gaan meteen naar de prullenbak.`, ok:'Ja, verwijderen', danger:true})) return load();
-    try{ await post('/api/senders/rule', body); toast('Regel opgeslagen — wordt toegepast bij de volgende sync'); }catch(err){ toast('Mislukt: '+err.message); }
+    if(el.value==='trash' && !await ask({title:'Automatisch verwijderen?', msg:`Alle huidige en toekomstige mails van ${x.name} gaan meteen naar de prullenbak.`, ok:'Automatisch verwijderen', danger:true})) return load();
+    try{ await post('/api/senders/rule', body); toast('Regel opgeslagen. Ze geldt vanaf de volgende sync.'); }catch(err){ toast('Mislukt: '+err.message); }
     load();
   }
   if(el.dataset.kind!==undefined && el.value){
     const x = S.senders[+el.dataset.kind];
-    try{ await post('/api/senders/rule', {account:x.account, addr:x.addr, kind:el.value}); toast('Aangepast'); }catch(err){ toast('Mislukt: '+err.message); }
+    try{ await post('/api/senders/rule', {account:x.account, addr:x.addr, kind:el.value}); toast('Soort aangepast'); }catch(err){ toast('Mislukt: '+err.message); }
     load();
   }
 });
@@ -789,8 +791,8 @@ window.addEventListener('popstate', ()=>{ const m=location.hash.match(/^#t=(\d+)
 let qh; $('#q').addEventListener('input', e=>{ clearTimeout(qh); qh=setTimeout(()=>{ S.q=e.target.value; S.tab='inbox'; load(true); }, 300); });
 document.addEventListener('keydown', e=>{
   if(e.key==='/' && !e.target.closest('input,textarea,select,[contenteditable]') && !document.querySelector('dialog[open]')){ e.preventDefault(); $('#q').focus(); }
+  if(e.key==='Enter' && e.target.id==='instr'){ e.preventDefault(); $('[data-a=draft]')?.click(); }
 });
-document.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.id==='instr'){ e.preventDefault(); $('[data-a=draft]')?.click(); } });
 
 /* ---------- instellingen: meldingen, AI-dienst, kosten ---------- */
 const settings = $('#settings');
@@ -803,7 +805,7 @@ const eur = v => new Intl.NumberFormat('nl-BE',{style:'currency',currency:'EUR',
 const monthName = m => new Date(m+'-01').toLocaleDateString('nl-BE',{month:'long',year:'numeric'});
 
 async function openSettings(){
-  $('#set-body').innerHTML = skeleton();
+  $('#set-body').innerHTML = placeholder();
   openDialog(settings);
   const [dev, cost, sub] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})), mySub().catch(()=>null)]);
   S.set = {devices: dev.devices, costs: cost.months, here: !!sub};
@@ -815,29 +817,29 @@ wireDialog(settings, closeSettings);
 function renderSettings(){
   const st = S.set;
   let push;
-  if(!pushSupported()) push = `<div class="muted">${onIOS() && !standalone() ? 'Meldingen werken enkel vanuit de app op je beginscherm: tik in Safari op Delen → <b>Zet op beginscherm</b> en open Butler daar (iOS 16.4 of nieuwer).' : 'Deze browser ondersteunt geen pushmeldingen.'}</div>`;
-  else push = `<div class="line"><span>${I('bell')} ${st.here ? 'Dit toestel krijgt meldingen' : 'Dit toestel krijgt nog geen meldingen'}</span>
-    <span class="group-actions">${st.here ? '<button class="btn" data-set="push-test">Test</button><button class="btn" data-set="push-off">Uitzetten</button>' : '<button class="btn primary" data-set="push-on">Aanzetten</button>'}</span></div>`;
+  if(!pushSupported()) push = `<div class="muted">${onIOS() && !standalone() ? 'Meldingen werken enkel vanuit de app op je beginscherm: tik in Safari op Delen, dan <b>Zet op beginscherm</b>, en open Butler daar (iOS 16.4 of nieuwer).' : 'Deze browser ondersteunt geen pushmeldingen.'}</div>`;
+  else push = `<div class="line"><span>${st.here ? 'Dit toestel krijgt meldingen' : 'Dit toestel krijgt nog geen meldingen'}</span>
+    <span class="group-actions">${st.here ? '<button class="btn" data-set="push-test">Stuur testmelding</button><button class="btn" data-set="push-off">Zet uit</button>' : `<button class="btn primary" data-set="push-on">${I('bell')}Zet meldingen aan</button>`}</span></div>`;
   const devs = st.devices.length ? st.devices.map(d=>`<div class="line"><span>${esc(d.device)}<span class="sub">sinds ${esc(when(d.created_at))}</span></span><button class="btn" data-set="push-forget" data-id="${esc(d.id)}">Vergeet</button></div>`).join('') : '<div class="muted">Nog geen toestellen.</div>';
 
   const provs = S.ai_providers || [];
   const ai = !provs.length ? '<div class="muted">Geen AI-sleutel ingesteld in config.yaml.</div>'
-    : provs.map(p=>`<label class="line"><span><input type="radio" name="prov" value="${esc(p.id)}" ${p.id===S.ai_provider?'checked':''} ${provs.length<2?'disabled':''}> <b>${esc(p.name)}</b>
-        <span class="sub">samenvatten: ${esc(p.triage_model)} · antwoorden: ${esc(p.draft_model)}</span></span></label>`).join('');
+    : provs.map(p=>`<label class="line"><input type="radio" name="prov" value="${esc(p.id)}" ${p.id===S.ai_provider?'checked':''} ${provs.length<2?'disabled':''}><span><b>${esc(p.name)}</b>
+        <span class="sub">Samenvatten met ${esc(p.triage_model)}, antwoorden met ${esc(p.draft_model)}</span></span></label>`).join('');
 
   const costs = !st.costs.length ? '<div class="muted">Nog geen AI-gebruik.</div>' : st.costs.map((m,i)=>`
     <details class="month" ${i===0?'open':''}>
       <summary><span>${esc(monthName(m.month))}</span><b>${eur(m.cost_eur)}</b></summary>
-      ${m.lines.map(l=>`<div class="line"><span>${l.provider==='openai'?'ChatGPT':'Claude'} · ${esc(l.model)}<span class="sub">${l.kind==='draft'?'antwoorden':'samenvatten'} · ${l.calls}× · ${(l.input_tokens/1000).toFixed(0)}k in / ${(l.output_tokens/1000).toFixed(1)}k uit</span></span><span>${eur(l.cost_eur)}</span></div>`).join('')}
-      ${m.uncertain?`<div class="muted" style="padding-bottom:10px">${m.uncertain} aanroep(en) zonder volledige prijs: het werkelijke bedrag kan hoger liggen.</div>`:''}
+      ${m.lines.map(l=>`<div class="line"><span>${l.provider==='openai'?'ChatGPT':'Claude'}, ${esc(l.model)}<span class="sub">${l.kind==='draft'?'Antwoorden':'Samenvatten'}: ${l.calls} keer, ${(l.input_tokens/1000).toFixed(0)}k tokens in en ${(l.output_tokens/1000).toFixed(1)}k uit</span></span><span>${eur(l.cost_eur)}</span></div>`).join('')}
+      ${m.uncertain?`<div class="muted" style="padding-bottom:12px">${m.uncertain} aanroep(en) zonder volledige prijs: het werkelijke bedrag kan hoger liggen.</div>`:''}
     </details>`).join('');
 
   $('#set-body').innerHTML = `
-    <div class="group-h">Meldingen</div><div class="group">${push}</div>
-    <div class="group-h">Toestellen met meldingen</div><div class="group">${devs}</div>
-    <div class="group-h">AI-dienst</div><div class="group">${ai}</div>
-    <div class="group-h">AI-kosten</div><div class="group">${costs}</div>
-    <div class="muted" style="margin:0 6px">Schatting: verbruik × lijstprijs, omgerekend naar euro. Wat je echt betaalt, staat in de console van Anthropic of OpenAI.</div>`;
+    <h3 class="group-h">Meldingen</h3><div class="group">${push}</div>
+    <h3 class="group-h">Toestellen met meldingen</h3><div class="group">${devs}</div>
+    <h3 class="group-h">AI-dienst</h3><div class="group">${ai}</div>
+    <h3 class="group-h">AI-kosten</h3><div class="group">${costs}</div>
+    <p class="fine">Een schatting: verbruik maal lijstprijs, omgerekend naar euro. Wat je echt betaalt, staat in de console van Anthropic of OpenAI.</p>`;
 }
 
 async function settingAction(a, el){
@@ -845,7 +847,7 @@ async function settingAction(a, el){
   try{
     if(a==='push-on'){
       const perm = await Notification.requestPermission(); // iOS vraagt enkel na een tik
-      if(perm !== 'granted') throw new Error(onIOS() ? 'Meldingen zijn niet toegestaan. Zet ze aan bij Instellingen op je iPhone → Meldingen → Butler.' : 'Meldingen zijn niet toegestaan in deze browser.');
+      if(perm !== 'granted') throw new Error(onIOS() ? 'Meldingen zijn niet toegestaan. Zet ze aan bij Instellingen op je iPhone, Meldingen, Butler.' : 'Meldingen zijn niet toegestaan in deze browser.');
       const reg = await navigator.serviceWorker.ready;
       const {key} = await api('/api/push/key');
       const sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:urlBytes(key)});
@@ -855,7 +857,7 @@ async function settingAction(a, el){
     if(a==='push-off'){
       const sub = await mySub();
       if(sub){ await post('/api/push/unsubscribe', {endpoint: sub.endpoint}); await sub.unsubscribe(); }
-      S.set.here = false; S.set.devices = (await api('/api/push/devices')).devices; toast('Meldingen uit op dit toestel');
+      S.set.here = false; S.set.devices = (await api('/api/push/devices')).devices; toast('Meldingen staan uit op dit toestel');
     }
     if(a==='push-test'){ await post('/api/push/test'); toast('Testmelding verstuurd'); }
     if(a==='push-forget'){ const r = await api('/api/push/devices/'+el.dataset.id, {method:'DELETE'}); S.set.devices = r.devices; toast('Toestel vergeten'); }
