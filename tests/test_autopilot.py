@@ -20,9 +20,29 @@ def setup(app, monkeypatch, **on):
     return fake
 
 
-def test_butler_never_sends_mail_by_itself(app, client, acc, monkeypatch):
-    """Ook met alles aan (en een oude instelling 'invoices'): een factuur blijft een voorstel, er gaat niets de deur uit."""
-    fake = setup(app, monkeypatch, invoices=True, ads=True, drafts=True)
+def test_new_invoice_goes_to_billit_by_itself(app, client, acc, monkeypatch):
+    """De enige uitzondering op de harde regel: een factuur (pdf) gaat naar Billit, één keer, naar niemand anders."""
+    fake = setup(app, monkeypatch, invoices=True)
+    put(acc, "Sent Messages", 40, raw("Me <me@icloud.com>", "", "<s@me>", to=BILLIT, days=30))
+    data = mail_with_attachments()
+    tid, _ = put(acc, "INBOX", 5, data)
+    fake.messages.create.return_value = claude_reply(TRIAGE % ("factuur", "lezen"))
+    with mock.patch.object(acc, "run_imap", side_effect=lambda fn: fn(imap_for(data, 5))), \
+         mock.patch("app.actions.smtp_send") as smtp:
+        app.ai.triage(tid)
+        for hook in app.ai.after_triage:
+            hook(tid)
+            hook(tid)  # nog eens bekeken: niet twee keer versturen
+    assert smtp.call_count == 1 and smtp.call_args.args[1]["To"] == BILLIT
+    e = client.get("/api/activity", headers=H).json()["entries"]
+    assert [(x["kind"], x["can_undo"]) for x in e] == [("factuur", 0)] and BILLIT in e[0]["detail"]
+    assert client.get(f"/api/threads/{tid}", headers=H).json()["auto"][0]["kind"] == "factuur"
+
+
+def test_butler_never_answers_by_itself(app, client, acc, monkeypatch):
+    """Harde regel: zelfs met alles aan gaat er geen antwoord de deur uit; enkel een concept. (Een factuur kan wel naar
+    Billit: zie hierboven; hier staat 'invoices' uit.)"""
+    fake = setup(app, monkeypatch, ads=True, drafts=True)
     put(acc, "Sent Messages", 40, raw("Me <me@icloud.com>", "", "<s@me>", to=BILLIT, days=30))
     data = mail_with_attachments()
     tid, _ = put(acc, "INBOX", 5, data)
@@ -97,6 +117,11 @@ def test_hard_rule_background_code_cannot_send_mail():
 
     forbidden = re.compile(r"smtp_send|send_reply|\.forward\(|\bunsubscribe\(|smtplib|send_message")
     app_dir = pathlib.Path(__file__).resolve().parent.parent / "app"
-    for name in ("ai.py", "autopilot.py", "sync.py", "moments.py", "notify.py", "fatigue.py", "dossiers.py", "tone.py"):
+    for name in ("ai.py", "sync.py", "moments.py", "notify.py", "fatigue.py", "dossiers.py", "tone.py"):
         hits = forbidden.findall((app_dir / name).read_text())
         assert not hits, f"{name} mag nooit mail versturen: {hits}"
+    # autopilot: enkel de factuur naar het boekhoudadres, via forward.invoice_address, en nooit een antwoord
+    auto = (app_dir / "autopilot.py").read_text()
+    assert not re.search(r"smtp_send|send_reply|smtplib|send_message|\bunsubscribe\(", auto)
+    assert re.findall(r"actions\.forward\(([^)]*)\)", auto) == ["db, acc, m[\"id\"], [addr]"]
+    assert "addr = forward.invoice_address(db, app_cfg)" in auto

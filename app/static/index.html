@@ -866,10 +866,10 @@ function activitySummary(list){
   return parts.length > 1 ? parts.slice(0, -1).join(', ') + ' en ' + parts[parts.length - 1] : parts[0];
 }
 function activityView(d){
-  const on = Object.entries(d.enabled).filter(([, v]) => v).map(([k]) => ({ads: 'reclame opruimen', drafts: 'antwoordconcepten'})[k]);
+  const on = Object.entries(d.enabled).filter(([, v]) => v).map(([k]) => ({invoices: 'facturen naar je boekhouding', ads: 'reclame opruimen', drafts: 'antwoordconcepten'})[k]);
   const head = `<button class="backbtn" data-activity-back>${I('back')}<span>${TAB_NAMES[S.tab]}</span></button>
     <div class="sec-h"><h2>Wat Butler deed</h2></div>
-    <div class="note">${on.length ? `Aan: ${esc(on.join(', '))}. Enkel nieuwe mail. Butler verstuurt nooit zelf iets: dat doe jij.` : 'Butler doet nu niets zelf.'}
+    <div class="note">${on.length ? `Aan: ${esc(on.join(', '))}. Enkel nieuwe mail. Butler verstuurt zelf enkel facturen naar je boekhouding; antwoorden doe jij.` : 'Butler doet nu niets zelf.'}
       <button class="linkbtn" data-activity-settings>Instellingen</button></div>`;
   if(!d.entries.length) return head + empty('Nog niets gedaan', 'Wat Butler zelf doet, verschijnt hier: met de mail erbij en, waar het kan, een knop om het terug te draaien.', TIE());
   const rows = d.entries.map(x => `<div class="item act ${x.undone_at ? 'undone' : ''}">
