@@ -207,6 +207,7 @@ a.item{touch-action:pan-y}
 .badge.dossier{background:var(--out);color:var(--lapel);font-weight:600;cursor:pointer}
 .linkbtn{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:0;color:var(--lapel);font:inherit;font-weight:600;cursor:pointer}
 .linkbtn .i{width:14px;height:14px}
+.related + .related{margin-top:10px}
 .related{margin:18px 0 0;padding:12px 14px;border-radius:12px;background:var(--tint)}
 .related-h{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:4px}
 .related-h .i{width:16px;height:16px;color:var(--lapel)}
@@ -667,13 +668,13 @@ function renderStatus(syncing=false){
 function card(c, mode){
   const badges = [];
   if(c.priority==='hoog') badges.push('<span class="badge gold">Belangrijk</span>');
-  if(c.deadline) badges.push(`<span class="badge">${I('clock')}tegen ${esc(dayMonth(c.deadline))}</span>`);
+  if(c.deadline) badges.push(`<span class="badge">${I('clock')}${esc(dueLabel(c.deadline))}</span>`);
   if(mode==='them'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge">${d} dagen stil</span>`); }
   if(mode==='me'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge">${d} dagen oud</span>`); }
   if(c.category && c.category!=='overig') badges.push(`<span class="badge">${esc(c.category)}</span>`);
   if(S.accounts.length>1) badges.push(`<span class="badge">${esc(c.account_name)}</span>`);
   c.tags.forEach(t => badges.push(`<span class="badge tag">#${esc(t)}</span>`));
-  if(c.dossier && mode !== 'dossier') badges.unshift(`<span class="badge dossier" data-dossier="${c.dossier.id}">${I('folder')}${esc(c.dossier.name)}</span>`);
+  if(mode !== 'dossier') (c.dossiers || []).slice().reverse().forEach(d => badges.unshift(dossierBadge(d)));
   return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}" data-flagged="${c.flagged?1:0}">
     ${avatar(c.who, c.last_outgoing, c.avatar)}
     <div class="c-main">
@@ -694,6 +695,10 @@ function momentWhen(m, active){
   return (active ? 'tot ' : '') + day + t;
 }
 /* agenda: alles wat aan een datum hangt, per dag */
+const dossierBadge = d => `<span class="badge dossier" data-dossier="${d.id}">${I('folder')}${esc(d.name)}</span>`;
+// een deadline met uur is een afspraak ("10 nov om 11:00"), zonder uur een uiterste datum ("tegen 10 nov")
+const dueLabel = dl => dl.length > 10 ? `${dayMonth(dl)} om ${dl.slice(11, 16)}` : `tegen ${dayMonth(dl)}`;
+
 function dayLabel(key){
   const d = new Date(key + 'T12:00:00'), today = new Date(), tomorrow = new Date(Date.now() + 864e5);
   if(d.toDateString() === today.toDateString()) return 'Vandaag';
@@ -723,7 +728,7 @@ function agendaView(items){
         ${m?.detail ? `<div class="subj m-detail">${esc(m.detail)}</div>` : ''}
         <div class="sum">${m ? TIE() + esc(c.who) + ': ' + esc(c.subject || '') : esc(c.who)}</div>
         ${rem ? `<div class="ag-rem">${I('bell')}Herinnering om ${esc(rem)}</div>` : ''}
-        ${c.dossier ? `<div class="meta"><span class="badge dossier" data-dossier="${c.dossier.id}">${I('folder')}${esc(c.dossier.name)}</span></div>` : ''}
+        ${(c.dossiers || []).length ? `<div class="meta">${c.dossiers.map(dossierBadge).join('')}</div>` : ''}
       </div></a>`;
   }).join('')}</div></section>`).join('');
 }
@@ -797,7 +802,8 @@ async function load(animate=false){
       const inInbox = d.senders.reduce((a,x)=>a+x.in_inbox,0);
       const kindIn = S.cfilter === 'alle' ? 0 : inInbox;
       html = `<div class="sec-h"><h2>Afzenders</h2><span class="num">${d.senders.length}</span><span class="hint">${inInbox} mails in je inbox</span></div>`
-        + (kindIn ? `<div class="actions" style="margin:4px 0 8px"><button class="btn primary" data-s="archive-kind">${I('archive')}Alle ${S.cfilter === 'reclame' ? 'reclame' : 'notificaties'} archiveren (${kindIn})</button></div>` : '')
+        + (kindIn ? `<div class="actions" style="margin:4px 0 8px"><button class="btn primary" data-s="archive-kind">${I('archive')}Alle ${S.cfilter === 'reclame' ? 'reclame' : 'notificaties'} archiveren (${kindIn})</button>
+            <button class="btn danger" data-s="trash-kind">${I('trash')}Verwijderen</button></div>` : '')
         + (dflt ? `<div class="note">Zonder regel wordt na ${dflt} dagen automatisch gearchiveerd.</div>` : '')
         + (d.senders.length ? `<div class="items">${d.senders.map((x,i)=>senderCard(x,i)).join('')}</div>`
           : empty('Niets op te ruimen', 'Geen afzenders in deze categorie.', I('check')));
@@ -861,12 +867,16 @@ function senderCard(x, i){
 }
 
 async function senderAction(a, i, btn){
-  if(a === 'archive-kind'){
+  if(a === 'archive-kind' || a === 'trash-kind'){
     const n = S.senders.reduce((t, x) => t + x.in_inbox, 0), what = S.cfilter === 'reclame' ? 'reclame' : 'notificaties';
-    if(!await ask({title:`${n} mails archiveren?`, msg:`Alle ${what} uit je inbox gaat naar het archief. Er wordt niets verwijderd.`, ok:'Archiveren'})) return;
-    toast(`${n} mails worden gearchiveerd`);
-    post('/api/senders/archive-kind', {kind: S.cfilter, account: S.account})
-      .then(r => toast(`${r.moved} gearchiveerd`)).catch(e => toast('Archiveren mislukt: ' + e.message)).finally(() => load());
+    const trash = a === 'trash-kind';
+    if(!await ask(trash
+        ? {title:`${n} mails verwijderen?`, msg:`Alle ${what} uit je inbox gaat naar de prullenbak.`, ok:'Verwijderen', danger:true}
+        : {title:`${n} mails archiveren?`, msg:`Alle ${what} uit je inbox gaat naar het archief. Er wordt niets verwijderd.`, ok:'Archiveren'})) return;
+    toast(trash ? `${n} mails worden verwijderd` : `${n} mails worden gearchiveerd`);
+    post('/api/senders/archive-kind', {kind: S.cfilter, account: S.account, role: trash ? 'trash' : 'archive'})
+      .then(r => toast(`${r.moved} ${trash ? 'verwijderd' : 'gearchiveerd'}`))
+      .catch(e => toast((trash ? 'Verwijderen' : 'Archiveren') + ' mislukt: ' + e.message)).finally(() => load());
     return;
   }
   const x = S.senders[i]; const who = {account:x.account, addr:x.addr};
@@ -927,7 +937,7 @@ function renderThread(){
   $('#s-title').textContent = t.subject || '(geen onderwerp)';
   $('#s-meta').innerHTML = [S.accounts.length>1 ? t.account_name : '', `${t.n} bericht${t.n>1?'en':''}`, t.done?'afgehandeld':'']
     .filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('')
-    + (t.dossier ? `<button class="linkbtn" data-dossier="${t.dossier.id}">${I('folder')}${esc(t.dossier.name)}</button>` : '');
+    + (t.dossiers || []).map(d => `<button class="linkbtn" data-dossier="${d.id}">${I('folder')}${esc(d.name)}</button>`).join('');
   // werkbalk onderaan: binnen duimbereik, enkel de hoofdactie getint
   const T = (id, icon, label, cls='', extra='') => `<button class="tb ${cls}" data-a="${id}" ${extra}>${I(icon)}<span>${label}</span></button>`;
   $('#s-actions').innerHTML = [
@@ -940,7 +950,7 @@ function renderThread(){
   $('#more-menu').innerHTML = [
     t.unread ? `<button data-a="read">${I('read')}Markeer als gelezen</button>` : '',
     `<button data-a="tags">${I('tag')}Tags bewerken</button>`,
-    t.dossier ? `<button data-a="dossier-remove">${I('folder')}Uit het dossier halen</button>` : '',
+    (t.dossiers || []).length ? `<button data-a="dossier-remove">${I('folder')}Uit ${t.dossiers.length > 1 ? 'de dossiers' : 'het dossier'} halen</button>` : '',
     t.in_inbox ? `<hr><button data-a="trash" class="danger">${I('trash')}Naar de prullenbak</button>` : ''
   ].join('');
   [1,3,7].forEach(d => $('#sn'+d).textContent = shortDay(d));
@@ -951,7 +961,7 @@ function renderThread(){
     const facts = [
       t.priority==='hoog' ? '<span class="badge gold">Belangrijk</span>' : t.priority ? `<span class="badge">prioriteit ${esc(t.priority)}</span>` : '',
       t.action ? `<span class="badge">${esc(t.action)}</span>` : '',
-      t.deadline ? `<span class="badge">${I('clock')}tegen ${esc(dayMonth(t.deadline))}</span>` : '',
+      t.deadline ? `<span class="badge">${I('clock')}${esc(dueLabel(t.deadline))}</span>` : '',
       t.category ? `<span class="badge">${esc(t.category)}</span>` : '',
       t.summary_stale ? '<span class="badge">nieuwe berichten sinds deze samenvatting</span>' : ''
     ].join('');
@@ -962,8 +972,8 @@ function renderThread(){
     note = `<button class="btn ask-butler" data-a="summarize">${TIE()}Laat Butler samenvatten</button>`;
   }
   const context = `<div id="ctx">${contextView(t)}</div>`;
-  const related = (t.dossier_threads || []).length ? `<div class="related"><div class="related-h">${I('folder')}<span>Ook in ${esc(t.dossier.name)}</span></div>
-    ${t.dossier_threads.map(r => `<a class="rel" href="#t=${r.tid}" data-tid="${r.tid}"><span>${esc(r.subject || '(geen onderwerp)')}</span><time>${esc(when(r.date))}</time></a>`).join('')}</div>` : '';
+  const related = (t.dossier_threads || []).map(g => `<div class="related"><div class="related-h">${I('folder')}<span>Ook in ${esc(g.dossier.name)}</span></div>
+    ${g.threads.map(r => `<a class="rel" href="#t=${r.tid}" data-tid="${r.tid}"><span>${esc(r.subject || '(geen onderwerp)')}</span><time>${esc(when(r.date))}</time></a>`).join('')}</div>`).join('');
   // per gebeurtenis: het uur van de gebeurtenis zelf, met Butlers herinneringen erbij
   const events = {};
   for(const m of t.moments || []) (events[m.event_at] ||= []).push(m);

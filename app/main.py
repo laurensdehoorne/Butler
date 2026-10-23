@@ -163,7 +163,7 @@ def _card(t, msgs, extra=None):
         "unread": sum(1 for m in msgs if m["in_inbox"] and not m["seen"]),
         "in_inbox": any(m["in_inbox"] for m in msgs),
         "flagged": any(m.get("flagged") for m in msgs),
-        "dossier": dossiers.get(db, t["dossier_id"]) if t.get("dossier_id") else None,
+        "dossiers": dossiers.of_thread(db, t["tid"]),
         "bulk": all(m["bulk"] for m in inc) if inc else False,
         "kind": (inc[-1]["kind"] if inc else "") or "",
         "last_outgoing": bool(last["outgoing"]),
@@ -465,15 +465,19 @@ def get_thread(tid: int):
     ]
     card["ai_available"] = ai.active_for(t["account"])
     card["context"] = t.get("context") or ""
-    card["dossier_threads"] = []
-    if t.get("dossier_id"):  # de andere mails uit hetzelfde dossier, nieuwste eerst
-        for r in db.q("""SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
-                         WHERE t.dossier_id=? AND t.tid!=? GROUP BY t.tid ORDER BY MAX(m.date) DESC LIMIT 12""",
-                      (t["dossier_id"], tid)):
+    card["dossier_threads"] = []  # per dossier de andere mails, nieuwste eerst
+    for d in card["dossiers"]:
+        related = []
+        for r in db.q("""SELECT td.tid FROM thread_dossiers td JOIN threads t ON t.tid=td.tid
+                         JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                         WHERE td.dossier_id=? AND td.tid!=? GROUP BY td.tid ORDER BY MAX(m.date) DESC LIMIT 12""",
+                      (d["id"], tid)):
             ot, om = thread_messages(db, r["tid"])
             if om:
                 c = _card(ot, om)
-                card["dossier_threads"].append({k: c[k] for k in ("tid", "subject", "who", "date", "avatar", "last_outgoing")})
+                related.append({k: c[k] for k in ("tid", "subject", "who", "date", "avatar", "last_outgoing")})
+        if related:
+            card["dossier_threads"].append({"dossier": d, "threads": related})
     incoming = [m for m in msgs if not m["outgoing"]]
     if incoming:
         rule = sender_rule(db, t["account"], incoming[-1]["from_addr"]) or {}
@@ -550,8 +554,9 @@ def get_dossier(did: int):
     if not d:
         raise HTTPException(404, "dossier niet gevonden")
     cards = []
-    for r in db.q("""SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
-                     WHERE t.dossier_id=? GROUP BY t.tid ORDER BY MAX(m.date) DESC LIMIT 200""", (did,)):
+    for r in db.q("""SELECT td.tid FROM thread_dossiers td JOIN threads t ON t.tid=td.tid
+                     JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                     WHERE td.dossier_id=? GROUP BY td.tid ORDER BY MAX(m.date) DESC LIMIT 200""", (did,)):
         t, msgs = thread_messages(db, r["tid"])
         if msgs:
             cards.append(_card(t, msgs))
@@ -784,14 +789,15 @@ def sender_trash(body: SenderIn):
 class KindIn(BaseModel):
     kind: str
     account: str = ""
+    role: str = "archive"  # of "trash"
 
 
 @app.post("/api/senders/archive-kind", dependencies=[Depends(auth)])
 def sender_archive_kind(body: KindIn):
-    if body.kind not in ("reclame", "notificatie"):
+    if body.kind not in ("reclame", "notificatie") or body.role not in ("archive", "trash"):
         raise HTTPException(400, "ongeldige soort")
     targets = [_acc(body.account)] if body.account else list(accounts.values())
-    moved = sum(_run(lambda a=a: actions.move_kind(db, a, body.kind, "archive")) for a in targets)
+    moved = sum(_run(lambda a=a: actions.move_kind(db, a, body.kind, body.role)) for a in targets)
     return {"ok": True, "moved": moved}
 
 

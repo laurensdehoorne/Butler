@@ -15,6 +15,7 @@ log = logging.getLogger("butler.sync")
 MAX_FULL_SIZE = 5 * 1024 * 1024  # groter → enkel headers
 CHUNK = 40
 MOMENT_DAYS = 365  # gemarkeerde mails ouder dan dit gaan niet meer naar de AI voor momenten
+CATCH_UP_DAYS = 120  # persoonlijke mail van zo lang geleden krijgt alsnog een samenvatting en dossier
 HEADER_COST = 20_000  # een bericht boven MAX_FULL_SIZE kost enkel zijn headers
 
 
@@ -356,16 +357,19 @@ class Syncer:
 
     # --- inhaal-triage --------------------------------------------------------
     def queue_triage(self, acc):
-        """Inbox-threads die nog nooit door de AI gingen, bv. omdat de AI pas na de eerste sync aangezet werd.
+        """Threads die nog nooit door de AI gingen of nog geen dossier hebben: de inbox, en persoonlijke mail van de
+        laatste CATCH_UP_DAYS dagen (ook gearchiveerd, zodat een dossier ook de oudere mails van een zaak bevat).
 
-        Zonder triage telt een thread als "wacht op jou"; de inbox is klein, dus dit kost weinig."""
+        Zonder triage telt een inbox-thread als "wacht op jou". Eén poging per thread per opstart; nieuwste eerst."""
         if not self.ai.active_for(acc.id):
             return
+        since = (datetime.now(timezone.utc) - timedelta(days=CATCH_UP_DAYS)).isoformat()
         rows = self.db.q(
             """SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
                WHERE t.account=? AND (t.ai_count=0 OR t.dossier_ai=0) GROUP BY t.tid
-               HAVING SUM(m.in_inbox) > 0 AND MIN(m.bulk) = 0 ORDER BY MAX(m.date) DESC LIMIT 300""",
-            (acc.id,),
+               HAVING (SUM(m.in_inbox) > 0 OR MAX(m.date) >= ?) AND MIN(m.bulk) = 0
+               ORDER BY SUM(m.in_inbox) > 0 DESC, MAX(m.date) DESC LIMIT 1000""",
+            (acc.id, since),
         )
         for r in rows:
             if r["tid"] not in self._triage_tried:

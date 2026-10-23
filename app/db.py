@@ -54,7 +54,14 @@ CREATE TABLE IF NOT EXISTS threads(
   UNIQUE(account, thread_key)
 );
 
--- dossiers: mails die over hetzelfde gaan (zie dossiers.py)
+-- dossiers: mails die over hetzelfde gaan (zie dossiers.py); een thread kan in meerdere dossiers zitten
+CREATE TABLE IF NOT EXISTS thread_dossiers(
+  tid INTEGER NOT NULL,
+  dossier_id INTEGER NOT NULL,
+  source TEXT DEFAULT 'ai',  -- 'ai' of 'ref' (hetzelfde referentienummer)
+  PRIMARY KEY(tid, dossier_id)
+);
+CREATE INDEX IF NOT EXISTS ix_td_dossier ON thread_dossiers(dossier_id);
 CREATE TABLE IF NOT EXISTS dossiers(
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -148,6 +155,13 @@ class DB:
                                ("threads", "dossier_id INTEGER"), ("threads", "dossier_ai INTEGER DEFAULT 0")):
                 if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
+            # dossiers v2 (meerdere per mail, geen verzamelnamen, referentienummers): eenmalig opnieuw laten indelen,
+            # anders blijft de AI oude verzamelnamen als "Lopende schadedossiers" hergebruiken
+            if not self.conn.execute("SELECT 1 FROM settings WHERE key='dossiers_v2'").fetchone():
+                self.conn.execute("DELETE FROM thread_dossiers")
+                self.conn.execute("DELETE FROM dossiers")
+                self.conn.execute("UPDATE threads SET dossier_id=NULL, dossier_ai=0 WHERE dossier_ai=1")
+                self.conn.execute("INSERT INTO settings(key, value) VALUES('dossiers_v2', '1')")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")
 
     def q(self, sql, args=()):
