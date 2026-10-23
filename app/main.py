@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import actions, autopilot, config, costs, dossiers, fatigue, forward, moments, shared, tone
+from . import actions, autopilot, config, costs, dossiers, fatigue, forward, moments, search, shared, tone
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
@@ -319,9 +319,28 @@ def attachment(sig: str, mid: int, idx: int, e: int = 0):
 
 
 # --- wat Butler zelf deed --------------------------------------------------------
+@app.get("/api/ask", dependencies=[Depends(auth)])
+def ask_butler(q: str, account: str = ""):
+    """Een vraag over je mail: Butler zoekt en antwoordt, met de mails waar het antwoord in staat."""
+    if not ai.enabled:
+        raise HTTPException(400, "Zet eerst de AI aan in Instellingen.")
+    res = _run(lambda: search.ask(ai, db, q.strip()[:300], account))
+    cards = []
+    for tid in [res["tids"][i - 1] for i in res["cited"]] + res["tids"]:
+        if tid in {c["tid"] for c in cards}:
+            continue
+        t, msgs = thread_messages(db, tid)
+        if msgs:
+            cards.append(_card(t, msgs))
+    order = {tid: n for n, tid in enumerate(res["tids"], 1)}
+    for c in cards:
+        c["ref"] = order.get(c["tid"])
+    return {"answer": res["answer"], "threads": cards}
+
+
 @app.get("/api/notify/muted", dependencies=[Depends(auth)])
 def notify_muted():
-    return {"muted": fatigue.muted_list(db)}
+    return {"muted": fatigue.muted_list(db), "priority": fatigue.priority_list(db)}
 
 
 @app.get("/api/activity", dependencies=[Depends(auth)])
@@ -449,25 +468,17 @@ def trigger_sync():
 
 @app.get("/api/inbox", dependencies=[Depends(auth)])
 def inbox(account: str = "", filter: str = "alle", q: str = "", limit: int = 150):
-    args = [account, account]
-    sql = """SELECT t.tid, MAX(m.date) AS last_date FROM threads t
-             JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
-             WHERE (?='' OR t.account=?)"""
-    if q.strip():
-        like = f"%{q.strip()}%"
-        sql += """ AND t.tid IN (SELECT t2.tid FROM threads t2 JOIN messages m2
-                   ON m2.account=t2.account AND m2.thread_key=t2.thread_key
-                   WHERE m2.subject LIKE ? OR m2.from_name LIKE ? OR m2.from_addr LIKE ? OR m2.body LIKE ?)"""
-        args += [like] * 4
-        sql += " GROUP BY t.tid"
+    if q.strip():  # slim zoeken: alle mail, de beste eerst (zie search.py)
+        tids = search.find(db, q, account, min(limit, 500) * 2, fts=db.fts)
     else:
-        sql += " GROUP BY t.tid HAVING SUM(m.in_inbox) > 0"
-    sql += " ORDER BY last_date DESC LIMIT ?"
-    args.append(min(limit, 500) * 2)
+        tids = [r["tid"] for r in db.q("""SELECT t.tid, MAX(m.date) AS last_date FROM threads t
+                   JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                   WHERE (?='' OR t.account=?) GROUP BY t.tid HAVING SUM(m.in_inbox) > 0
+                   ORDER BY last_date DESC LIMIT ?""", (account, account, min(limit, 500) * 2))]
 
     out = []
-    for r in db.q(sql, args):
-        t, msgs = thread_messages(db, r["tid"])
+    for tid in tids:
+        t, msgs = thread_messages(db, tid)
         if not msgs:
             continue
         card = _card(t, msgs)
@@ -709,7 +720,7 @@ def get_thread(tid: int):
     if incoming:
         rule = sender_rule(db, t["account"], incoming[-1]["from_addr"]) or {}
         card["sender"] = {"addr": incoming[-1]["from_addr"], "name": incoming[-1]["from_name"] or incoming[-1]["from_addr"],
-                          "context": rule.get("context") or "", "muted": rule.get("notify") == 0,
+                          "context": rule.get("context") or "", "muted": rule.get("notify") == 0, "priority": rule.get("notify") == 1,
                           "muted_auto": bool(rule.get("notify_auto"))}
     card["moments"] = [_moment(r) for r in db.q("SELECT * FROM moments WHERE tid=? AND until > ? ORDER BY at",
                                                   (tid, _now().isoformat()))]

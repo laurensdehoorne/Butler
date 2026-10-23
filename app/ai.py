@@ -287,11 +287,12 @@ class AIWorker:
         if not t or not msgs:
             return
         prio = (res or {}).get("priority") or "normaal"
-        if not self.notifier.wants(prio):
-            return
         last = [m for m in msgs if not m["outgoing"]][-1:] or msgs[-1:]
         last = last[0]
-        if fatigue.muted(self.db, t["account"], last["from_addr"]):
+        vip = fatigue.priority(self.db, t["account"], last["from_addr"])  # prioritaire afzender: altijd
+        if not vip and (not self.notifier.wants(prio) or fatigue.muted(self.db, t["account"], last["from_addr"])):
+            return
+        if vip and self.notifier.mode == "off":
             return
         acc = self.accounts.get(t["account"])
         # wie en waarover: de afzender als titel, het account enkel als er meer dan één is
@@ -301,7 +302,7 @@ class AIWorker:
         if res and res.get("summary"):
             text += "\n" + res["summary"]
         fatigue.record(self.db, t["account"], last["from_addr"], tid)
-        self.notifier.send(title, text, tid=tid, high=(prio == "hoog"),
+        self.notifier.send(title, text, tid=tid, high=(prio == "hoog" or vip), force=vip,
                            extra={"account": t["account"], "from": last["from_addr"], "subject": last["subject"],
                                   "priority": prio, "summary": (res or {}).get("summary")})
 

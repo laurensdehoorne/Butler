@@ -214,6 +214,8 @@ class DB:
                 self.conn.execute("UPDATE threads SET dossier_ai=0 WHERE dossier_ai=1")
                 self.conn.execute("INSERT INTO settings(key, value) VALUES('dossiers_v4', '1')")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")
+            from .search import setup as search_setup
+            self.fts = search_setup(self.conn)  # slim zoeken (FTS5); zonder FTS5 zoekt Butler met LIKE
 
     def q(self, sql, args=()):
         with self.lock:

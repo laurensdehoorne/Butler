@@ -6,7 +6,8 @@ gelezen-vlag komt van de server) en staat ze nog in je inbox, dan telt ze als ge
 meldingen op rij van dezelfde afzender krijg je van die afzender geen meldingen meer; de mail zelf blijft gewoon
 binnenkomen. Weer aanzetten kan in de mail (Meer) of in Instellingen → Meldingen.
 
-sender_rules.notify: NULL = gewoon, 0 = stil (door jou of door Butler), 1 = altijd melden (ook als je ze negeert).
+sender_rules.notify: NULL = gewoon, 0 = stil (door jou of door Butler), 1 = prioritair: altijd een melding, ook voor
+mail die de AI niet belangrijk vindt en tijdens de stille uren (en Butler zet ze nooit stil).
 """
 
 from datetime import datetime, timedelta, timezone
@@ -51,5 +52,16 @@ def check(db):
     return out
 
 
+def priority(db, account, addr):
+    r = db.one("SELECT notify FROM sender_rules WHERE account=? AND addr=?", (account, (addr or "").lower()))
+    return bool(r) and r["notify"] == 1
+
+
 def muted_list(db):
     return [dict(r) for r in db.q("""SELECT account, addr, notify_auto FROM sender_rules WHERE notify=0 ORDER BY addr""")]
+
+
+def priority_list(db):
+    return [dict(r) for r in db.q("""SELECT r.account, r.addr, (SELECT MAX(m.from_name) FROM messages m
+                                     WHERE m.account=r.account AND m.from_addr=r.addr) AS name
+                                     FROM sender_rules r WHERE r.notify=1 ORDER BY r.addr""")]

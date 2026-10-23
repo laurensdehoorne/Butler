@@ -339,6 +339,10 @@ dialog.sheet.center .shead{padding-top:14px}
 #fwd .flabel{font-size:.875rem;color:var(--muted);margin-top:6px}
 #fwd .actions{margin-top:14px}
 #fwd .actions .btn{flex:1;justify-content:center;min-height:44px}
+.ask-row{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:12px 0 0;padding:10px 14px;border:0;border-radius:14px;background:var(--tint);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.ask-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ask-card{margin-top:12px}
+.ask-card a.ref{display:inline-grid;place-items:center;min-width:1.4em;height:1.4em;margin:0 1px;padding:0 4px;border-radius:999px;background:var(--tint);color:var(--lapel);font-size:.75em;font-weight:600;text-decoration:none;vertical-align:.15em}
 .act-row{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:12px 0 4px;padding:10px 14px;border:0;border-radius:14px;background:var(--tint);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .act-row span{flex:1}
 .act-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -517,6 +521,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M8.5 3.5A6 6 0 0 1 18 8c0 3 .6 5 1.3 6.4"/><path d="M6 8c0 7-3 9-3 9h14"/><path d="M10 21a2 2 0 0 0 4 0"/><path d="M3 3l18 18"/></symbol>
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9z"/></symbol>
   <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M8 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2"/></symbol>
   <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
@@ -557,7 +562,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   <label class="searchbox">
     <span class="visually-hidden">Zoeken in alle mail</span>
     <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
-    <input type="search" id="q" placeholder="Zoeken in alle mail" autocomplete="off" enterkeyhint="search">
+    <input type="search" id="q" placeholder="Zoek of stel een vraag" autocomplete="off" enterkeyhint="search">
     <kbd>/</kbd>
   </label>
   <div class="chips" id="accounts"></div>
@@ -785,6 +790,31 @@ function momentWhen(m, active){
   return (active ? 'tot ' : '') + day + t;
 }
 /* agenda: alles wat aan een datum hangt, per dag */
+/* ---------- slim zoeken: een vraag over je mail, Butler antwoordt met de mails erbij ---------- */
+const isQuestion = q => q.trim().split(/\s+/).length >= 3 && /\?\s*$|^(wie|wat|wanneer|waar|waarom|hoeveel|hoe|welke|welk|heb|had|is|zijn|wordt|moet|kan|when|what|who|where|how|which)\b/i.test(q.trim());
+function askBlock(){
+  if(!S.q.trim() || !S.ai) return '';
+  const a = S.ask?.q === S.q ? S.ask : null;
+  if(!a) return isQuestion(S.q) || S.q.trim().split(/\s+/).length >= 3
+    ? `<button class="ask-row" data-ask>${TIE()}<span>Vraag het Butler: “${esc(S.q.trim())}”</span>${I('chev')}</button>` : '';
+  if(a.loading) return `<div class="note-card ask-card"><div class="head">${TIE('Butler')}<span class="muted">Butler zoekt in je mail…</span></div></div>`;
+  if(a.error) return `<div class="note-card ask-card"><p>${esc(a.error)}</p></div>`;
+  const refs = {}; a.res.threads.forEach(c => { if(c.ref) refs[c.ref] = c.tid; });
+  const text = esc(a.res.answer).replace(/\[(\d+)\]/g, (m, n) => refs[n] ? `<a href="#" class="ref" data-tid="${refs[n]}">${n}</a>` : '');
+  const cited = a.res.threads.filter(c => c.ref && new RegExp(`\\[${c.ref}\\]`).test(a.res.answer));
+  const rest = a.res.threads.filter(c => !cited.includes(c)).slice(0, 5);
+  return `<div class="note-card ask-card"><div class="head">${TIE('Butler')}<span class="muted">Butler antwoordt</span></div><p>${text}</p></div>`
+    + (cited.length ? `<div class="sec-h"><h2>Gevonden in</h2></div><div class="items">${cited.map(c => card(c)).join('')}</div>` : '')
+    + (rest.length ? `<div class="sec-h"><h2>Ook bekeken</h2></div><div class="items">${rest.map(c => card(c)).join('')}</div>` : '');
+}
+async function askButler(){
+  const q = S.q;
+  S.ask = {q, loading: true}; load();
+  try{ S.ask = {q, res: await api(`/api/ask?q=${encodeURIComponent(q)}&account=${encodeURIComponent(S.account)}`)}; }
+  catch(err){ S.ask = {q, error: 'Butler kon niet antwoorden: ' + err.message}; }
+  if(S.q === q) load();
+}
+
 /* ---------- wat Butler zelf deed (Instellingen → Automatisch) ---------- */
 const ACT = {factuur: ['fwd', 'factuur doorgestuurd', 'facturen doorgestuurd'], opruimen: ['archive', 'keer opgeruimd', 'keer opgeruimd'],
              concept: ['draft', 'concept klaargezet', 'concepten klaargezet']};
@@ -988,11 +1018,12 @@ async function load(animate=false){
       const d = await api(`/api/agenda?account=${acc}`);
       html = agendaView(vis(d.items));
     } else if(S.tab==='inbox'){
-      const d = await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
+      const answered = S.ask?.q === S.q && (S.ask.res || S.ask.loading);  // een vraag: enkel wat Butler vond
+      const d = answered ? {threads: []} : await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
       d.threads = vis(d.threads);
-      html = d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c)).join('')}</div>`
-        : S.q ? empty('Niets gevonden', `Geen mail met “${esc(S.q)}”. Zoeken gaat over onderwerp, afzender en tekst.`, I('search'))
-        : empty('Inbox leeg', 'Nieuwe mail verschijnt hier vanzelf.');
+      html = askBlock() + (d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c)).join('')}</div>`
+        : S.q ? (S.ask?.q === S.q ? '' : empty('Niets gevonden', `Geen mail met “${esc(S.q)}”. Probeer minder woorden, van:naam, na:2026-03 of pdf, of stel een vraag.`, I('search')))
+        : empty('Inbox leeg', 'Nieuwe mail verschijnt hier vanzelf.'));
     } else if(S.tab==='cleanup'){
       const d = await api(`/api/senders?account=${acc}&kind=${S.cfilter}`);
       if(seq!==S.seq) return;
@@ -1179,7 +1210,8 @@ function renderThread(){
     `<button data-a="forward">${I('fwd')}Doorsturen…</button>`,
     (S.me?.users || []).length > 1 ? `<button data-a="share">${I('share')}Delen met…</button>` : '',
     `<button data-a="tags">${I('tag')}Tags bewerken</button>`,
-    t.sender ? `<button data-a="${t.sender.muted ? 'notify-on' : 'notify-off'}">${I('bell')}${t.sender.muted ? 'Weer meldingen' : 'Geen meldingen meer'} van ${esc(t.sender.name)}</button>` : '',
+    t.sender ? `<button data-a="${t.sender.priority ? 'notify-normal' : 'notify-vip'}">${I('star')}${t.sender.priority ? 'Niet meer altijd melden' : 'Altijd een melding'} van ${esc(t.sender.name)}</button>` : '',
+    t.sender && !t.sender.priority ? `<button data-a="${t.sender.muted ? 'notify-normal' : 'notify-off'}">${I('bell')}${t.sender.muted ? 'Weer meldingen' : 'Geen meldingen meer'} van ${esc(t.sender.name)}</button>` : '',
     // soort van de afzender: zo sorteert Butler alle mail van hem (ook in Opruimen)
     ...(t.sender ? [['notificatie', 'bell', 'Is een notificatie'], ['reclame', 'tag', 'Is reclame'], ['persoonlijk', 'inbox', 'Is persoonlijke mail']]
       .filter(([k]) => k !== (t.kind || 'persoonlijk'))
@@ -1472,9 +1504,10 @@ async function doAction(a, btn){
       const r = await post(p+'/forward', {message_id: inv.message_id, to: [inv.to]});
       toast(`Doorgestuurd naar ${inv.to}` + (r.attachments ? ` (${r.attachments} bijlage${r.attachments > 1 ? 'n' : ''})` : ''));
       S.thread = await api(p); return renderThread(); }
-    if(a === 'notify-off' || a === 'notify-on'){
-      await post('/api/senders/rule', {account: t.account, addr: t.sender.addr, notify: a === 'notify-on' ? 1 : 0});
-      toast(a === 'notify-on' ? `Weer meldingen van ${t.sender.name}` : `Geen meldingen meer van ${t.sender.name}`);
+    if(a.startsWith('notify-')){
+      const v = {'notify-off': 0, 'notify-vip': 1, 'notify-normal': -1}[a];
+      await post('/api/senders/rule', {account: t.account, addr: t.sender.addr, notify: v});
+      toast(v === 1 ? `${t.sender.name}: altijd een melding, ook 's nachts` : v === 0 ? `Geen meldingen meer van ${t.sender.name}` : `Gewone meldingen van ${t.sender.name}`);
       S.thread = await api(p); return renderThread(); }
     if(a.startsWith('kind-')){
       const kind = a.slice(5);
@@ -1547,7 +1580,7 @@ async function doAction(a, btn){
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e=>{
-  const el = e.target.closest('[data-activity],[data-activity-back],[data-activity-settings],[data-undo],[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
+  const el = e.target.closest('[data-ask],[data-activity],[data-activity-back],[data-activity-settings],[data-undo],[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
   if(el.hasAttribute('data-quick-open')){ S.quick = true; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-quick-go')) return quickGo(el);
@@ -1558,6 +1591,7 @@ document.addEventListener('click', async e=>{
     return load(true);
   }
   if(el.dataset.dossier){ e.preventDefault(); if(S.thread) closeThread(); S.dossier = +el.dataset.dossier; scrollTo(0, 0); return load(true); }
+  if(el.hasAttribute('data-ask')) return askButler();
   if(el.hasAttribute('data-activity')){ S.activity = true; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-activity-back')){ S.activity = false; return load(true); }
   if(el.hasAttribute('data-activity-settings')) return openSettings('auto');
@@ -1607,6 +1641,9 @@ document.addEventListener('change', async e=>{
 $('#back').onclick = closeThread;
 window.addEventListener('popstate', ()=>{ const m=location.hash.match(/^#t=(\d+)/); m ? openThread(+m[1], false) : closeTopLayer(sheet); });
 let qh; $('#q').addEventListener('input', e=>{ clearTimeout(qh); qh=setTimeout(()=>{ S.q=e.target.value; S.tab='inbox'; load(true); }, 300); });
+$('#q').addEventListener('keydown', e => {  // Enter op een vraag: Butler antwoordt
+  if(e.key === 'Enter' && S.ai && isQuestion(e.target.value)){ e.preventDefault(); clearTimeout(qh); S.q = e.target.value; S.tab = 'inbox'; askButler(); }
+});
 document.addEventListener('keydown', e=>{
   if(e.key==='/' && !e.target.closest('input,textarea,select,[contenteditable]') && !document.querySelector('dialog[open]')){ e.preventDefault(); $('#q').focus(); }
   if(e.key==='Enter' && e.target.id==='instr'){ e.preventDefault(); $('[data-a=draft]')?.click(); }
@@ -1632,10 +1669,10 @@ async function openSettings(view='root'){
   S.view = view; S.cfgErrors = {};
   $('#set-body').innerHTML = placeholder();
   openDialog(settings);
-  const [dev, cost, sub, cfg, tn, mu] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})),
+  const [dev, cost, sub, cfg, tn, mu] = /* mu: stille en prioritaire afzenders */ await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})),
     mySub().catch(()=>null), api('/api/config').catch(()=>null), api('/api/tone').catch(()=>null), api('/api/notify/muted').catch(()=>({muted:[]}))]);
   const me = await fetch('/api/me').then(r => r.ok ? r.json() : null).catch(() => null);  // enkel achter de gateway
-  S.set = {devices: dev.devices, costs: cost.months, here: !!sub, tone: tn, me, muted: mu.muted};
+  S.set = {devices: dev.devices, costs: cost.months, here: !!sub, tone: tn, me, muted: mu.muted, priority: mu.priority || []};
   S.cfg = cfg;
   if(view === 'account:new') S.view = newAccount();
   renderSettings();
@@ -1689,6 +1726,9 @@ function rootSettings(){
         <button class="btn primary" data-set="user-add">${I('plus')}Gebruiker toevoegen</button></div></div>`);
   return who + `
     <h3 class="group-h">Meldingen</h3><div class="group">${push}</div>
+    <h3 class="group-h">Altijd een melding van</h3><div class="group">${st.priority.length ? st.priority.map(m => `<div class="line"><span>${esc(m.name || m.addr)}<span class="sub">${esc(m.addr)}</span></span>
+      <button class="btn" data-set="vip-off" data-acc="${esc(m.account)}" data-addr="${esc(m.addr)}">Gewoon</button></div>`).join('')
+      : '<div class="muted">Nog niemand. Open een mail van iemand en kies Meer → Altijd een melding: ook voor gewone mail en tijdens de stille uren.</div>'}</div>
     ${(st.muted || []).length ? `<h3 class="group-h">Geen meldingen van</h3><div class="group">${st.muted.map(m => `<div class="line"><span>${esc(m.addr)}<span class="sub">${m.notify_auto ? 'Je las hun laatste meldingen niet' : 'Door jou stil gezet'}</span></span>
       <button class="btn" data-set="unmute" data-acc="${esc(m.account)}" data-addr="${esc(m.addr)}">Weer melden</button></div>`).join('')}</div>` : ''}
     <h3 class="group-h">Toestellen met meldingen</h3><div class="group">${devs}</div>
@@ -1822,9 +1862,10 @@ async function waitForRestart(){
 async function settingAction(a, el){
   if(a === 'open'){ S.view = el.dataset.view; S.cfgErrors = {}; S.cfg.accounts = S.cfg.accounts.filter(x => !x.isNew || S.view.startsWith('account:')); renderSettings(); settings.scrollTop = 0; return; }
   if(a === 'add-account'){ S.view = newAccount(); renderSettings(); return; }
-  if(a === 'unmute'){
-    await post('/api/senders/rule', {account: el.dataset.acc, addr: el.dataset.addr, notify: 1});
-    S.set.muted = S.set.muted.filter(m => m.addr !== el.dataset.addr); toast('Weer meldingen'); renderSettings(); return;
+  if(a === 'unmute' || a === 'vip-off'){
+    await post('/api/senders/rule', {account: el.dataset.acc, addr: el.dataset.addr, notify: -1});
+    S.set.muted = S.set.muted.filter(m => m.addr !== el.dataset.addr); S.set.priority = S.set.priority.filter(m => m.addr !== el.dataset.addr);
+    toast(a === 'unmute' ? 'Weer meldingen' : 'Gewone meldingen'); renderSettings(); return;
   }
   if(a === 'logout'){ await fetch('/logout', {method: 'POST'}); location.replace('/login'); return; }
   if(a === 'pw-change' || a === 'pw-reset'){

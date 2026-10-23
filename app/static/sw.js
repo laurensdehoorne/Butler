@@ -1,7 +1,7 @@
 // Butler-service worker (zoals in CellarPeaks): houdt de app-schil offline beschikbaar, toont een nette
 // "wordt bijgewerkt"-pagina wanneer Tailscale tijdens een herstart 502–504 geeft, en toont Web Push-meldingen.
 // De API wordt nooit gecachet: die gaat altijd naar de server.
-const CACHE = "butler-v7"; // een nieuwe versie wist de oudere caches
+const CACHE = "butler-v8"; // een nieuwe versie wist de oudere caches
 const SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/apple-touch-icon.png", "/icon-192.png", "/badge-96.png", "/fonts/bodoni-moda-latin.woff2"];
 
 self.addEventListener("install", (event) => {

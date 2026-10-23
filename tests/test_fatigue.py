@@ -35,3 +35,18 @@ def test_topics_can_be_switched_off(app, monkeypatch):
     app.notifier.send("Laurens deelde een mail", "x", extra={"type": "shared"}, force=True)
     app.notifier.send("Ann", "Vraag", tid=1, force=True)
     assert [m["title"] for m in sent] == ["Ann"]
+
+
+def test_priority_sender_always_notifies(app, client, acc, monkeypatch):
+    tid, _ = put(acc, "INBOX", 1, raw("Mama <mama@thuis.be>", "Zondag eten?", "<z@t>"))
+    other, _ = put(acc, "INBOX", 2, raw("Shop <s@shop.be>", "Nieuws", "<n@s>"))
+    monkeypatch.setattr(app.notifier, "mode", "important")
+    monkeypatch.setattr(app.notifier, "quiet", (__import__("datetime").time(0, 0), __import__("datetime").time(23, 59)))
+    sent = []
+    monkeypatch.setattr(app.notifier, "push", type("P", (), {"send": lambda self, m: sent.append(m)})())
+    client.post("/api/senders/rule", headers=H, json={"account": acc.id, "addr": "mama@thuis.be", "notify": 1})
+    app.ai._maybe_notify(tid, {"priority": "normaal"})  # gewone mail, tijdens de stille uren
+    app.ai._maybe_notify(other, {"priority": "normaal"})
+    assert [m["title"] for m in sent] == ["Mama"]
+    assert client.get("/api/notify/muted", headers=H).json()["priority"][0]["addr"] == "mama@thuis.be"
+    assert client.get(f"/api/threads/{tid}", headers=H).json()["sender"]["priority"]
