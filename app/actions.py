@@ -244,17 +244,29 @@ def save_draft(db, acc, tid, body, reply_all=False):
     return {"to": to, "cc": cc, "subject": subject, "folder": folder}
 
 
-def send_reply(db, acc, tid, body, reply_all=False):
-    t, em, mid, to, cc, subject, refs = build_reply(db, acc, tid, body, reply_all)
-
-    smtp_send(acc, em)
-
+def append_sent(acc, em):
     if acc.append_sent and acc.folders.get("sent"):
         raw = em.as_bytes()
         try:
             acc.run_imap(lambda c: c.append(acc.folders["sent"], raw, flags=(SEEN,)))
         except Exception:
             pass  # verzonden is verzonden; enkel de kopie in 'Verzonden' ontbreekt dan
+
+
+def forward(db, acc, mid, to, note=""):
+    from . import forward as fw
+
+    row, rows = _copies(db, mid)
+    if not row:
+        raise ValueError("bericht niet gevonden")
+    return fw.send(db, acc, dict(row), rows, to, note, _raw, smtp_send, lambda em: append_sent(acc, em))
+
+
+def send_reply(db, acc, tid, body, reply_all=False):
+    t, em, mid, to, cc, subject, refs = build_reply(db, acc, tid, body, reply_all)
+
+    smtp_send(acc, em)
+    append_sent(acc, em)
 
     now = datetime.now(timezone.utc).isoformat()
     db.x(

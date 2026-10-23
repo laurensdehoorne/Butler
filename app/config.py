@@ -79,6 +79,8 @@ SECTIONS = [
     {"id": "general", "title": "Algemeen", "fields": [
         F("app.base_url", "Adres van Butler", "text", "Voor de link in meldingen, bv. https://butler.jouw-tailnet.ts.net", ""),
         F("app.timezone", "Tijdzone", "text", "Bv. Europe/Brussels.", "Europe/Brussels"),
+        F("app.invoice_forward", "Facturen doorsturen naar", "text",
+          "Je boekhouding, bv. je Billit-adres. Leeg = Butler neemt het adres waar je facturen al naartoe stuurt.", ""),
         F("app.remote_images", "Afbeeldingen in mails laden", "bool",
           "Via Butler: de afzender ziet je IP-adres en locatie niet, wel dat de mail geopend werd.", True),
         F("app.token", "Toegangstoken", "secret",

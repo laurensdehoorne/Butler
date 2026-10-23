@@ -332,6 +332,16 @@ dialog.sheet.center .shead{padding-top:14px}
 .tb:disabled{opacity:.5}
 .sbody:focus{outline:none}
 
+#fwd{width:min(460px,calc(100% - 32px));border-radius:18px;--off:0 0;--sc:.96}
+#fwd form{padding:22px;display:flex;flex-direction:column;gap:6px}
+#fwd h2{font:600 1.375rem/1.25 var(--display);margin:0}
+#fwd p{margin:0 0 8px;color:var(--muted);font-size:0.9062rem}
+#fwd .flabel{font-size:.875rem;color:var(--muted);margin-top:6px}
+#fwd .actions{margin-top:14px}
+#fwd .actions .btn{flex:1;justify-content:center;min-height:44px}
+.invoice{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border-radius:14px;background:var(--tint)}
+.invoice span{flex:1;min-width:12em}
+.invoice .btn{width:auto}
 #ask{width:min(420px,calc(100% - 32px));border-radius:18px;--off:0 0;--sc:.96}
 #ask form{padding:22px}
 #ask h2{font:600 1.375rem/1.25 var(--display);margin:0 0 6px}
@@ -486,6 +496,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/></symbol>
   <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.2"/></symbol>
   <symbol id="i-read" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="m3 10 9 6 9-6"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="m15 5 6 6-6 6"/><path d="M21 11H10a6 6 0 0 0-6 6v2"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></symbol>
   <symbol id="i-draft" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></symbol>
@@ -577,6 +588,21 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     </div>
   </form>
 </dialog>
+<dialog id="fwd" closedby="any" aria-labelledby="fwd-title">
+  <form method="dialog">
+    <h2 id="fwd-title">Doorsturen</h2>
+    <p id="fwd-msg"></p>
+    <label class="flabel" for="fwd-to">Aan</label>
+    <input class="field" id="fwd-to" type="email" multiple autocomplete="off" list="fwd-list" placeholder="naam@voorbeeld.be" required>
+    <datalist id="fwd-list"></datalist>
+    <label class="flabel" for="fwd-note">Bericht (niet verplicht)</label>
+    <textarea class="field" id="fwd-note" rows="3"></textarea>
+    <div class="actions">
+      <button type="button" class="btn ghost" data-close>Annuleren</button>
+      <button value="ok" class="btn primary" id="fwd-ok"><svg class="i" aria-hidden="true"><use href="#i-fwd"/></svg>Versturen</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="viewer" closedby="any" aria-label="Bijlage bekijken">
   <div class="viewer-bar"><span class="viewer-name"></span>
     <a class="iconbtn viewer-open" target="_blank" rel="noopener" aria-label="Openen of bewaren"><svg class="i" aria-hidden="true"><use href="#i-ext"/></svg></a>
@@ -645,6 +671,8 @@ function ask({title, msg='', input=false, value='', type='text', ok='OK', danger
   return new Promise(res => d.addEventListener('close', () => res(d.returnValue==='ok' ? (input ? inp.value : true) : null), {once:true}));
 }
 wireDialog($('#ask'), () => closeTopLayer($('#ask'), ''));
+wireDialog($('#fwd'), () => closeTopLayer($('#fwd'), ''));
+$('#fwd [data-close]').onclick = () => closeTopLayer($('#fwd'), '');
 $('#ask [data-close]').onclick = () => closeTopLayer($('#ask'), '');
 
 /* ---------- API ---------- */
@@ -1052,6 +1080,7 @@ function renderThread(){
   ].join('');
   $('#more-menu').innerHTML = [
     t.unread ? `<button data-a="read">${I('read')}Markeer als gelezen</button>` : '',
+    `<button data-a="forward">${I('fwd')}Doorsturen…</button>`,
     `<button data-a="tags">${I('tag')}Tags bewerken</button>`,
     `<button data-a="dossier-choose">${I('folder')}${(t.dossiers || []).length ? 'Ander dossier…' : 'In een dossier zetten…'}</button>`,
     (t.dossiers || []).length ? `<button data-a="dossier-remove">${I('folder')}Uit ${t.dossiers.length > 1 ? 'de dossiers' : 'het dossier'} halen</button>` : '',
@@ -1128,7 +1157,12 @@ function renderThread(){
     </section>`;
 
   const keep = $('#reply')?.value, keepInstr = $('#instr')?.value;
-  $('#s-body').innerHTML = note + context + upcoming + snooze + tags + msgs + related + compose;
+  const inv = t.invoice;  // factuur: met één tik naar je boekhouding
+  const invoice = !inv ? '' : inv.done
+    ? `<div class="info">${I('check')}Factuur doorgestuurd naar ${esc(inv.to)}</div>`
+    : `<div class="invoice">${I('file')}<span>Factuur? Stuur ze door naar <b>${esc(inv.to)}</b>.</span>
+        <button class="btn primary" data-a="invoice">${I('fwd')}Doorsturen</button></div>`;
+  $('#s-body').innerHTML = note + invoice + context + upcoming + snooze + tags + msgs + related + compose;
   if(keep) $('#reply').value = keep;
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
   showHtmlMessages();
@@ -1243,6 +1277,28 @@ async function doAction(a, btn){
         value: (t.dossiers || [])[0]?.name || '', ok: 'Bewaren', list: names});
       if(!v?.trim()) return;
       S.thread = await post(p+'/dossier', {name: v.trim()}); toast('In ' + v.trim()); return renderThread(); }
+    if(a==='invoice'){
+      const inv = t.invoice;
+      if(!await ask({title:'Factuur doorsturen?', msg:`Naar ${inv.to}, met de bijlagen.`, ok:'Doorsturen'})) return;
+      btn.innerHTML = I('fwd') + 'Doorsturen…';
+      const r = await post(p+'/forward', {message_id: inv.message_id, to: [inv.to]});
+      toast(`Doorgestuurd naar ${inv.to}` + (r.attachments ? ` (${r.attachments} bijlage${r.attachments > 1 ? 'n' : ''})` : ''));
+      S.thread = await api(p); return renderThread(); }
+    if(a==='forward'){
+      const incoming = t.messages.filter(m => !m.outgoing), m = incoming[incoming.length - 1] || t.messages[t.messages.length - 1];
+      const n = (m.attachments || []).length;
+      const d = $('#fwd'), to = $('#fwd-to');
+      $('#fwd-msg').textContent = (m.subject || '(geen onderwerp)') + (n ? `, ${n} bijlage${n > 1 ? 'n' : ''}` : '');
+      to.value = ''; $('#fwd-note').value = ''; d.returnValue = '';
+      api('/api/recipients').then(r => $('#fwd-list').innerHTML = r.recipients.map(x => `<option value="${esc(x.addr)}">${esc(x.name)}</option>`).join('')).catch(() => {});
+      openDialog(d); to.focus();
+      const ok = await new Promise(res => d.addEventListener('close', () => res(d.returnValue === 'ok'), {once:true}));
+      if(!ok) return;
+      const addrs = to.value.split(/[,;\s]+/).filter(Boolean);
+      toast('Wordt doorgestuurd…');
+      const r = await post(p+'/forward', {message_id: m.id, to: addrs, note: $('#fwd-note').value});
+      toast(`Doorgestuurd naar ${addrs.join(', ')}`);
+      S.thread = await api(p); return renderThread(); }
     if(a==='dossier-remove'){ S.thread = await post(p+'/dossier/remove'); toast('Uit het dossier gehaald'); return renderThread(); }
     if(a==='ctx-edit'){ $('#ctx').innerHTML = contextForm(t); $('#ctx-text').focus(); return; }
     if(a==='ctx-cancel'){ $('#ctx').innerHTML = contextView(t); return; }

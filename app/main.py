@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import actions, config, costs, dossiers, moments, tone
+from . import actions, config, costs, dossiers, forward, moments, tone
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
@@ -599,6 +599,7 @@ def get_thread(tid: int):
                           "context": rule.get("context") or ""}
     card["moments"] = [_moment(r) for r in db.q("SELECT * FROM moments WHERE tid=? AND until > ? ORDER BY at",
                                                   (tid, _now().isoformat()))]
+    card["invoice"] = forward.suggestion(db, APP, t, msgs)  # factuur: met één tik naar je boekhouding
     return card
 
 
@@ -1144,6 +1145,29 @@ def digest_loop():
             except Exception:
                 log.exception("ochtendsamenvatting mislukt")
         _t.sleep(20)
+
+
+class ForwardIn(BaseModel):
+    message_id: int
+    to: list[str]
+    note: str = ""
+
+
+@app.post("/api/threads/{tid}/forward", dependencies=[Depends(auth)])
+def forward_message(tid: int, body: ForwardIn):
+    t = _thread_or_404(tid)
+    to = [a.strip() for a in body.to if a.strip()]
+    if not to or not all(re.match(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$", a) for a in to):
+        raise HTTPException(400, "Geef een geldig e-mailadres.")
+    if not db.one("SELECT 1 FROM messages WHERE id=? AND account=?", (body.message_id, t["account"])):
+        raise HTTPException(404, "bericht niet gevonden")
+    res = _run(lambda: actions.forward(db, _acc(t["account"]), body.message_id, to, body.note))
+    return {"ok": True, **res}
+
+
+@app.get("/api/recipients", dependencies=[Depends(auth)])
+def recipients():
+    return {"recipients": forward.recipients(db)}
 
 
 @app.post("/api/threads/{tid}/send", dependencies=[Depends(auth)])
