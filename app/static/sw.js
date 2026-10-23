@@ -1,4 +1,4 @@
-// Butler-service worker (zoals in CellarPeaks): houdt de app-schil offline beschikbaar, toont een nette
+// Secretaresse-service worker (zoals in CellarPeaks): houdt de app-schil offline beschikbaar, toont een nette
 // "wordt bijgewerkt"-pagina wanneer Tailscale tijdens een herstart 502–504 geeft, en toont Web Push-meldingen.
 // De API wordt nooit gecachet: die gaat altijd naar de server.
 const CACHE = "butler-v12"; // een nieuwe versie wist de oudere caches
@@ -18,14 +18,14 @@ self.addEventListener("activate", (event) => {
 
 const WAIT = `<!doctype html><html lang="nl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="3">
-<title>Butler wordt bijgewerkt</title>
+<title>Secretaresse wordt bijgewerkt</title>
 <style>
   :root { color-scheme: light dark; }
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 17px/1.5 -apple-system, system-ui, sans-serif;
          background: #ffffff; color: #000000; text-align: center; padding: 24px; box-sizing: border-box; }
   @media (prefers-color-scheme: dark) { body { background: #000000; color: #ffffff; } }
   img { width: 72px; height: 72px; border-radius: 16px; } p { margin: 4px 0; } small { opacity: .6; }
-</style></head><body><div><img src="/apple-touch-icon.png" alt=""><p><b>Butler wordt bijgewerkt</b></p>
+</style></head><body><div><img src="/apple-touch-icon.png" alt=""><p><b>Secretaresse wordt bijgewerkt</b></p>
 <p>Een ogenblik: deze pagina herlaadt vanzelf.</p><small>Meestal duurt dit minder dan een minuut.</small></div></body></html>`;
 const restarting = (response) => response.status >= 502 && response.status <= 504;
 const wait = () => new Response(WAIT, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
@@ -57,7 +57,7 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   let msg = {};
   try { msg = event.data ? event.data.json() : {}; } catch { msg = { body: event.data?.text() }; }
-  const shown = self.registration.showNotification(msg.title || "Butler", {
+  const shown = self.registration.showNotification(msg.title || "Secretaresse", {
     body: msg.body || "", icon: "/icon-192.png", badge: "/badge-96.png",
     data: { url: msg.url || "/" }, tag: msg.tag || "butler",
   });

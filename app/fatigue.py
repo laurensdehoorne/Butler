@@ -1,13 +1,13 @@
 """Meldingen die je steeds negeert, stoppen vanzelf (naar de richtlijnen voor meldingen: stilte is beter dan dat je
 alle meldingen uitzet).
 
-Elke melding over nieuwe mail komt in notify_log. Lees je die mail niet binnen een dag (in Butler of in Spark: de
+Elke melding over nieuwe mail komt in notify_log. Lees je die mail niet binnen een dag (in Secretaresse of in Spark: de
 gelezen-vlag komt van de server) en staat ze nog in je inbox, dan telt ze als genegeerd. Na IGNORED_MAX genegeerde
 meldingen op rij van dezelfde afzender krijg je van die afzender geen meldingen meer; de mail zelf blijft gewoon
 binnenkomen. Weer aanzetten kan in de mail (Meer) of in Instellingen → Meldingen.
 
-sender_rules.notify: NULL = gewoon, 0 = stil (door jou of door Butler), 1 = prioritair: altijd een melding, ook voor
-mail die de AI niet belangrijk vindt en tijdens de stille uren (en Butler zet ze nooit stil).
+sender_rules.notify: NULL = gewoon, 0 = stil (door jou of door Secretaresse), 1 = prioritair: altijd een melding, ook voor
+mail die de AI niet belangrijk vindt en tijdens de stille uren (en Secretaresse zet ze nooit stil).
 """
 
 from datetime import datetime, timedelta, timezone

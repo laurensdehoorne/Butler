@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS threads(
   snooze_until TEXT,
   done INTEGER DEFAULT 0,
   moments_ai INTEGER DEFAULT 0,  -- aantal berichten toen de momenten bepaald werden
-  context TEXT,                  -- wat je Butler over deze mail vertelde
+  context TEXT,                  -- wat je Secretaresse over deze mail vertelde
   dossier_id INTEGER,
   dossier_ai INTEGER DEFAULT 0,  -- 0 = nog niet bepaald, 1 = door de AI, -1 = door jou eruit gehaald
   UNIQUE(account, thread_key)
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS notify_log(
 );
 CREATE INDEX IF NOT EXISTS ix_notify_addr ON notify_log(account, addr, at);
 
--- wat Butler zelf deed (zie autopilot.py): facturen doorgestuurd, reclame opgeruimd, concepten klaargezet
+-- wat Secretaresse zelf deed (zie autopilot.py): facturen doorgestuurd, reclame opgeruimd, concepten klaargezet
 CREATE TABLE IF NOT EXISTS auto_log(
   id INTEGER PRIMARY KEY,
   at TEXT,
@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS dossiers(
   last_at TEXT
 );
 
--- momenten uit gemarkeerde mails: wanneer Butler een mail weer naar voren haalt (inchecken, concert, ...)
+-- momenten uit gemarkeerde mails: wanneer Secretaresse een mail weer naar voren haalt (inchecken, concert, ...)
 CREATE TABLE IF NOT EXISTS moments(
   id INTEGER PRIMARY KEY,
   tid INTEGER NOT NULL,
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS sender_rules(
   action TEXT DEFAULT 'none',-- none | keep | archive | trash | archive_after
   after_days INTEGER DEFAULT 7,
   unsubscribed_at TEXT,
-  context TEXT,              -- wat je Butler over deze afzender vertelde
+  context TEXT,              -- wat je Secretaresse over deze afzender vertelde
   PRIMARY KEY(account, addr)
 );
 
@@ -220,7 +220,7 @@ class DB:
                 self.conn.execute("INSERT INTO settings(key, value) VALUES('html_v2', '1')")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")
             from .search import setup as search_setup
-            self.fts = search_setup(self.conn)  # slim zoeken (FTS5); zonder FTS5 zoekt Butler met LIKE
+            self.fts = search_setup(self.conn)  # slim zoeken (FTS5); zonder FTS5 zoekt Secretaresse met LIKE
 
     def q(self, sql, args=()):
         with self.lock:

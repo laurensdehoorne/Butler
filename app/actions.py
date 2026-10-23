@@ -289,7 +289,7 @@ def build_new(acc, to, cc, subject, body, files=()):
 def send_new(acc, to, cc, subject, body, files=()):
     em = build_new(acc, to, cc, subject, body, files)
     smtp_send(acc, em)
-    append_sent(acc, em)  # de kopie in 'Verzonden' komt bij de volgende sync ook in Butler
+    append_sent(acc, em)  # de kopie in 'Verzonden' komt bij de volgende sync ook in Secretaresse
     return {"to": to, "cc": cc, "subject": subject}
 
 
@@ -405,7 +405,7 @@ def unsubscribe(db, acc, addr):
     method, target = unsub_method(r["unsub"], r["unsub_post"])
     if method == "one-click":
         resp = httpx.post(target, data={"List-Unsubscribe": "One-Click"}, timeout=20, follow_redirects=True,
-                          headers={"User-Agent": "Butler (RFC 8058 one-click unsubscribe)"})
+                          headers={"User-Agent": "Secretaresse (RFC 8058 one-click unsubscribe)"})
         if resp.status_code >= 400:
             raise RuntimeError(f"uitschrijven geweigerd door afzender (HTTP {resp.status_code})")
     elif method == "mail":

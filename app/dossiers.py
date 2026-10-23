@@ -1,11 +1,11 @@
 """Dossiers: mails die over dezelfde zaak gaan, bij elkaar (een reis, een verbouwing, een schadegeval, een aankoop).
 
-Er komt geen aparte AI-vraag bij: telkens Butler een mail samenvat of momenten zoekt, noemt de AI ook de zaken waar
+Er komt geen aparte AI-vraag bij: telkens Secretaresse een mail samenvat of momenten zoekt, noemt de AI ook de zaken waar
 de mail over gaat. Ze krijgt daarbij de bestaande dossiers als lijst, zodat de bevestiging van de vlucht, het hotel en
 de parking in hetzelfde dossier belanden. Een mail kan in meerdere dossiers zitten: een overzicht van drie lopende
 schadedossiers hoort bij elk van die drie.
 
-Daarnaast koppelt Butler mails met hetzelfde referentienummer (S006326085, 2026-00285, ...) zonder AI aan elkaar.
+Daarnaast koppelt Secretaresse mails met hetzelfde referentienummer (S006326085, 2026-00285, ...) zonder AI aan elkaar.
 Een nummer dat in veel mails staat (een ondernemingsnummer in een handtekening) telt niet mee.
 
 thread_dossiers.source: 'ai' (gekozen door de AI, wordt vervangen bij een nieuwe samenvatting) of 'ref' (gekoppeld via

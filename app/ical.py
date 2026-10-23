@@ -1,18 +1,18 @@
-"""De agenda van Butler als agenda-abonnement (iCalendar), voor de Agenda-app op iPhone, Mac en elders.
+"""De agenda van Secretaresse als agenda-abonnement (iCalendar), voor de Agenda-app op iPhone, Mac en elders.
 
 Een app op het beginscherm kan niet zelf in de Agenda-app schrijven; een abonnement (webcal://) wel, en de Agenda-app
 ververst het zelf. De link bevat een geheim (een HMAC), want een agenda-app kan niet aanmelden: wie de link heeft, ziet
 je afspraken (geen mail). Enkel de gebeurtenissen: titel, uur, waar het over gaat en een link terug naar de mail.
 
 Gebeurtenissen met een uur staan in UTC (de Agenda-app toont ze in je eigen tijdzone); een deadline zonder uur is een
-gebeurtenis van de hele dag. Geen herinneringen in de agenda: Butler stuurt die zelf, op het juiste moment.
+gebeurtenis van de hele dag. Geen herinneringen in de agenda: Secretaresse stuurt die zelf, op het juiste moment.
 """
 
 import hashlib
 import hmac
 from datetime import date, datetime, timedelta, timezone
 
-PRODID = "-//Butler//Agenda//NL"
+PRODID = "-//Secretaresse//Agenda//NL"
 
 
 def token(key):
@@ -47,7 +47,7 @@ def _utc(iso, tz):
     return d.astimezone(timezone.utc)
 
 
-def calendar(items, tz, base_url="", name="Butler"):
+def calendar(items, tz, base_url="", name="Secretaresse"):
     """items: de regels van /api/agenda. → tekst van een .ics-bestand."""
     now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", f"PRODID:{PRODID}", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",

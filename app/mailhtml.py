@@ -1,8 +1,8 @@
 """HTML-mails tonen zonder dat je toestel iets van buiten laadt.
 
 Externe afbeeldingen in een mail (logo's, foto's, maar ook meetpixels) worden herschreven naar /img/<handtekening>/<adres>:
-Butler haalt ze zelf op. De afzender ziet zo nooit je IP-adres of locatie, wel dat de mail geopend werd. De
-handtekening (HMAC met de sleutel van de avatars) zorgt dat /img enkel adressen ophaalt die Butler zelf in een mail
+Secretaresse haalt ze zelf op. De afzender ziet zo nooit je IP-adres of locatie, wel dat de mail geopend werd. De
+handtekening (HMAC met de sleutel van de avatars) zorgt dat /img enkel adressen ophaalt die Secretaresse zelf in een mail
 zette: het is geen open proxy, ook al werkt het zonder token (een <img> kan geen token meesturen).
 Met app.remote_images: false worden externe afbeeldingen helemaal weggelaten.
 """
@@ -50,7 +50,7 @@ class MailImages:
         return self.proxied(url) if self.enabled else ""
 
     def rewrite(self, html):
-        """Externe afbeeldingen via Butler (of weg); de rest van de HTML blijft zoals ze is."""
+        """Externe afbeeldingen via Secretaresse (of weg); de rest van de HTML blijft zoals ze is."""
         soup = BeautifulSoup(html, "html.parser")
         for t in soup.find_all(True):
             if t.name == "img":

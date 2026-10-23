@@ -1,7 +1,7 @@
-"""Mail delen tussen gebruikers van dezelfde Butler (zie gateway.py).
+"""Mail delen tussen gebruikers van dezelfde Secretaresse (zie gateway.py).
 
-Elke gebruiker heeft een eigen database, dus delen is een kopie: de Butler van wie deelt geeft de thread mee (tekst,
-HTML en bijlagen, die hij van zijn mailserver haalt), en de Butler van wie ontvangt bewaart die als "gedeeld met jou",
+Elke gebruiker heeft een eigen database, dus delen is een kopie: de Secretaresse van wie deelt geeft de thread mee (tekst,
+HTML en bijlagen, die hij van zijn mailserver haalt), en de Secretaresse van wie ontvangt bewaart die als "gedeeld met jou",
 los van zijn eigen mail. De bijlagen staan als bestanden in <data>/shared/<id>/; de ontvanger heeft geen toegang tot
 de mailbox van wie deelde, en dat hoeft ook niet.
 """

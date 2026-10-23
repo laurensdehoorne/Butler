@@ -1,4 +1,4 @@
-# Butler
+# Secretaresse
 
 Self-hosted mailassistent die **Gmail en iCloud** (en elke andere IMAP-mailbox) samenbrengt in één webapp:
 
@@ -8,21 +8,21 @@ Self-hosted mailassistent die **Gmail en iCloud** (en elke andere IMAP-mailbox) 
 - **Pushmeldingen** – via [ntfy](https://ntfy.sh) en/of een Home Assistant-webhook, enkel voor belangrijke mail of voor alles, met stille uren.
 - **Antwoorden** – via SMTP met correcte threading (`In-Reply-To`/`References`), zodat het antwoord ook in Gmail, Apple Mail en Spark netjes in de conversatie staat.
 
-Alles wat je in Butler doet (archiveren, gelezen, verwijderen) gebeurt echt op de mailserver, dus je andere mailapps blijven in sync.
+Alles wat je in Secretaresse doet (archiveren, gelezen, verwijderen) gebeurt echt op de mailserver, dus je andere mailapps blijven in sync.
 
 ## Samen met je gewone mailapp (bv. Spark)
 
-Butler is bedoeld als **assistent naast** je mailapp, niet als vervanger:
+Secretaresse is bedoeld als **assistent naast** je mailapp, niet als vervanger:
 
-- **Niets verandert vanzelf.** Butler leest met `BODY.PEEK` en in read-only-modus: mails worden niet als gelezen gemarkeerd, verplaatst of gelabeld tenzij je zelf op een knop drukt.
-- **Opvolgen is het startscherm.** "Klaar", snoozen en tags zijn lokaal in Butler en raken je mailbox niet.
+- **Niets verandert vanzelf.** Secretaresse leest met `BODY.PEEK` en in read-only-modus: mails worden niet als gelezen gemarkeerd, verplaatst of gelabeld tenzij je zelf op een knop drukt.
+- **Opvolgen is het startscherm.** "Klaar", snoozen en tags zijn lokaal in Secretaresse en raken je mailbox niet.
 - **Antwoorden die je in Spark verstuurt worden herkend** via de Verzonden-map: de thread verdwijnt dan vanzelf uit *Wacht op jou* en verschijnt na `followup_days` in *Wacht op antwoord* als er niets terugkomt.
 - **Concepten in plaats van versturen.** Een antwoordvoorstel kun je met *Zet als concept* in de Concepten-map van je mailbox zetten; je vindt het dan in Spark terug om na te kijken en te versturen. Rechtstreeks versturen kan ook nog.
-- **Geen dubbele meldingen.** Laat Spark gewoon elke mail melden en zet Butler op `notify.mode: important`: dan krijg je enkel een extra (time-sensitive) melding voor wat écht dringend is, plus de ochtendsamenvatting (`digest_time`).
+- **Geen dubbele meldingen.** Laat Spark gewoon elke mail melden en zet Secretaresse op `notify.mode: important`: dan krijg je enkel een extra (time-sensitive) melding voor wat écht dringend is, plus de ochtendsamenvatting (`digest_time`).
 
 ## Gemarkeerde mail op het juiste moment
 
-Markeer in Spark een mail die je later nodig hebt (een vlucht, een concert, een reservatie): Spark zet er een vlag op, in Gmail een ster. Butler ziet die vlag, ook als de mail al gearchiveerd (*Klaar*) is, en laat de AI bepalen wanneer je de mail nodig hebt:
+Markeer in Spark een mail die je later nodig hebt (een vlucht, een concert, een reservatie): Spark zet er een vlag op, in Gmail een ster. Secretaresse ziet die vlag, ook als de mail al gearchiveerd (*Klaar*) is, en laat de AI bepalen wanneer je de mail nodig hebt:
 
 - **Vlucht**: wanneer het online inchecken opengaat (of 24 uur voor vertrek) en 3 uur voor vertrek.
 - **Concert of evenement**: om 9:00 op de dag zelf en 2 uur voor de start.
@@ -48,13 +48,13 @@ Uitschrijven bevestigt aan de afzender dat je adres actief is. Gebruik het voor 
 
 ```
 Gmail  ─┐ IMAP IDLE                         ┌─ Claude API (samenvatting, antwoord)
-iCloud ─┼──────────► Butler (FastAPI) ─────┼─ ntfy / Home Assistant (push)
+iCloud ─┼──────────► Secretaresse (FastAPI) ─────┼─ ntfy / Home Assistant (push)
 andere ─┘ SMTP ◄──── SQLite-cache /data ────┘─ Webinterface (browser / PWA)
 ```
 
 - Per account een IMAP-verbinding die met **IDLE** op nieuwe mail wacht (meestal binnen enkele seconden), met een volledige sync minstens elke `poll_seconds`.
 - Alle mail (INBOX, Verzonden en het archief: *Alle e-mail* bij Gmail, *Archief* bij iCloud) wordt lokaal gecachet in SQLite (`/data/butler.db`); met `sync_days` beperk je dat tot de laatste X dagen, gemarkeerde mail blijft dan altijd. De eerste sync van een groot archief wordt gespreid over dagen (`sync_daily_mb`, standaard 1000 MB per account per dag; Gmail laat ongeveer 2,5 GB IMAP-download per dag toe): gemarkeerde mail eerst, dan van nieuw naar oud. Nieuwe mail komt altijd meteen binnen; bovenaan staat hoeveel oude mail nog volgt. Threads worden opgebouwd via `X-GM-THRID` (Gmail) of `References`/`In-Reply-To` (iCloud en andere).
-- **Harde regel: Butler verstuurt nooit zelf een antwoord.** De AI schrijft hooguit een concept in je Concepten-map; verzenden gebeurt enkel na een tik van jou. Enige uitzondering, enkel als je het aanzet (Instellingen → Automatisch): een factuur (pdf) gaat meteen door naar je boekhouding (Billit). Tests bewaken dat de AI en de andere achtergrondcode geen mail kunnen versturen en dat de factuur nergens anders heen gaat.
+- **Harde regel: Secretaresse verstuurt nooit zelf een antwoord.** De AI schrijft hooguit een concept in je Concepten-map; verzenden gebeurt enkel na een tik van jou. Enige uitzondering, enkel als je het aanzet (Instellingen → Automatisch): een factuur (pdf) gaat meteen door naar je boekhouding (Billit). Tests bewaken dat de AI en de andere achtergrondcode geen mail kunnen versturen en dat de factuur nergens anders heen gaat.
 - Grote berichten (> 5 MB) worden enkel met headers opgehaald.
 - Bij de eerste sync worden geen meldingen verstuurd en enkel threads van de laatste `ai.initial_days` dagen samengevat, om kosten te beperken. Nieuwsbrieven (herkend aan `List-Unsubscribe` e.d.) gaan nooit naar de AI.
 
@@ -69,13 +69,13 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-Open daarna `http://<host>:8088` en voeg in de app je eerste account toe; zet bij *Instellingen → Algemeen* meteen een toegangstoken als Butler niet enkel via Tailscale bereikbaar is. Op iPhone: Delen → *Zet op beginscherm* voor een app-icoon.
+Open daarna `http://<host>:8088` en voeg in de app je eerste account toe; zet bij *Instellingen → Algemeen* meteen een toegangstoken als Secretaresse niet enkel via Tailscale bereikbaar is. Op iPhone: Delen → *Zet op beginscherm* voor een app-icoon.
 
 Liever alles in een bestand? Kopieer `config.example.yaml` naar `config.yaml`, vul aan en `chmod 600 config.yaml`.
 
 ### Enkel via Tailscale (aanbevolen)
 
-`docker-compose.tailscale.yml` zet een Tailscale-container naast Butler. Butler deelt diens netwerk, opent geen poort op de host en is enkel bereikbaar op `https://butler.<jouw-tailnet>.ts.net` (geldig certificaat via `tailscale serve`).
+`docker-compose.tailscale.yml` zet een Tailscale-container naast Secretaresse. Secretaresse deelt diens netwerk, opent geen poort op de host en is enkel bereikbaar op `https://butler.<jouw-tailnet>.ts.net` (geldig certificaat via `tailscale serve`).
 
 ```bash
 cp .env.example .env            # TS_AUTHKEY invullen (Tailscale-admin → Settings → Keys, met tag:butler)
@@ -93,7 +93,7 @@ Gebruik nooit je gewone wachtwoord:
 
 ### Bereikbaarheid
 
-Butler heeft volledige toegang tot je mail. Zet hem **niet rechtstreeks op internet**. Aanbevolen:
+Secretaresse heeft volledige toegang tot je mail. Zet hem **niet rechtstreeks op internet**. Aanbevolen:
 
 - enkel via **Tailscale** (eventueel `tailscale serve` voor HTTPS), of
 - achter een **Cloudflare Tunnel met Cloudflare Access** (e-mail-OTP of SSO) ervoor.
@@ -102,7 +102,7 @@ Het `app.token` is een extra laag, geen vervanging daarvoor.
 
 ### Claude of ChatGPT
 
-Butler werkt met **Claude** (Anthropic) of **ChatGPT** (OpenAI, via de Responses API), net als CellarPeaks. Vul één of beide sleutels in onder `ai` in `config.yaml` (of als `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in de omgeving). Zijn beide ingevuld, dan staat rechtsboven in de app een keuzelijst *AI-dienst*; de keuze wordt bewaard. Standaardmodellen: `claude-haiku-5-5` en `claude-sonnet-5-5`, of `gpt-6-luna` (voor allebei; `gpt-6.1-sol` is sterker). Fouten van de dienst (ongeldige sleutel, krediet op, model onbekend) verschijnen in gewone taal.
+Secretaresse werkt met **Claude** (Anthropic) of **ChatGPT** (OpenAI, via de Responses API), net als CellarPeaks. Vul één of beide sleutels in onder `ai` in `config.yaml` (of als `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in de omgeving). Zijn beide ingevuld, dan staat rechtsboven in de app een keuzelijst *AI-dienst*; de keuze wordt bewaard. Standaardmodellen: `claude-haiku-5-5` en `claude-sonnet-5-5`, of `gpt-6-luna` (voor allebei; `gpt-6.1-sol` is sterker). Fouten van de dienst (ongeldige sleutel, krediet op, model onbekend) verschijnen in gewone taal.
 
 ### Kosten
 
@@ -110,35 +110,35 @@ Onder **⚙︎ → AI-kosten** zie je per maand wat samenvatten en antwoorden ko
 
 ### Privacy
 
-Met `ai.enabled: true` gaat de inhoud van persoonlijke mails naar de gekozen dienst (Claude API van Anthropic of OpenAI API). Beide trainen standaard niet op API-data en verwijderen ze na hoogstens 30 dagen; bij OpenAI stuurt Butler `store: false` mee, zodat het antwoord niet als opgeslagen *response* bij OpenAI blijft staan. Zet `ai: false` op accounts met gevoelige inhoud (bv. patiënt- of klantgegevens); die worden dan nooit doorgestuurd en krijgen gewoon een melding per persoonlijke mail.
+Met `ai.enabled: true` gaat de inhoud van persoonlijke mails naar de gekozen dienst (Claude API van Anthropic of OpenAI API). Beide trainen standaard niet op API-data en verwijderen ze na hoogstens 30 dagen; bij OpenAI stuurt Secretaresse `store: false` mee, zodat het antwoord niet als opgeslagen *response* bij OpenAI blijft staan. Zet `ai: false` op accounts met gevoelige inhoud (bv. patiënt- of klantgegevens); die worden dan nooit doorgestuurd en krijgen gewoon een melding per persoonlijke mail.
 
-Afzenderfoto's (`app.avatars`) haalt de server op en bewaart ze in `/data/avatars`; je toestel laadt niets van buiten. Voor een **logo** (`logos: true`) gaat enkel de domeinnaam van de afzender naar buiten: Butler zoekt het BIMI-logo in de DNS en anders het pictogram van de website. Gratis mailboxen (gmail.com, icloud.com, …) krijgen geen logo. Voor een **profielfoto** (`gravatar: true`) stuurt Butler een SHA-256-hash van het afzenderadres naar Gravatar; zo weet Gravatar welke adressen je mail sturen. Zet `gravatar: false` als je dat niet wilt. Butler haalt enkel iets op bij publieke adressen, nooit in je eigen netwerk, en wat niet gevonden wordt, probeert hij pas na 14 dagen opnieuw.
+Afzenderfoto's (`app.avatars`) haalt de server op en bewaart ze in `/data/avatars`; je toestel laadt niets van buiten. Voor een **logo** (`logos: true`) gaat enkel de domeinnaam van de afzender naar buiten: Secretaresse zoekt het BIMI-logo in de DNS en anders het pictogram van de website. Gratis mailboxen (gmail.com, icloud.com, …) krijgen geen logo. Voor een **profielfoto** (`gravatar: true`) stuurt Secretaresse een SHA-256-hash van het afzenderadres naar Gravatar; zo weet Gravatar welke adressen je mail sturen. Zet `gravatar: false` als je dat niet wilt. Secretaresse haalt enkel iets op bij publieke adressen, nooit in je eigen netwerk, en wat niet gevonden wordt, probeert hij pas na 14 dagen opnieuw.
 
 ## Aanmelden en meerdere gebruikers
 
-Butler vraagt een naam en wachtwoord. Bij de eerste keer maak je zelf het eerste account aan: dat is de beheerder, en
+Secretaresse vraagt een naam en wachtwoord. Bij de eerste keer maak je zelf het eerste account aan: dat is de beheerder, en
 die houdt de bestaande mail in `/data`. Had je al een `app.token`, dan wordt dat het wachtwoord van de beheerder.
 
-In **Instellingen → Gebruikers** voegt de beheerder anderen toe. Elke gebruiker krijgt een eigen Butler met een eigen
+In **Instellingen → Gebruikers** voegt de beheerder anderen toe. Elke gebruiker krijgt een eigen Secretaresse met een eigen
 database, mailaccounts, dossiers en instellingen in `/data/users/<naam>`; niemand ziet de mail van een ander. Een nieuwe
 gebruiker neemt de AI-sleutels van de beheerder over (aan te passen in haar eigen instellingen) en voegt zelf haar
 mailaccounts toe.
 
-Achter de schermen start `app/gateway.py` per gebruiker een Butler op 127.0.0.1 en stuurt elk verzoek door naar die van
+Achter de schermen start `app/gateway.py` per gebruiker een Secretaresse op 127.0.0.1 en stuurt elk verzoek door naar die van
 wie aangemeld is. De gebruikers staan in `/data/users.json` (wachtwoorden als scrypt-hash).
 
 ## Pushmeldingen
 
 ### In de app (Web Push)
 
-Zoals in CellarPeaks stuurt Butler meldingen rechtstreeks naar de app op je beginscherm, zonder extra app:
+Zoals in CellarPeaks stuurt Secretaresse meldingen rechtstreeks naar de app op je beginscherm, zonder extra app:
 
-1. Open Butler in Safari, tik op Delen → **Zet op beginscherm** en open Butler via dat icoon (iOS 16.4 of nieuwer; op Android of desktop werkt het ook in de browser).
+1. Open Secretaresse in Safari, tik op Delen → **Zet op beginscherm** en open Secretaresse via dat icoon (iOS 16.4 of nieuwer; op Android of desktop werkt het ook in de browser).
 2. **⚙︎ → Meldingen → Meldingen aanzetten**, en sta meldingen toe. Met **Testmelding** controleer je meteen of het werkt.
 
-Een tik op een melding opent de mail in Butler. De server maakt de eerste keer zelf een sleutelpaar om zijn meldingen te ondertekenen (`data/vapid.pem`); wis dat bestand niet, anders moet elk toestel de meldingen opnieuw aanzetten. Zet `notify.push_contact` op een `mailto:`-adres (Apple vraagt een contactadres). Onder **⚙︎ → Toestellen met meldingen** zie en vergeet je toestellen; een verwijderde app wordt vanzelf vergeten.
+Een tik op een melding opent de mail in Secretaresse. De server maakt de eerste keer zelf een sleutelpaar om zijn meldingen te ondertekenen (`data/vapid.pem`); wis dat bestand niet, anders moet elk toestel de meldingen opnieuw aanzetten. Zet `notify.push_contact` op een `mailto:`-adres (Apple vraagt een contactadres). Onder **⚙︎ → Toestellen met meldingen** zie en vergeet je toestellen; een verwijderde app wordt vanzelf vergeten.
 
-De service worker toont tijdens een update of herstart een pagina *Butler wordt bijgewerkt* die zichzelf herlaadt, in plaats van de foutpagina van Tailscale, en houdt de app ook offline open.
+De service worker toont tijdens een update of herstart een pagina *Secretaresse wordt bijgewerkt* die zichzelf herlaadt, in plaats van de foutpagina van Tailscale, en houdt de app ook offline open.
 
 ntfy en Home Assistant hieronder zijn optioneel, bv. om meldingen via HA te routeren.
 
@@ -149,14 +149,14 @@ ntfy en Home Assistant hieronder zijn optioneel, bv. om meldingen via HA te rout
 
 Met een eigen ntfy-server op iOS: zet `upstream-base-url: "https://ntfy.sh"` in de serverconfig, anders komen meldingen niet direct binnen.
 
-Een tik op de melding opent de thread in Butler (via `app.base_url`).
+Een tik op de melding opent de thread in Secretaresse (via `app.base_url`).
 
 ### Home Assistant
 
 Zet `ha_webhook` op `http://<ha>:8123/api/webhook/butler_nieuwe_mail` en voeg deze automatisering toe:
 
 ```yaml
-alias: Butler – nieuwe mail
+alias: Secretaresse – nieuwe mail
 triggers:
   - trigger: webhook
     webhook_id: butler_nieuwe_mail
@@ -180,7 +180,7 @@ De payload bevat ook `account`, `from`, `subject`, `priority` en `summary`, hand
 Alles kan in de app, via **Instellingen → Configuratie**: accounts (met *Test verbinding*), synchroniseren, opvolgen en opruimen, AI, meldingen en algemeen. Wachtwoorden en API-sleutels gaan nooit naar de browser; een leeg veld behoudt de bewaarde waarde.
 
 - Wat je in de app bewaart, staat in `/data/config.yaml` (chmod 600) en gaat voor op het meegegeven `config.yaml`. Dat laatste wordt enkel nog gelezen zolang er niets in de app bewaard is.
-- Na bewaren herstart Butler zichzelf; Docker (`restart: unless-stopped`) zet hem meteen terug op. Buiten Docker zet je `BUTLER_RESTART=0` en herstart je zelf.
+- Na bewaren herstart Secretaresse zichzelf; Docker (`restart: unless-stopped`) zet hem meteen terug op. Buiten Docker zet je `BUTLER_RESTART=0` en herstart je zelf.
 
 De sleutels zijn dezelfde als in [`config.example.yaml`](config.example.yaml). Belangrijkste opties:
 
@@ -199,14 +199,14 @@ De sleutels zijn dezelfde als in [`config.example.yaml`](config.example.yaml). B
 
 ## Automatisch bijwerken
 
-`deploy/update.sh` haalt nieuwe versies van `main` op en bouwt Butler enkel opnieuw als er iets veranderd is (met of zonder de Tailscale-container, zoals het nu draait). Via cron, elk kwartier:
+`deploy/update.sh` haalt nieuwe versies van `main` op en bouwt Secretaresse enkel opnieuw als er iets veranderd is (met of zonder de Tailscale-container, zoals het nu draait). Via cron, elk kwartier:
 
 ```bash
 apt-get install -y cron
 echo '*/15 * * * * root /opt/butler/deploy/update.sh >> /var/log/butler-update.log 2>&1' > /etc/cron.d/butler-update
 ```
 
-Wat er gebeurde, staat in `/var/log/butler-update.log`. Tijdens het herbouwen is Butler enkele seconden weg; de app toont dan „Butler wordt bijgewerkt”.
+Wat er gebeurde, staat in `/var/log/butler-update.log`. Tijdens het herbouwen is Secretaresse enkele seconden weg; de app toont dan „Secretaresse wordt bijgewerkt”.
 
 ## Ontwikkelen
 
@@ -215,7 +215,7 @@ pip install -r requirements.txt
 BUTLER_CONFIG=./config.yaml BUTLER_DB=./data/butler.db uvicorn app.main:app --reload --port 8088
 ```
 
-`BUTLER_NO_SYNC=1` start de webinterface zonder IMAP-verbindingen; `BUTLER_RESTART=0` laat Butler na het bewaren van instellingen niet zichzelf stoppen (handig met `--reload`).
+`BUTLER_NO_SYNC=1` start de webinterface zonder IMAP-verbindingen; `BUTLER_RESTART=0` laat Secretaresse na het bewaren van instellingen niet zichzelf stoppen (handig met `--reload`).
 
 ### Tests
 
@@ -230,4 +230,4 @@ De tests draaien met een tijdelijke config en database, zonder echte mailservers
 
 - Bijlagen worden niet getoond of gedownload; open die in je gewone mailapp.
 - Nieuwe mails opstellen (zonder bestaande thread) zit er nog niet in, enkel antwoorden.
-- Gmail-labels worden niet gesynchroniseerd; tags in Butler zijn lokaal.
+- Gmail-labels worden niet gesynchroniseerd; tags in Secretaresse zijn lokaal.

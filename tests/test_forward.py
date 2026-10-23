@@ -24,7 +24,7 @@ def test_forward_with_attachments(app, client, acc):
 
 
 def test_invoice_goes_to_bookkeeping_in_one_tap(app, client, acc):
-    for i in range(3):  # zo stuur je je facturen al door: Butler leert het adres
+    for i in range(3):  # zo stuur je je facturen al door: Secretaresse leert het adres
         put(acc, "Sent Messages", 40 + i, raw("Me <me@icloud.com>", "", f"<s{i}@me>", to=f"Billit <{BILLIT}>", days=30))
     data = mail_with_attachments()
     tid, _ = put(acc, "INBOX", 5, data)

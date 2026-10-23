@@ -27,13 +27,13 @@ def gw(tmp_path, monkeypatch):
     monkeypatch.setattr(G, "MAIN_CONFIG", str(cfg))
     seen = []
 
-    def upstream(request):  # de Butler van de gebruiker
+    def upstream(request):  # de Secretaresse van de gebruiker
         seen.append(request)
         body = json.dumps({"port": request.url.port, "path": request.url.path}).encode()
         return httpx.Response(200, headers={"content-type": "application/json"}, stream=httpx.ByteStream(body))
 
     users = G.Users(tmp_path / "users.json")
-    G.migrate(users)  # de bestaande Butler wordt de beheerder, met het oude token als wachtwoord
+    G.migrate(users)  # de bestaande Secretaresse wordt de beheerder, met het oude token als wachtwoord
     backends = FakeBackends()
     app = G.create_app(users, key=b"k" * 32, backends=backends, transport=httpx.MockTransport(upstream))
     return TestClient(app), users, backends, seen
@@ -72,7 +72,7 @@ def test_admin_adds_user_with_own_database(gw, tmp_path):
 
     m = TestClient(c.app)
     assert login(m, "marie-elisabeth", "geheim-wachtwoord").status_code == 200
-    assert m.get("/api/threads/1").json()["port"] == 9102  # haar eigen Butler
+    assert m.get("/api/threads/1").json()["port"] == 9102  # haar eigen Secretaresse
     assert m.post("/api/users", json={"name": "X", "password": "12345678"}).status_code == 403
     assert m.put("/api/users/laurens/password", json={"password": "12345678"}).status_code == 403
     assert m.put("/api/users/marie-elisabeth/password", json={"password": "nieuw-wachtwoord"}).json()["ok"]

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Butler bijwerken zodra er iets nieuws op GitHub (main) staat; anders gebeurt er niets.
+# Secretaresse bijwerken zodra er iets nieuws op GitHub (main) staat; anders gebeurt er niets.
 # Voor cron, bv. elk kwartier (/etc/cron.d/butler-update):
 #   */15 * * * * root /opt/butler/deploy/update.sh >> /var/log/butler-update.log 2>&1
 set -eu

@@ -1,4 +1,4 @@
-"""Momenten uit gemarkeerde mail: Butler haalt een mail naar voren op het moment dat je ze nodig hebt.
+"""Momenten uit gemarkeerde mail: Secretaresse haalt een mail naar voren op het moment dat je ze nodig hebt.
 
 Wie een mail markeert in Spark (een ster in Gmail, een vlag in iCloud), zegt daarmee: deze heb ik later nog nodig.
 De AI leest zo'n thread en bepaalt wanneer: online inchecken, vertrek, de dag van een concert, een afhaling. Elk
@@ -29,7 +29,7 @@ Bepaal op welke momenten {name} deze mail bij de hand moet hebben. Antwoord met 
 - soort: vlucht, trein, concert, evenement, reservatie, afspraak, afhaling of ander.
 - titel: kort wat er dan te doen is, bv. "Online inchecken voor SN3583 naar Lissabon", "Vertrek SN3583 naar Lissabon", "Concert Arctic Monkeys".
 - detail: in één zin wat je op dat moment nodig hebt: uur, plaats, terminal of poort, zitplaats, boekingsnummer of ticketnummer.
-- begin en einde: wanneer Butler de mail toont (de herinnering), in lokale tijd van de plaats waar het gebeurt; tijdzone is die plaats (IANA-naam).
+- begin en einde: wanneer Secretaresse de mail toont (de herinnering), in lokale tijd van de plaats waar het gebeurt; tijdzone is die plaats (IANA-naam).
 - gebeurtenis: het tijdstip van de gebeurtenis zelf waar dit moment bij hoort (het vertrek van de vlucht, de start van het concert of webinar, het uur van de afspraak), in dezelfde tijdzone. Momenten voor dezelfde gebeurtenis hebben hetzelfde tijdstip.
 - Vlucht: een moment wanneer het online inchecken opengaat (staat dat niet in de mail, neem dan 24 uur voor vertrek) tot het vertrek, en een moment 3 uur voor vertrek tot het vertrek. Bij een heen- en terugvlucht doe je dat voor elke vlucht.
 - Trein: een moment 1 uur voor vertrek tot het vertrek.

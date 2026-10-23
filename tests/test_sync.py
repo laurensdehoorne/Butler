@@ -84,7 +84,7 @@ def test_old_mail_spread_over_days(app, acc):
 
 
 def test_opening_a_thread_fetches_archived_replies(app, acc, client):
-    """Oude mail binnen het dagbudget: van een gesprek kende Butler enkel je eigen antwoorden (Verzonden). Openen haalt
+    """Oude mail binnen het dagbudget: van een gesprek kende Secretaresse enkel je eigen antwoorden (Verzonden). Openen haalt
     de gearchiveerde antwoorden van de anderen meteen op, één keer."""
     from tests.conftest import H, put
 

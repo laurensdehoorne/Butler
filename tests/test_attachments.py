@@ -47,7 +47,7 @@ def test_thread_lists_attachments_and_opens_them_on_demand(app, client, acc):
         html = client.get(atts[2]["url"])
     assert pdf.status_code == 200 and pdf.content == PDF and pdf.headers["content-type"] == "application/pdf"
     assert pdf.headers["content-disposition"].startswith("inline") and "sandbox" not in pdf.headers["content-security-policy"]
-    # html nooit als pagina in Butler: downloaden, in een sandbox
+    # html nooit als pagina in Secretaresse: downloaden, in een sandbox
     assert html.headers["content-type"] == "application/octet-stream" and html.headers["content-disposition"].startswith("attachment")
     assert "sandbox" in html.headers["content-security-policy"]
 

@@ -1,7 +1,7 @@
 """Configuratie: lezen, controleren en bewaren, zodat alles ook in de app kan.
 
-Butler leest eerst /data/config.yaml (wat in de app bewaard werd). Bestaat dat niet, dan het meegegeven bestand
-(BUTLER_CONFIG, in Docker /config/config.yaml, alleen-lezen); en zonder enig bestand start Butler leeg, zodat je alles
+Secretaresse leest eerst /data/config.yaml (wat in de app bewaard werd). Bestaat dat niet, dan het meegegeven bestand
+(BUTLER_CONFIG, in Docker /config/config.yaml, alleen-lezen); en zonder enig bestand start Secretaresse leeg, zodat je alles
 in de app kunt instellen. Bewaren gebeurt altijd in /data/config.yaml.
 
 Wachtwoorden en sleutels gaan nooit naar de browser: die krijgt een leeg veld met de vermelding dat er een waarde is.
@@ -59,7 +59,7 @@ SECTIONS = [
         F("ai.openai_triage_model", "ChatGPT-model voor samenvatten", "text", "", "gpt-6-luna"),
         F("ai.openai_draft_model", "ChatGPT-model voor antwoorden", "text", "", "gpt-6-luna"),
         F("ai.initial_days", "Bij de eerste sync samenvatten (dagen)", "number", "Enkel mail van de laatste dagen, om kosten te sparen.", 7, min=0),
-        F("ai.name", "Je voornaam", "text", "Zo spreekt Butler je aan in samenvattingen.", ""),
+        F("ai.name", "Je voornaam", "text", "Zo spreekt Secretaresse je aan in samenvattingen.", ""),
         F("ai.owner", "Wie je bent", "text", "Bv. Jan Peeters, zelfstandige in Gent. Helpt de AI de toon te kiezen.", ""),
         F("ai.signature", "Handtekening", "textarea", "Onder elk antwoordvoorstel.", ""),
     ]},
@@ -80,25 +80,25 @@ SECTIONS = [
     ]},
     {"id": "auto", "title": "Automatisch", "fields": [
         F("app.auto.invoices", "Facturen doorsturen naar je boekhouding", "bool",
-          "Een nieuwe mail met een factuur (pdf) gaat meteen naar het adres bij Algemeen, bv. Billit. Het enige dat Butler zelf verstuurt.", False),
+          "Een nieuwe mail met een factuur (pdf) gaat meteen naar het adres bij Algemeen, bv. Billit. Het enige dat Secretaresse zelf verstuurt.", False),
         F("app.auto.ads", "Reclame opruimen", "bool", "Reclame die een dag in je inbox staat, gaat naar het archief.", False),
         F("app.auto.drafts", "Antwoordconcepten klaarzetten", "bool",
-          "Verwacht een nieuwe mail een antwoord, dan schrijft Butler een concept in je Concepten-map. Versturen doe jij.", False),
+          "Verwacht een nieuwe mail een antwoord, dan schrijft Secretaresse een concept in je Concepten-map. Versturen doe jij.", False),
     ]},
     {"id": "general", "title": "Algemeen", "fields": [
-        F("app.base_url", "Adres van Butler", "text", "Voor de link in meldingen, bv. https://butler.jouw-tailnet.ts.net", ""),
+        F("app.base_url", "Adres van Secretaresse", "text", "Voor de link in meldingen, bv. https://butler.jouw-tailnet.ts.net", ""),
         F("app.timezone", "Tijdzone", "text", "Bv. Europe/Brussels.", "Europe/Brussels"),
         F("app.invoice_forward", "Facturen doorsturen naar", "text",
-          "Je boekhouding, bv. je Billit-adres. Leeg = Butler neemt het adres waar je facturen al naartoe stuurt.", ""),
+          "Je boekhouding, bv. je Billit-adres. Leeg = Secretaresse neemt het adres waar je facturen al naartoe stuurt.", ""),
         F("app.remote_images", "Afbeeldingen in mails laden", "bool",
-          "Via Butler: de afzender ziet je IP-adres en locatie niet, wel dat de mail geopend werd.", True),
+          "Via Secretaresse: de afzender ziet je IP-adres en locatie niet, wel dat de mail geopend werd.", True),
         F("app.token", "Toegangstoken", "secret",
-          "Leeg = geen aanmelding, enkel als Butler uitsluitend via Tailscale bereikbaar is.", ""),
+          "Leeg = geen aanmelding, enkel als Secretaresse uitsluitend via Tailscale bereikbaar is.", ""),
     ]},
 ]
 
 ACCOUNT_FIELDS = [
-    F("name", "Naam", "text", "Zo heet het account in Butler, bv. Gmail.", ""),
+    F("name", "Naam", "text", "Zo heet het account in Secretaresse, bv. Gmail.", ""),
     F("provider", "Soort", "select", "", "gmail", options=[["gmail", "Gmail"], ["icloud", "iCloud"], ["custom", "Andere (IMAP)"]]),
     F("email", "E-mailadres", "text", "", ""),
     F("display_name", "Je naam als afzender", "text", "", ""),
@@ -279,7 +279,7 @@ def save(cfg, data_dir):
     path = data_path(data_dir)
     tmp = path.with_suffix(".yaml.tmp")
     with open(tmp, "w", encoding="utf-8") as f:
-        f.write("# Bewaard door Butler. Wijzig liefst via Instellingen in de app; bevat wachtwoorden.\n")
+        f.write("# Bewaard door Secretaresse. Wijzig liefst via Instellingen in de app; bevat wachtwoorden.\n")
         yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)

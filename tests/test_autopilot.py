@@ -106,7 +106,7 @@ def test_ads_after_a_day_logged_and_restorable(app, client, acc, monkeypatch):
         client.post(f"/api/activity/{e['id']}/undo", headers=H)
     assert imap.search.call_args.args[0] == ["HEADER", "Message-ID", "<p1@x>"]
     assert imap.move.call_args.args == ([5], "INBOX")
-    assert "<p1@x>" in A.restored(app.db)  # en die ruimt Butler niet opnieuw op
+    assert "<p1@x>" in A.restored(app.db)  # en die ruimt Secretaresse niet opnieuw op
 
 
 def test_hard_rule_background_code_cannot_send_mail():

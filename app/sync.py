@@ -114,7 +114,7 @@ class Syncer:
 
     # --- pdf-bijlagen van mail van voor het lezen ervan ------------------------
     def read_pdfs(self, c, acc, days=60, limit=25):
-        """Inbox-mail met een pdf die Butler nog niet las: de tekst eruit halen en de mail opnieuw laten samenvatten
+        """Inbox-mail met een pdf die Secretaresse nog niet las: de tekst eruit halen en de mail opnieuw laten samenvatten
         (zo komt een hotelbevestiging die enkel in de pdf staat toch in de agenda). Enkel kleine pdf's."""
         since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         rows = self.db.q("""SELECT id, uid, account, thread_key FROM messages WHERE account=? AND folder='INBOX' AND uid>0
@@ -148,7 +148,7 @@ class Syncer:
             "SELECT id, uid, from_addr, kind, date, message_id FROM messages WHERE account=? AND folder='INBOX' AND uid>0 AND outgoing=0",
             (acc.id,),
         )
-        kept = autopilot.restored(self.db)  # wat je terugzette, laat Butler voortaan staan
+        kept = autopilot.restored(self.db)  # wat je terugzette, laat Secretaresse voortaan staan
         for m in rows:
             if m["message_id"] and m["message_id"] in kept:
                 continue
@@ -366,7 +366,7 @@ class Syncer:
 
     # --- een thread aanvullen als je hem opent ---------------------------------
     def complete_thread(self, acc, tid, limit=50):
-        """Oude mail komt binnen het dagbudget binnen: tot dan kent Butler van een gesprek soms enkel je eigen
+        """Oude mail komt binnen het dagbudget binnen: tot dan kent Secretaresse van een gesprek soms enkel je eigen
         antwoorden (Verzonden is klein) en niet de gearchiveerde antwoorden van de anderen. Een thread die je opent,
         meteen aanvullen uit het archief. Eén keer per thread per opstart. → aantal opgehaalde berichten."""
         folder = acc.folders.get("archive")

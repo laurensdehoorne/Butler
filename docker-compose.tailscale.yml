@@ -1,4 +1,4 @@
-# Butler enkel via Tailscale, met HTTPS (tailscale serve). Geen poort open op de host.
+# Secretaresse enkel via Tailscale, met HTTPS (tailscale serve). Geen poort open op de host.
 # Gebruik: cp .env.example .env  (TS_AUTHKEY invullen)  →  docker compose -f docker-compose.tailscale.yml up -d --build
 services:
   tailscale:

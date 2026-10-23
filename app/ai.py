@@ -350,7 +350,7 @@ class AIWorker:
         return res
 
     def context(self, t, msgs):
-        """Wat je Butler zelf vertelde over deze mail en over de afzender; gaat mee met elke AI-vraag."""
+        """Wat je Secretaresse zelf vertelde over deze mail en over de afzender; gaat mee met elke AI-vraag."""
         name = self.cfg.get("name", "de gebruiker")
         parts = []
         if (t.get("context") or "").strip():

@@ -1,4 +1,4 @@
-"""Slim zoeken: snel in alle mail (SQLite FTS5), en vragen aan Butler ("wanneer vertrekt mijn vlucht naar Lissabon?").
+"""Slim zoeken: snel in alle mail (SQLite FTS5), en vragen aan Secretaresse ("wanneer vertrekt mijn vlucht naar Lissabon?").
 
 Gewoon zoeken
 - Elk woord moet ergens voorkomen (onderwerp, afzender, ontvangers, tekst, namen en tekst van pdf-bijlagen of de
@@ -8,7 +8,7 @@ Gewoon zoeken
 - Niets met alle woorden? Dan wat met de meeste woorden overeenkomt.
 
 Vragen
-- De AI maakt van je vraag zoekwoorden (met synoniemen en vertalingen: factuur, invoice, rekening) en filters, Butler
+- De AI maakt van je vraag zoekwoorden (met synoniemen en vertalingen: factuur, invoice, rekening) en filters, Secretaresse
   zoekt, en de AI antwoordt in een paar zinnen op basis van de mails die hij vond, met verwijzingen ernaar.
 """
 
@@ -175,7 +175,7 @@ def find(db, q, account="", limit=150, any_word=False, words=None, filters=None,
     return [r["tid"] for r in rows[:limit]]
 
 
-# --- vragen aan Butler -------------------------------------------------------------
+# --- vragen aan Secretaresse -------------------------------------------------------------
 PLAN = """Je helpt zoeken in de mailbox van {name}. Vandaag is {today}.
 Zet de vraag om in een zoekopdracht. Antwoord met uitsluitend één JSON-object:
 {{"woorden": [...], "van": "", "aan": "", "na": "", "voor": "", "bijlage": false}}
@@ -185,7 +185,7 @@ Zet de vraag om in een zoekopdracht. Antwoord met uitsluitend één JSON-object:
 - "na"/"voor": "JJJJ-MM-DD" als de vraag een periode noemt (vorige maand, in 2025), anders "".
 - "bijlage": true als het om een bijlage gaat (factuur als pdf, ticket, contract)."""
 
-ANSWER = """Je bent Butler, de mailassistent van {name}. Vandaag is {today}.
+ANSWER = """Je bent Secretaresse, de mailassistent van {name}. Vandaag is {today}.
 Beantwoord de vraag in het Nederlands in hoogstens drie korte zinnen, enkel op basis van de mails hieronder. Verwijs
 naar de mails met hun nummer tussen haken, bv. [2]. Staat het antwoord er niet in, zeg dat dan eerlijk in één zin.
 Verzin niets: geen data, bedragen of namen die niet in de mails staan."""

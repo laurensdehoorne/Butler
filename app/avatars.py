@@ -6,7 +6,7 @@ achtergronddraad afwerkt: de foto verschijnt dan bij de volgende keer laden. Wat
 markering en wordt pas na RETRY_DAYS opnieuw geprobeerd.
 
 Bestandsnamen zijn een HMAC van adres of domein met een eigen geheime sleutel (avatars/.key), zodat niemand door een
-naam te raden kan nagaan of je mail van iemand kreeg. Omdat het domein uit de mail komt, haalt Butler enkel iets op bij
+naam te raden kan nagaan of je mail van iemand kreeg. Omdat het domein uit de mail komt, haalt Secretaresse enkel iets op bij
 publieke adressen, nooit bij een toestel in je eigen netwerk.
 """
 
@@ -41,7 +41,7 @@ MAX_IMAGE = 512 * 1024
 MAX_HTML = 1024 * 1024
 RETRY_DAYS = 14
 NAME_RE = re.compile(r"^[0-9a-f]{32}-(?:logo|face)\.(?:png|jpg|gif|webp|svg|ico)$")
-UA = "Butler/1.0 (self-hosted mailassistent; afzenderlogo's)"
+UA = "Secretaresse/1.0 (self-hosted mailassistent; afzenderlogo's)"
 
 
 class NotPublic(Exception):

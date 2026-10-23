@@ -1,9 +1,9 @@
 """Mail doorsturen, met de bijlagen, en facturen met één tik naar je boekhouding (Billit).
 
-Het boekhoudadres staat in de instellingen (app.invoice_forward) of Butler leert het uit je verstuurde mail: het
-adres waar je het vaakst naartoe stuurt bij een boekhoudpakket (Billit, ...). Een factuur herkent Butler aan de
+Het boekhoudadres staat in de instellingen (app.invoice_forward) of Secretaresse leert het uit je verstuurde mail: het
+adres waar je het vaakst naartoe stuurt bij een boekhoudpakket (Billit, ...). Een factuur herkent Secretaresse aan de
 categorie die de AI gaf of aan een pdf met een factuurachtige naam. Is diezelfde bijlage al naar dat adres gegaan
-(door Butler, of vanuit Spark), dan stelt Butler het niet meer voor.
+(door Secretaresse, of vanuit Spark), dan stelt Secretaresse het niet meer voor.
 """
 
 import json

@@ -32,10 +32,10 @@ DB_PATH = os.environ.get("BUTLER_DB", "/data/butler.db")
 DATA_DIR = os.path.dirname(os.path.abspath(DB_PATH))
 CFG_PATH = os.environ.get("BUTLER_CONFIG", "/config/config.yaml")
 CFG, CFG_SOURCE = config.load(DATA_DIR, CFG_PATH)  # wat in de app bewaard werd, gaat voor
-log.info("configuratie uit %s", CFG_SOURCE or "(nog niets: stel Butler in via Instellingen)")
+log.info("configuratie uit %s", CFG_SOURCE or "(nog niets: stel Secretaresse in via Instellingen)")
 APP = CFG.get("app") or {}
 AI_CFG = CFG.get("ai") or {}
-RESTART = os.environ.get("BUTLER_RESTART", "1") != "0"  # na bewaren herstarten; Docker zet Butler meteen terug op
+RESTART = os.environ.get("BUTLER_RESTART", "1") != "0"  # na bewaren herstarten; Docker zet Secretaresse meteen terug op
 SAVED = {"cfg": CFG}  # laatst bewaarde config; CFG zelf geldt tot de herstart
 db = DB(DB_PATH)
 accounts = {str(a["id"]): Account(a) for a in (CFG.get("accounts") or [])}
@@ -72,7 +72,7 @@ async def lifespan(_):
     yield
 
 
-app = FastAPI(title="Butler", lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(title="Secretaresse", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
 GATEWAY_SECRET = os.environ.get("BUTLER_GATEWAY_SECRET", "")  # achter de gateway (app.gateway): die meldt aan
@@ -113,7 +113,7 @@ _quiet = {"at": 0.0, "addrs": set()}
 def quiet_recipients():
     """Adressen waar je vaak naar stuurt zonder dat er ooit iets terugkomt (Billit, een scanner, een ticketsysteem).
 
-    Butler leert dat uit je eigen mail: QUIET_MIN of meer threads in het voorbije jaar en in geen enkele daarvan een
+    Secretaresse leert dat uit je eigen mail: QUIET_MIN of meer threads in het voorbije jaar en in geen enkele daarvan een
     bericht van dat adres. Eén keer per tien minuten berekend."""
     if time.time() - _quiet["at"] < 600:
         return _quiet["addrs"]
@@ -133,7 +133,7 @@ def quiet_recipients():
 
 
 def _quiet_senders():
-    """Afzenders die jou nooit een antwoord vragen (no-reply): daar zet Butler geen concept voor klaar."""
+    """Afzenders die jou nooit een antwoord vragen (no-reply): daar zet Secretaresse geen concept voor klaar."""
     return {r["addr"] for r in db.q("SELECT addr FROM sender_rules WHERE kind IN ('reclame', 'notificatie')")}
 
 
@@ -242,7 +242,7 @@ def avatar(name: str):
 
 @app.get("/img/{sig}/{enc}")
 def mail_image(sig: str, enc: str):
-    """Een afbeelding uit een mail, door Butler opgehaald; enkel adressen die Butler zelf ondertekend heeft."""
+    """Een afbeelding uit een mail, door Secretaresse opgehaald; enkel adressen die Secretaresse zelf ondertekend heeft."""
     url = images.unpack(sig, enc)
     if not url or not images.enabled:
         raise HTTPException(404)
@@ -291,7 +291,7 @@ def attachment_links(mid, atts):
 @app.get("/att/{sig}/{mid}/{idx}")
 def attachment(sig: str, mid: int, idx: int, e: int = 0):
     """Een bijlage, van de server gehaald op het moment dat je ze opent. Zonder token (een gewone link), maar enkel met
-    een handtekening die Butler zelf gaf en die nog geldig is."""
+    een handtekening die Secretaresse zelf gaf en die nog geldig is."""
     if e < time.time() or not hmac.compare_digest(sig, _att_sig(mid, idx, e)):
         raise HTTPException(404)
     row = db.one("SELECT account FROM messages WHERE id=?", (mid,))
@@ -307,17 +307,17 @@ def attachment(sig: str, mid: int, idx: int, e: int = 0):
     return Response(data, media_type=ctype if inline else "application/octet-stream", headers={
         "Content-Disposition": f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(name)}",
         # sandbox enkel voor downloads: Chrome weigert een pdf in een sandbox te tonen, en pdf en afbeeldingen voeren
-        # toch geen scripts uit in Butler
+        # toch geen scripts uit in Secretaresse
         "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'" + ("" if inline else "; sandbox"),
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, max-age=3600",
     })
 
 
-# --- wat Butler zelf deed --------------------------------------------------------
+# --- wat Secretaresse zelf deed --------------------------------------------------------
 @app.get("/api/ask", dependencies=[Depends(auth)])
 def ask_butler(q: str, account: str = ""):
-    """Een vraag over je mail: Butler zoekt en antwoordt, met de mails waar het antwoord in staat."""
+    """Een vraag over je mail: Secretaresse zoekt en antwoordt, met de mails waar het antwoord in staat."""
     if not ai.enabled:
         raise HTTPException(400, "Zet eerst de AI aan in Instellingen.")
     res = _run(lambda: search.ask(ai, db, q.strip()[:300], account))
@@ -610,7 +610,7 @@ def calendar_feed(tok: str):
     if not ical.valid(avatars.key, tok):
         raise HTTPException(404)
     body = ical.calendar(agenda()["items"], notifier.tz, APP.get("base_url", "").rstrip("/"),
-                         name="Butler" + (f" ({AI_CFG.get('name')})" if AI_CFG.get("name") else ""))
+                         name="Secretaresse" + (f" ({AI_CFG.get('name')})" if AI_CFG.get("name") else ""))
     return Response(body, media_type="text/calendar; charset=utf-8",
                     headers={"Cache-Control": "private, max-age=900", "Content-Disposition": 'inline; filename="butler.ics"'})
 
@@ -771,7 +771,7 @@ def _run(fn):
 
 @app.post("/api/threads/{tid}/complete", dependencies=[Depends(auth)])
 def complete_thread(tid: int):
-    """De berichten van deze thread die Butler nog niet ophaalde (archief binnen het dagbudget): nu meteen."""
+    """De berichten van deze thread die Secretaresse nog niet ophaalde (archief binnen het dagbudget): nu meteen."""
     t = _thread_or_404(tid)
     return {"added": _run(lambda: syncer.complete_thread(_acc(t["account"]), tid))}
 
@@ -808,7 +808,7 @@ KIND_HINTS = re.compile(r"\b(reclame|nieuwsbrief|promo\w*|notificatie\w*|melding
 
 @app.post("/api/threads/{tid}/context", dependencies=[Depends(auth)])
 def set_context(tid: int, body: ContextIn):
-    """Context voor Butler; daarna meteen opnieuw samenvatten (en momenten zoeken als de mail gemarkeerd is)."""
+    """Context voor Secretaresse; daarna meteen opnieuw samenvatten (en momenten zoeken als de mail gemarkeerd is)."""
     t = _thread_or_404(tid)
     text = body.text.strip()[:2000] or None
     _, msgs = thread_messages(db, tid)
@@ -1129,7 +1129,7 @@ class RuleIn(SenderIn):
     action: str | None = None        # none | keep | archive | trash | archive_after
     after_days: int | None = None
     kind: str | None = None          # 'reclame' | 'notificatie' | 'persoonlijk' | 'auto'
-    notify: int | None = None        # 0 = geen meldingen, 1 = altijd, -1 = gewoon (zoals Butler het beslist)
+    notify: int | None = None        # 0 = geen meldingen, 1 = altijd, -1 = gewoon (zoals Secretaresse het beslist)
 
 
 @app.post("/api/senders/rule", dependencies=[Depends(auth)])
@@ -1238,7 +1238,7 @@ def push_forget(did: str):
 
 @app.post("/api/push/test", dependencies=[Depends(auth)])
 def push_test():
-    n = push.send({"title": "Butler", "body": "Meldingen werken. Zo ziet een melding van Butler eruit.",
+    n = push.send({"title": "Secretaresse", "body": "Meldingen werken. Zo ziet een melding van Secretaresse eruit.",
                    "url": "/", "tag": "butler-test"})
     if not n:
         if push.count():
@@ -1260,7 +1260,7 @@ class ConfigIn(BaseModel):
 
 
 def restart_soon():
-    """Na het antwoord stoppen; Docker (restart: unless-stopped) start Butler opnieuw met de nieuwe instellingen."""
+    """Na het antwoord stoppen; Docker (restart: unless-stopped) start Secretaresse opnieuw met de nieuwe instellingen."""
     def stop():
         time.sleep(0.8)
         os.kill(os.getpid(), signal.SIGTERM)
@@ -1356,7 +1356,7 @@ def digest_loop():
             try:
                 text = digest_text()
                 if text:
-                    notifier.send("Butler – opvolgen", text, extra={"type": "digest"}, force=True)
+                    notifier.send("Secretaresse – opvolgen", text, extra={"type": "digest"}, force=True)
             except Exception:
                 log.exception("ochtendsamenvatting mislukt")
         _t.sleep(20)

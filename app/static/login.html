@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Butler">
+<meta name="apple-mobile-web-app-title" content="Secretaresse">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<title>Aanmelden bij Butler</title>
+<title>Aanmelden bij Secretaresse</title>
 <style>
 :root{color-scheme:light dark;--bg:#f2f2f7;--card:#ffffff;--ink:#000000;--muted:#6e6e73;--rule:#d1d1d6;--blue:#007aff;--red:#ff3b30;--field:#ffffff}
 @media (prefers-color-scheme:dark){:root{--bg:#000000;--card:#1c1c1e;--ink:#ffffff;--muted:#98989d;--rule:#38383a;--blue:#0a84ff;--red:#ff453a;--field:#2c2c2e}}
@@ -38,7 +38,7 @@ button:disabled{opacity:.6}
 <main>
   <div class="brand">
     <img src="/icon.svg" alt="" width="76" height="76">
-    <h1>Butler</h1>
+    <h1>Secretaresse</h1>
     <p id="lead">Meld je aan om je mail te zien.</p>
   </div>
   <form id="f" novalidate>
@@ -49,7 +49,7 @@ button:disabled{opacity:.6}
     <button id="go">Aanmelden</button>
     <p class="err" id="err" role="alert"></p>
   </form>
-  <p class="hint" id="hint">Wachtwoord vergeten? De beheerder van Butler kan een nieuw instellen.</p>
+  <p class="hint" id="hint">Wachtwoord vergeten? De beheerder van Secretaresse kan een nieuw instellen.</p>
 </main>
 <script>
 const setup = "{{SETUP}}" === "1";
@@ -69,7 +69,7 @@ document.getElementById("f").addEventListener("submit", async (e) => {
     const r = await fetch("/login", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name, password})});
     if (r.ok) { location.replace("/"); return; }
     err.textContent = (await r.json().catch(() => ({}))).detail || "Aanmelden lukte niet.";
-  } catch { err.textContent = "Geen verbinding met Butler."; }
+  } catch { err.textContent = "Geen verbinding met Secretaresse."; }
   btn.disabled = false;
 });
 document.getElementById("name").focus();

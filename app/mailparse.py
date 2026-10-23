@@ -156,7 +156,7 @@ GENERIC_TYPES = ("application/octet-stream", "binary/octet-stream", "application
 
 def att_type(ctype, name):
     """Het echte type van een bijlage: veel mailprogramma's sturen een pdf als application/octet-stream, en dan
-    tonen iPhone en Butler ze niet. Bij zo'n algemeen type telt de extensie van de bestandsnaam."""
+    tonen iPhone en Secretaresse ze niet. Bij zo'n algemeen type telt de extensie van de bestandsnaam."""
     ctype = (ctype or "").lower()
     if ctype and ctype not in GENERIC_TYPES:
         return ctype

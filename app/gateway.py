@@ -1,13 +1,13 @@
-"""Aanmelden met naam en wachtwoord, met per gebruiker een eigen Butler: eigen database, mailaccounts en instellingen.
+"""Aanmelden met naam en wachtwoord, met per gebruiker een eigen Secretaresse: eigen database, mailaccounts en instellingen.
 
-De gateway staat voor alles. Per gebruiker draait een gewone Butler (app.main) als apart proces op 127.0.0.1, met
-eigen BUTLER_DB en BUTLER_CONFIG; de gateway stuurt elk verzoek door naar de Butler van wie aangemeld is. Zo blijft de
-mail van de ene gebruiker volledig gescheiden van die van de andere, en hoeft Butler zelf niets van gebruikers te weten.
+De gateway staat voor alles. Per gebruiker draait een gewone Secretaresse (app.main) als apart proces op 127.0.0.1, met
+eigen BUTLER_DB en BUTLER_CONFIG; de gateway stuurt elk verzoek door naar de Secretaresse van wie aangemeld is. Zo blijft de
+mail van de ene gebruiker volledig gescheiden van die van de andere, en hoeft Secretaresse zelf niets van gebruikers te weten.
 
 - /data/users.json: de gebruikers, met een scrypt-hash van het wachtwoord. De eerste gebruiker (de beheerder) gebruikt
   de bestaande /data; elke volgende krijgt /data/users/<id>.
 - Een sessie is een ondertekende cookie (HttpOnly, 180 dagen): de app op je beginscherm blijft aangemeld.
-- Een Butler die herstart (na het bewaren van instellingen) start de gateway meteen opnieuw; tot hij klaar is, wachten
+- Een Secretaresse die herstart (na het bewaren van instellingen) start de gateway meteen opnieuw; tot hij klaar is, wachten
   de verzoeken even.
 
 Starten: python -m app.gateway (zo in de Dockerfile).
@@ -144,7 +144,7 @@ def seed_config(data_dir, name):
 
 
 def migrate(users):
-    """Eerste start met de gateway: de bestaande Butler wordt de beheerder, met het oude toegangstoken als wachtwoord."""
+    """Eerste start met de gateway: de bestaande Secretaresse wordt de beheerder, met het oude toegangstoken als wachtwoord."""
     if users.all():
         return
     cfg, _ = config.load(str(DATA), MAIN_CONFIG)
@@ -183,9 +183,9 @@ def verify(cookie, key):
     return uid
 
 
-# --- Butler per gebruiker -------------------------------------------------------
+# --- Secretaresse per gebruiker -------------------------------------------------------
 class Backends:
-    """Start per gebruiker een Butler en zet hem terug op als hij stopt (bv. na het bewaren van instellingen)."""
+    """Start per gebruiker een Secretaresse en zet hem terug op als hij stopt (bv. na het bewaren van instellingen)."""
 
     def __init__(self, users, secret):
         self.users, self.secret = users, secret
@@ -210,7 +210,7 @@ class Backends:
             self.procs[u["id"]] = p
             p.wait()
             if not self.stopping:
-                log.info("Butler van %s stopte (%s); opnieuw starten", u["id"], p.returncode)
+                log.info("Secretaresse van %s stopte (%s); opnieuw starten", u["id"], p.returncode)
                 time.sleep(1)
 
     def stop(self):
@@ -294,7 +294,7 @@ def create_app(users=None, key=None, backends=None, transport=None):
 
     @app.post("/api/share")
     async def share(body: ShareIn, request: Request):
-        """Een kopie van een thread naar de Butler van een andere gebruiker: tekst, HTML en bijlagen."""
+        """Een kopie van een thread naar de Secretaresse van een andere gebruiker: tekst, HTML en bijlagen."""
         u = current(request)
         if not u:
             return need_login(request)
@@ -314,7 +314,7 @@ def create_app(users=None, key=None, backends=None, transport=None):
             except httpx.ConnectError:
                 await asyncio.sleep(0.5)
         else:
-            raise HTTPException(503, f"De Butler van {to['name']} start nog op; probeer zo opnieuw.")
+            raise HTTPException(503, f"De Secretaresse van {to['name']} start nog op; probeer zo opnieuw.")
         if r2.status_code != 200:
             raise HTTPException(502, "Delen mislukte.")
         return {"ok": True, "to": to["name"]}
@@ -368,7 +368,7 @@ def create_app(users=None, key=None, backends=None, transport=None):
         q = request.url.query
         url = f"http://127.0.0.1:{u['port']}/{path}" + (f"?{q}" if q else "")
         body = await request.body()
-        for attempt in range(40):  # Butler start (opnieuw) op: even wachten
+        for attempt in range(40):  # Secretaresse start (opnieuw) op: even wachten
             try:
                 upstream = await client.send(client.build_request(request.method, url, headers=headers, content=body),
                                              stream=True)
@@ -376,7 +376,7 @@ def create_app(users=None, key=None, backends=None, transport=None):
             except httpx.ConnectError:
                 await asyncio.sleep(0.5)
         else:
-            return JSONResponse({"detail": "Butler start op, probeer zo opnieuw."}, status_code=503)
+            return JSONResponse({"detail": "Secretaresse start op, probeer zo opnieuw."}, status_code=503)
         out = {k: v for k, v in upstream.headers.items() if k.lower() not in HOP}
 
         async def stream():
@@ -401,7 +401,7 @@ def main():
     backends = Backends(users, secrets.token_urlsafe(32))
     backends.start_all()
     app = create_app(users, backends=backends)
-    try:  # uvicorn stopt netjes bij SIGTERM; daarna de Butlers van de gebruikers
+    try:  # uvicorn stopt netjes bij SIGTERM; daarna de Secretaresses van de gebruikers
         uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8088")), proxy_headers=True,
                     forwarded_allow_ips="*")
     finally:

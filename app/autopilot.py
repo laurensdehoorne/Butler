@@ -1,13 +1,13 @@
-"""Wat Butler zelf doet, als je het aanzet (Instellingen → Automatisch), en wat hij deed (auto_log).
+"""Wat Secretaresse zelf doet, als je het aanzet (Instellingen → Automatisch), en wat hij deed (auto_log).
 
-Harde regel: Butler beantwoordt en deelt nooit zelf iets. Er is precies één uitzondering: een factuur (pdf) doorsturen
+Harde regel: Secretaresse beantwoordt en deelt nooit zelf iets. Er is precies één uitzondering: een factuur (pdf) doorsturen
 naar je boekhouding (Billit), en dat enkel als je het aanzet. Wat hij zelf mag:
 - Facturen: een nieuwe mail met een factuur (pdf) gaat meteen naar je boekhouding (zie forward.py), nooit naar iemand anders.
 - Reclame: reclame die een dag in je inbox staat, gaat naar het archief (nooit naar de prullenbak).
-- Antwoorden: bij nieuwe mail waar de AI een antwoord van jou verwacht, zet Butler een concept klaar in je
-  Concepten-map. Versturen doe jij, in Butler of in Spark, na het nalezen.
+- Antwoorden: bij nieuwe mail waar de AI een antwoord van jou verwacht, zet Secretaresse een concept klaar in je
+  Concepten-map. Versturen doe jij, in Secretaresse of in Spark, na het nalezen.
 
-Enkel mail die binnenkomt nadat je iets aanzette, nooit je oude mail. Alles komt in het logboek "Wat Butler deed";
+Enkel mail die binnenkomt nadat je iets aanzette, nooit je oude mail. Alles komt in het logboek "Wat Secretaresse deed";
 opruimen en concepten kun je daar terugdraaien, een doorgestuurde factuur niet (die is verstuurd).
 """
 
@@ -152,7 +152,7 @@ def undo(db, accounts, entry_id):
 
 
 def restored(db):
-    """Message-ID's die je na het opruimen terugzette: die ruimt Butler niet opnieuw op."""
+    """Message-ID's die je na het opruimen terugzette: die ruimt Secretaresse niet opnieuw op."""
     out = set()
     for r in db.q("SELECT data FROM auto_log WHERE kind='opruimen' AND undone_at IS NOT NULL"):
         out |= set(json.loads(r["data"] or "{}").get("message_ids") or [])
@@ -184,7 +184,7 @@ def restore(acc, folder, mids):
 
 
 def delete_draft(acc, folder, draft_id):
-    """Het concept dat Butler klaarzette weer weghalen (enkel dat ene concept, op zijn Message-ID)."""
+    """Het concept dat Secretaresse klaarzette weer weghalen (enkel dat ene concept, op zijn Message-ID)."""
     if not folder or not draft_id:
         return
 
