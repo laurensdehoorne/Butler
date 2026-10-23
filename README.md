@@ -183,6 +183,17 @@ De sleutels zijn dezelfde als in [`config.example.yaml`](config.example.yaml). B
 | `accounts[].aliases` | Extra adressen die ook als "jij" gelden |
 | `accounts[].provider` | `gmail`, `icloud` of `custom` (dan `imap_host`, `smtp_host`, … zelf invullen) |
 
+## Automatisch bijwerken
+
+`deploy/update.sh` haalt nieuwe versies van `main` op en bouwt Butler enkel opnieuw als er iets veranderd is (met of zonder de Tailscale-container, zoals het nu draait). Via cron, elk kwartier:
+
+```bash
+apt-get install -y cron
+echo '*/15 * * * * root /opt/butler/deploy/update.sh >> /var/log/butler-update.log 2>&1' > /etc/cron.d/butler-update
+```
+
+Wat er gebeurde, staat in `/var/log/butler-update.log`. Tijdens het herbouwen is Butler enkele seconden weg; de app toont dan „Butler wordt bijgewerkt”.
+
 ## Ontwikkelen
 
 ```bash
