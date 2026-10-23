@@ -178,3 +178,10 @@ def test_trash_archived_advertising(app, client, acc):
     assert [c.args for c in imap.select_folder.call_args_list] == [("INBOX",), ("Archive",)]
     assert [c.args for c in imap.move.call_args_list] == [([10], "Deleted Messages"), ([30], "Deleted Messages")]
     assert [m["subject"] for m in app.db.q("SELECT subject FROM messages WHERE folder='Archive'")] == ["Foto's"]
+
+
+def test_context_saying_notification_sorts_the_sender(app, client, acc):
+    tid, _ = put(acc, "INBOX", 1, raw("AliExpress <transaction@notice.aliexpress.com>", "Pakket onderweg", "<a1@x>"))
+    client.post(f"/api/threads/{tid}/context", headers=H, json={"text": "Label als notificatie", "sender": True})
+    assert app.db.one("SELECT kind FROM messages")["kind"] == "notificatie"
+    assert client.get(f"/api/threads/{tid}", headers=H).json()["kind"] == "notificatie"

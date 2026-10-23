@@ -724,6 +724,9 @@ class ContextIn(BaseModel):
     sender: bool = False  # voor alle mail van deze afzender in plaats van enkel deze mail
 
 
+KIND_HINTS = re.compile(r"\b(reclame|nieuwsbrief|promo\w*|notificatie\w*|melding(en)?|automatische mail)\b", re.I)
+
+
 @app.post("/api/threads/{tid}/context", dependencies=[Depends(auth)])
 def set_context(tid: int, body: ContextIn):
     """Context voor Butler; daarna meteen opnieuw samenvatten (en momenten zoeken als de mail gemarkeerd is)."""
@@ -734,7 +737,13 @@ def set_context(tid: int, body: ContextIn):
     if body.sender:
         if not incoming:
             raise HTTPException(400, "Deze mail heeft geen afzender behalve jezelf.")
-        upsert_rule(db, t["account"], incoming[-1]["from_addr"], context=text)
+        addr = incoming[-1]["from_addr"]
+        upsert_rule(db, t["account"], addr, context=text)
+        # "dit is reclame" of "label als notificatie": dan ook zo sorteren, niet enkel in de samenvatting
+        kind = KIND_HINTS.search(text or "")
+        if kind:
+            kind = "reclame" if kind.group(0).lower().startswith(("reclame", "nieuwsbrief", "promo")) else "notificatie"
+            sender_set_rule(RuleIn(account=t["account"], addr=addr, kind=kind))
     else:
         db.x("UPDATE threads SET context=? WHERE tid=?", (text, tid))
     if ai.active_for(t["account"]):

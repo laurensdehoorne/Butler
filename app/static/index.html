@@ -1132,6 +1132,10 @@ function renderThread(){
     `<button data-a="forward">${I('fwd')}Doorsturen…</button>`,
     (S.me?.users || []).length > 1 ? `<button data-a="share">${I('share')}Delen met…</button>` : '',
     `<button data-a="tags">${I('tag')}Tags bewerken</button>`,
+    // soort van de afzender: zo sorteert Butler alle mail van hem (ook in Opruimen)
+    ...(t.sender ? [['notificatie', 'bell', 'Is een notificatie'], ['reclame', 'tag', 'Is reclame'], ['persoonlijk', 'inbox', 'Is persoonlijke mail']]
+      .filter(([k]) => k !== (t.kind || 'persoonlijk'))
+      .map(([k, icon, label]) => `<button data-a="kind-${k}">${I(icon)}${label}</button>`) : []),
     `<button data-a="dossier-choose">${I('folder')}${(t.dossiers || []).length ? 'Ander dossier…' : 'In een dossier zetten…'}</button>`,
     (t.dossiers || []).length ? `<button data-a="dossier-remove">${I('folder')}Uit ${t.dossiers.length > 1 ? 'de dossiers' : 'het dossier'} halen</button>` : '',
     t.in_inbox ? `<hr><button data-a="trash" class="danger">${I('trash')}Naar de prullenbak</button>` : ''
@@ -1333,6 +1337,11 @@ async function doAction(a, btn){
       btn.innerHTML = I('fwd') + 'Doorsturen…';
       const r = await post(p+'/forward', {message_id: inv.message_id, to: [inv.to]});
       toast(`Doorgestuurd naar ${inv.to}` + (r.attachments ? ` (${r.attachments} bijlage${r.attachments > 1 ? 'n' : ''})` : ''));
+      S.thread = await api(p); return renderThread(); }
+    if(a.startsWith('kind-')){
+      const kind = a.slice(5);
+      await post('/api/senders/rule', {account: t.account, addr: t.sender.addr, kind});
+      toast(`Alle mail van ${t.sender.name}: ${kind === 'persoonlijk' ? 'persoonlijk' : kind}`);
       S.thread = await api(p); return renderThread(); }
     if(a==='share'){
       const recent = sharedWith(), rank = u => { const i = recent.indexOf(u.id); return i < 0 ? 99 : i; };
