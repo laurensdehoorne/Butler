@@ -2,16 +2,18 @@ import hmac
 import json
 import logging
 import os
+import signal
+import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from . import actions, costs, moments
+from . import actions, config, costs, moments
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .ai import PROVIDERS, AIError, AIWorker
@@ -23,14 +25,15 @@ from .sync import Syncer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("butler")
 
-CFG_PATH = os.environ.get("BUTLER_CONFIG", "/config/config.yaml")
-with open(CFG_PATH, encoding="utf-8") as f:
-    CFG = yaml.safe_load(f) or {}
-APP = CFG.get("app") or {}
-AI_CFG = CFG.get("ai") or {}
-
 DB_PATH = os.environ.get("BUTLER_DB", "/data/butler.db")
 DATA_DIR = os.path.dirname(os.path.abspath(DB_PATH))
+CFG_PATH = os.environ.get("BUTLER_CONFIG", "/config/config.yaml")
+CFG, CFG_SOURCE = config.load(DATA_DIR, CFG_PATH)  # wat in de app bewaard werd, gaat voor
+log.info("configuratie uit %s", CFG_SOURCE or "(nog niets: stel Butler in via Instellingen)")
+APP = CFG.get("app") or {}
+AI_CFG = CFG.get("ai") or {}
+RESTART = os.environ.get("BUTLER_RESTART", "1") != "0"  # na bewaren herstarten; Docker zet Butler meteen terug op
+SAVED = {"cfg": CFG}  # laatst bewaarde config; CFG zelf geldt tot de herstart
 db = DB(DB_PATH)
 accounts = {str(a["id"]): Account(a) for a in (CFG.get("accounts") or [])}
 push = Push(db, DATA_DIR, (CFG.get("notify") or {}).get("push_contact", ""))
@@ -635,6 +638,69 @@ def push_test():
     if not n:
         raise HTTPException(400, "Geen toestel met meldingen aan.")
     return {"ok": True, "sent": n}
+
+
+# --- configuratie ------------------------------------------------------------
+@app.get("/api/config", dependencies=[Depends(auth)])
+def get_config():
+    return {"sections": config.SECTIONS, "account_fields": config.ACCOUNT_FIELDS, **config.public(SAVED["cfg"]),
+            "saved_in_app": SAVED["cfg"] is not CFG or CFG_SOURCE == str(config.data_path(DATA_DIR)), "restarts": RESTART}
+
+
+class ConfigIn(BaseModel):
+    values: dict | None = None
+    accounts: list[dict] | None = None
+
+
+def restart_soon():
+    """Na het antwoord stoppen; Docker (restart: unless-stopped) start Butler opnieuw met de nieuwe instellingen."""
+    def stop():
+        time.sleep(0.8)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=stop, daemon=True, name="herstart").start()
+
+
+@app.put("/api/config", dependencies=[Depends(auth)])
+def put_config(body: ConfigIn):
+    try:
+        new = config.validate(config.apply(SAVED["cfg"], body.values, body.accounts))
+    except config.ConfigError as e:
+        raise HTTPException(400, {"message": "Niet bewaard: controleer de aangeduide velden.", "errors": e.errors})
+    path = config.save(new, DATA_DIR)
+    SAVED["cfg"] = new
+    log.info("configuratie bewaard in %s", path)
+    if RESTART:
+        restart_soon()
+    return {"ok": True, "restarting": RESTART}
+
+
+class AccountTestIn(BaseModel):
+    account: dict
+
+
+@app.post("/api/config/test-account", dependencies=[Depends(auth)])
+def test_account(body: AccountTestIn):
+    """Aanmelden bij IMAP met deze gegevens (een leeg wachtwoord = het bewaarde), zonder iets te wijzigen."""
+    try:
+        cfg = config.apply({"accounts": SAVED["cfg"].get("accounts") or []}, accounts=[body.account])["accounts"][0]
+        acc = Account(cfg)
+    except (config.ConfigError, KeyError) as e:
+        raise HTTPException(400, f"Onvolledig: {e}")
+    if not acc.password:
+        raise HTTPException(400, "Vul een app-wachtwoord in.")
+    if not acc.imap_host:
+        raise HTTPException(400, "Vul de IMAP-server in.")
+    try:
+        from imapclient import IMAPClient
+
+        c = IMAPClient(acc.imap_host, port=acc.imap_port, ssl=True, timeout=20)
+        c.login(acc.user, acc.password)
+        n = len(c.list_folders())
+        c.logout()
+    except Exception as e:
+        raise HTTPException(400, f"Aanmelden lukt niet: {str(e)[:200]}")
+    return {"ok": True, "folders": n}
 
 
 # --- kosten ----------------------------------------------------------------

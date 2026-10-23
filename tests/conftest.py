@@ -22,7 +22,7 @@ notify: {mode: all, webpush: true}
 accounts:
   - {id: icloud, name: iCloud, provider: icloud, email: me@icloud.com, display_name: Me, password: x}
 """, encoding="utf-8")
-os.environ.update(BUTLER_CONFIG=f"{_tmp}/config.yaml", BUTLER_DB=f"{_tmp}/butler.db", BUTLER_NO_SYNC="1")
+os.environ.update(BUTLER_CONFIG=f"{_tmp}/config.yaml", BUTLER_DB=f"{_tmp}/butler.db", BUTLER_NO_SYNC="1", BUTLER_RESTART="0")
 
 import app.main as M  # noqa: E402
 from app.mailparse import parse  # noqa: E402
