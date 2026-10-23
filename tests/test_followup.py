@@ -163,3 +163,18 @@ def test_ai_decides_whether_your_last_mail_waits(app, client, acc):
     # je schrijft opnieuw: dan telt het oordeel over de vorige mail niet meer
     put(acc, "Sent Messages", 5, raw("Me <me@icloud.com>", "Re: Test", "<t2@me>", to="tandarts@t.be", days=9, irt="<t1@me>"))
     assert len(client.get("/api/followup", headers=H).json()["waiting_on_them"]) == 2
+
+
+def test_trash_archived_advertising(app, client, acc):
+    put(acc, "INBOX", 10, raw("Shop <news@shop.be>", "Promo", "<p1@x>", unsub="<https://shop.be/u>"))
+    put(acc, "Archive", 30, raw("Shop <news@shop.be>", "Oude promo", "<p2@x>", unsub="<https://shop.be/u>"))
+    put(acc, "Archive", 31, raw("Ann <ann@y.be>", "Foto's", "<f@x>"))
+    assert client.get("/api/senders?kind=reclame", headers=H).json()["archived"] == 1
+    imap = mock.MagicMock()
+    imap.has_capability.return_value = True
+    with mock.patch.object(acc, "run_imap", side_effect=lambda fn: fn(imap)):
+        r = client.post("/api/senders/archive-kind", headers=H, json={"kind": "reclame", "role": "trash", "archived": True}).json()
+    assert r["moved"] == 2
+    assert [c.args for c in imap.select_folder.call_args_list] == [("INBOX",), ("Archive",)]
+    assert [c.args for c in imap.move.call_args_list] == [([10], "Deleted Messages"), ([30], "Deleted Messages")]
+    assert [m["subject"] for m in app.db.q("SELECT subject FROM messages WHERE folder='Archive'")] == ["Foto's"]

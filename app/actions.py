@@ -277,14 +277,21 @@ def move_sender(db, acc, addr, role):
     return _move_rows(db, acc, rows, role)
 
 
-def move_kind(db, acc, kind, role):
-    """Alle reclame (of notificaties) uit de inbox in één keer: één IMAP-verplaatsing per account."""
-    rows = db.q("SELECT id, uid FROM messages WHERE account=? AND kind=? AND folder='INBOX' AND uid>0 AND outgoing=0",
-                (acc.id, kind))
-    return _move_rows(db, acc, rows, role)
+def move_kind(db, acc, kind, role, archived=False):
+    """Alle reclame (of notificaties) uit de inbox in één keer: één IMAP-verplaatsing per map. Met archived ook
+    wat al in het archief staat (enkel naar de prullenbak: archiveren is het daar al)."""
+    moved = _move_rows(db, acc, kind_rows(db, acc, kind, "INBOX"), role)
+    if archived and role == "trash" and acc.folders.get("archive"):
+        moved += _move_rows(db, acc, kind_rows(db, acc, kind, acc.folders["archive"]), role, acc.folders["archive"])
+    return moved
 
 
-def _move_rows(db, acc, rows, role):
+def kind_rows(db, acc, kind, folder):
+    return db.q("SELECT id, uid FROM messages WHERE account=? AND kind=? AND folder=? AND uid>0 AND outgoing=0",
+                (acc.id, kind, folder))
+
+
+def _move_rows(db, acc, rows, role, src="INBOX"):
     if not rows:
         return 0
     dest = acc.folders.get(role)
@@ -293,7 +300,7 @@ def _move_rows(db, acc, rows, role):
     uids = [r["uid"] for r in rows]
 
     def fn(c):
-        c.select_folder("INBOX")
+        c.select_folder(src)
         if c.has_capability("MOVE"):
             c.move(uids, dest)
         else:

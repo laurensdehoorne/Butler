@@ -109,3 +109,17 @@ def test_chosen_dossier_sticks(app, client, acc):
     assert "Reisboeking 1480945" not in client.get("/api/dossier-names", headers=H).json()["names"]  # leeg: weg
     assert D.assign(app.db, car, ["Iets anders"]) == []  # de AI verandert je keuze niet
     assert client.post(f"/api/threads/{car}/dossier", headers=H, json={"name": " "}).status_code == 400
+
+
+def test_close_dossier_and_reopen_on_news(app, client, acc):
+    a, _ = put(acc, "INBOX", 1, raw("KBC <k@kbc.be>", "Brievenbus", "<b1@x>", days=3))
+    D.assign(app.db, a, ["Aanrijding brievenbus"])
+    did = D.of_thread(app.db, a)[0]["id"]
+    d = client.post(f"/api/dossiers/{did}/close", headers=H).json()
+    assert d["dossier"]["closed_at"] and d["threads"][0]["done"]
+    assert client.get("/api/dossiers", headers=H).json()["dossiers"][0]["closed"]
+    D.assign(app.db, a, ["Aanrijding brievenbus"])  # opnieuw bekeken, niets nieuws: blijft afgehandeld
+    assert D.get(app.db, did)["closed_at"]
+    b, _ = put(acc, "INBOX", 2, raw("KBC <k@kbc.be>", "Brievenbus: uitbetaling", "<b2@x>", days=-1))
+    D.assign(app.db, b, ["Aanrijding brievenbus"])
+    assert not D.get(app.db, did)["closed_at"]

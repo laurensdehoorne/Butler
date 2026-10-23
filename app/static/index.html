@@ -303,6 +303,10 @@ dialog.sheet.center .shead{padding-top:14px}
 .shead{position:sticky;top:0;z-index:2;padding:calc(env(safe-area-inset-top) + 10px) max(16px,env(safe-area-inset-right)) 14px max(16px,env(safe-area-inset-left));background:var(--jacket);-webkit-backdrop-filter:saturate(1.8) blur(20px);backdrop-filter:saturate(1.8) blur(20px);border-bottom:1px solid var(--rule)}
 @media (min-width:900px){.shead{padding-top:16px}}
 .shead .top{display:flex;align-items:flex-start;gap:8px}
+.dclose{margin:22px auto 0;width:auto}
+.dclosed{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:.875rem}
+.dclosed .i{width:15px;height:15px}
+.items.closed .item{opacity:.6}
 .backbtn{display:inline-flex;align-items:center;gap:2px;min-height:44px;margin-left:-10px;padding:0 10px 0 4px;border:0;background:transparent;color:var(--lapel);font-size:1.0625rem;border-radius:10px}
 .backbtn .i{width:24px;height:24px;stroke-width:2.2}
 .shead .top.bar{align-items:center}
@@ -856,19 +860,23 @@ async function load(animate=false){
       const d = await api(`/api/dossiers/${S.dossier}`);
       const due = d.moments.filter(c => new Date(c.moment.at) <= new Date()), later = d.moments.filter(c => new Date(c.moment.at) > new Date());
       html = `<button class="backbtn" data-dossier-back>${I('back')}<span>${TAB_NAMES[S.tab]}</span></button>
-        <div class="sec-h"><h2>${esc(d.dossier.name)}</h2><span class="num">${d.threads.length}</span></div>`
+        <div class="sec-h"><h2>${esc(d.dossier.name)}</h2><span class="num">${d.threads.length}</span>
+          ${d.dossier.closed_at ? `<span class="dclosed">${I('check')}Afgehandeld</span>` : ''}</div>`
         + (due.length ? `<section class="now"><div class="items">${due.map(c => momentCard(c, true)).join('')}</div></section>` : '')
         + (later.length ? `<div class="items">${later.map(c => momentCard(c, false)).join('')}</div>` : '')
-        + `<div class="items">${vis(d.threads).map(c => card(c, 'dossier')).join('')}</div>`;
+        + `<div class="items">${vis(d.threads).map(c => card(c, 'dossier')).join('')}</div>`
+        + `<button class="btn dclose" data-dossier-state="${d.dossier.closed_at ? 'reopen' : 'close'}">${I(d.dossier.closed_at ? 'undo' : 'check')}${d.dossier.closed_at ? 'Dossier heropenen' : 'Dossier afhandelen'}</button>`;
     } else if(S.tab==='dossiers'){
       const d = await api('/api/dossiers');
       html = !d.dossiers.length ? empty('Nog geen dossiers', 'Butler groepeert mail die over dezelfde zaak gaat: een reis, een verbouwing, een schadegeval.', I('folder'))
-        : `<div class="items" style="margin-top:12px">${d.dossiers.map(x => `<a class="item" href="#" data-dossier="${x.id}">
+        : [d.dossiers.filter(x => !x.closed), d.dossiers.filter(x => x.closed)].map((list, closed) => !list.length ? ''
+          : (closed ? `<div class="sec-h"><h2>Afgehandeld</h2><span class="num">${list.length}</span></div>` : '')
+          + `<div class="items${closed ? ' closed' : ''}" style="margin-top:12px">${list.map(x => `<a class="item" href="#" data-dossier="${x.id}">
             <span class="av me" aria-hidden="true">${I('folder')}</span>
             <div class="c-main"><div class="c-top"><span class="who"><b>${esc(x.name)}</b></span><time>${esc(when(x.last))}</time></div>
               <div class="sum">${x.n} mail${x.n > 1 ? 's' : ''}</div>
               ${x.next ? `<div class="m-when">${esc(x.next.title)}, ${esc(new Date(x.next.at).toLocaleDateString('nl-BE', {weekday:'short', day:'numeric', month:'short'}))}</div>` : ''}
-            </div></a>`).join('')}</div>`;
+            </div></a>`).join('')}</div>`).join('');
     } else if(S.tab==='agenda'){
       const d = await api(`/api/agenda?account=${acc}`);
       html = agendaView(vis(d.items));
@@ -888,6 +896,7 @@ async function load(animate=false){
       html = `<div class="sec-h"><h2>Afzenders</h2><span class="num">${d.senders.length}</span><span class="hint">${inInbox} mails in je inbox</span></div>`
         + (kindIn ? `<div class="actions" style="margin:4px 0 8px"><button class="btn primary" data-s="archive-kind">${I('archive')}Alle ${S.cfilter === 'reclame' ? 'reclame' : 'notificaties'} archiveren (${kindIn})</button>
             <button class="btn danger" data-s="trash-kind">${I('trash')}Verwijderen</button></div>` : '')
+        + (S.cfilter !== 'alle' && d.archived ? `<div class="actions" style="margin:4px 0 8px"><button class="btn danger" data-s="trash-archived">${I('trash')}${d.archived} gearchiveerde ${S.cfilter === 'reclame' ? 'reclame' : 'notificaties'} verwijderen</button></div>` : '')
         + (dflt ? `<div class="note">Zonder regel wordt na ${dflt} dagen automatisch gearchiveerd.</div>` : '')
         + (d.senders.length ? `<div class="items">${d.senders.map((x,i)=>senderCard(x,i)).join('')}</div>`
           : empty('Niets op te ruimen', 'Geen afzenders in deze categorie.', I('check')));
@@ -952,6 +961,15 @@ function senderCard(x, i){
 }
 
 async function senderAction(a, i, btn){
+  if(a === 'trash-archived'){
+    const what = S.cfilter === 'reclame' ? 'reclame' : 'notificaties';
+    if(!await ask({title:`Gearchiveerde ${what} verwijderen?`, msg:`Alle ${what} in je archief (en in je inbox) gaat naar de prullenbak.`, ok:'Verwijderen', danger:true})) return;
+    toast(`Gearchiveerde ${what} worden verwijderd`);
+    post('/api/senders/archive-kind', {kind: S.cfilter, account: S.account, role: 'trash', archived: true})
+      .then(r => toast(`${r.moved} verwijderd`))
+      .catch(e => toast('Verwijderen mislukt: ' + e.message)).finally(() => load());
+    return;
+  }
   if(a === 'archive-kind' || a === 'trash-kind'){
     const n = S.senders.reduce((t, x) => t + x.in_inbox, 0), what = S.cfilter === 'reclame' ? 'reclame' : 'notificaties';
     const trash = a === 'trash-kind';
@@ -1258,11 +1276,17 @@ async function doAction(a, btn){
 }
 
 /* ---------- events ---------- */
-document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
+document.addEventListener('click', async e=>{
+  const el = e.target.closest('[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
   if(el.hasAttribute('data-quick-open')){ S.quick = true; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-quick-go')) return quickGo(el);
+  if(el.dataset.dossierState){
+    const st = el.dataset.dossierState; el.disabled = true;
+    try{ await post(`/api/dossiers/${S.dossier}/${st}`); toast(st === 'close' ? 'Dossier afgehandeld' : 'Dossier heropend'); }
+    catch(err){ toast(err.message || 'Mislukt'); }
+    return load(true);
+  }
   if(el.dataset.dossier){ e.preventDefault(); if(S.thread) closeThread(); S.dossier = +el.dataset.dossier; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-dossier-back')){ S.dossier = null; S.quick = false; return load(true); }
   if(el.dataset.tab){ if(S.tab!==el.dataset.tab || S.dossier || S.quick){ S.tab=el.dataset.tab; S.dossier = null; S.quick = false; load(true); } }

@@ -666,16 +666,16 @@ def set_context(tid: int, body: ContextIn):
 def list_dossiers():
     """Alle dossiers, met de meest recente activiteit eerst: hoeveel mails, wanneer de laatste, wat eraan komt."""
     now = _now().isoformat()
-    rows = db.q("""SELECT d.id, d.name, COUNT(DISTINCT td.tid) AS n, MAX(m.date) AS last
+    rows = db.q("""SELECT d.id, d.name, d.closed_at, COUNT(DISTINCT td.tid) AS n, MAX(m.date) AS last
                    FROM dossiers d JOIN thread_dossiers td ON td.dossier_id=d.id JOIN threads t ON t.tid=td.tid
                    JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
-                   GROUP BY d.id ORDER BY last DESC""")
+                   GROUP BY d.id ORDER BY d.closed_at IS NOT NULL, last DESC""")
     out = []
     for r in rows:
         nxt = db.one("""SELECT mo.title, COALESCE(mo.event_at, mo.until) AS at FROM moments mo
                         JOIN thread_dossiers td ON td.tid=mo.tid WHERE td.dossier_id=? AND mo.until > ?
                         ORDER BY at LIMIT 1""", (r["id"], now))
-        out.append({"id": r["id"], "name": r["name"], "n": r["n"], "last": r["last"],
+        out.append({"id": r["id"], "name": r["name"], "n": r["n"], "last": r["last"], "closed": bool(r["closed_at"]),
                     "next": dict(nxt) if nxt else None})
     return {"dossiers": out}
 
@@ -697,6 +697,22 @@ def get_dossier(did: int):
                                                                 (_now().isoformat(),))]) if r["tid"] in tids]
     by_tid = {c["tid"]: c for c in cards}
     return {"dossier": d, "threads": cards, "moments": [{**by_tid[r["tid"]], "moment": _moment(r)} for r in upcoming]}
+
+
+@app.post("/api/dossiers/{did}/close", dependencies=[Depends(auth)])
+def close_dossier(did: int):
+    if not dossiers.get(db, did):
+        raise HTTPException(404, "dossier niet gevonden")
+    dossiers.close(db, did)
+    return get_dossier(did)
+
+
+@app.post("/api/dossiers/{did}/reopen", dependencies=[Depends(auth)])
+def reopen_dossier(did: int):
+    if not dossiers.get(db, did):
+        raise HTTPException(404, "dossier niet gevonden")
+    dossiers.reopen(db, did)
+    return get_dossier(did)
 
 
 class DossierIn(BaseModel):
@@ -885,7 +901,10 @@ def senders(kind: str = "alle", account: str = ""):
         })
     out.sort(key=lambda x: (-x["in_inbox"], -x["n"]))
     cl = APP.get("cleanup") or {}
-    return {"senders": out[:300], "defaults": {"notificatie_days": int(cl.get("notificatie_days", 0) or 0),
+    # al gearchiveerde reclame of notificaties: kan in één keer naar de prullenbak
+    archived = sum(len(actions.kind_rows(db, a, kind, a.folders["archive"])) for a in accounts.values()
+                   if kind in ("reclame", "notificatie") and a.folders.get("archive") and (not account or a.id == account))
+    return {"senders": out[:300], "archived": archived, "defaults": {"notificatie_days": int(cl.get("notificatie_days", 0) or 0),
                                                "reclame_days": int(cl.get("reclame_days", 0) or 0)}}
 
 
@@ -941,6 +960,7 @@ class KindIn(BaseModel):
     kind: str
     account: str = ""
     role: str = "archive"  # of "trash"
+    archived: bool = False  # ook wat al in het archief staat (enkel met trash)
 
 
 @app.post("/api/senders/archive-kind", dependencies=[Depends(auth)])
@@ -948,7 +968,7 @@ def sender_archive_kind(body: KindIn):
     if body.kind not in ("reclame", "notificatie") or body.role not in ("archive", "trash"):
         raise HTTPException(400, "ongeldige soort")
     targets = [_acc(body.account)] if body.account else list(accounts.values())
-    moved = sum(_run(lambda a=a: actions.move_kind(db, a, body.kind, body.role)) for a in targets)
+    moved = sum(_run(lambda a=a: actions.move_kind(db, a, body.kind, body.role, body.archived)) for a in targets)
     return {"ok": True, "moved": moved}
 
 

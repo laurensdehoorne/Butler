@@ -11,6 +11,9 @@ Een nummer dat in veel mails staat (een ondernemingsnummer in een handtekening) 
 thread_dossiers.source: 'ai' (gekozen door de AI, wordt vervangen bij een nieuwe samenvatting) of 'ref' (gekoppeld via
 een referentienummer). threads.dossier_ai: 0 = nog niet bepaald, 1 = bepaald, -1 = door jou uit de dossiers gehaald
 (de AI en de nummers zetten de thread er dan niet meer in).
+
+Een dossier kan afgehandeld zijn (dossiers.closed_at): de mails erin staan dan op klaar. Komt er nieuwe mail over
+dezelfde zaak, dan gaat het dossier vanzelf weer open.
 """
 
 import json
@@ -88,6 +91,7 @@ def assign(db, tid, names_):
     now = datetime.now(timezone.utc).isoformat()
     db.x("DELETE FROM thread_dossiers WHERE tid=?", (tid,))
     ids = [_id(db, n, now) for n in names_ or []]
+    _reopen_on_news(db, tid, ids)
     for did in ids:
         db.x("INSERT OR IGNORE INTO thread_dossiers(tid, dossier_id, source) VALUES(?,?,'ai')", (tid, did))
     db.x("UPDATE threads SET dossier_ai=1 WHERE tid=?", (tid,))
@@ -145,6 +149,26 @@ def choose(db, tid, name):
     return did
 
 
+def close(db, did):
+    """Afgehandeld: het dossier zakt naar onderen en alle mail erin staat op klaar."""
+    db.x("UPDATE dossiers SET closed_at=? WHERE id=?", (datetime.now(timezone.utc).isoformat(), did))
+    db.x("UPDATE threads SET done=1 WHERE tid IN (SELECT tid FROM thread_dossiers WHERE dossier_id=?)", (did,))
+
+
+def reopen(db, did):
+    db.x("UPDATE dossiers SET closed_at=NULL WHERE id=?", (did,))
+
+
+def _reopen_on_news(db, tid, ids):
+    """Nieuwe mail in een afgehandeld dossier (later dan het afronden): dan loopt de zaak weer."""
+    last = db.one("""SELECT MAX(m.date) AS d FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                     WHERE t.tid=?""", (tid,))
+    for did in ids:
+        d = db.one("SELECT closed_at FROM dossiers WHERE id=?", (did,))
+        if d and d["closed_at"] and last and last["d"] and last["d"] > d["closed_at"]:
+            reopen(db, did)
+
+
 def remove(db, tid):
     db.x("DELETE FROM thread_dossiers WHERE tid=?", (tid,))
     db.x("UPDATE threads SET dossier_ai=-1 WHERE tid=?", (tid,))
@@ -156,10 +180,10 @@ def _prune(db):
 
 
 def of_thread(db, tid):
-    return [dict(r) for r in db.q("""SELECT d.id, d.name FROM thread_dossiers td JOIN dossiers d ON d.id=td.dossier_id
+    return [dict(r) for r in db.q("""SELECT d.id, d.name, d.closed_at FROM thread_dossiers td JOIN dossiers d ON d.id=td.dossier_id
                                      WHERE td.tid=? ORDER BY d.last_at DESC""", (tid,))]
 
 
 def get(db, did):
-    r = db.one("SELECT id, name FROM dossiers WHERE id=?", (did,))
+    r = db.one("SELECT id, name, closed_at FROM dossiers WHERE id=?", (did,))
     return dict(r) if r else None
