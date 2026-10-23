@@ -64,3 +64,56 @@ def test_learns_recipients_that_never_answer(app, client, acc):
     assert app.quiet_recipients() == {"facturen@billit.be"}
     subjects = {c["subject"] for c in client.get("/api/followup", headers=H).json()["waiting_on_them"]}
     assert subjects == {"Vraag 0", "Vraag 1", "Offerte 0", "Offerte 1"}
+
+
+def test_waiting_on_me_most_important_first(app, client, acc):
+    from datetime import datetime, timedelta, timezone
+
+    from app import moments as MO
+
+    plain, _ = put(acc, "INBOX", 1, raw("A <a@x.be>", "Gewoon", "<g1@x>", days=9))
+    urgent, _ = put(acc, "INBOX", 2, raw("B <b@x.be>", "Dringend", "<d1@x>", days=1))
+    concert, _ = put(acc, "INBOX", 3, raw("C <c@x.be>", "Concert", "<c1@x>", days=1), flagged=True)
+    flight, _ = put(acc, "INBOX", 4, raw("D <d@x.be>", "Vlucht", "<v1@x>", days=2), flagged=True)
+    flagged_only, _ = put(acc, "INBOX", 5, raw("E <e@x.be>", "Gemarkeerd", "<e1@x>", days=8), flagged=True)
+    app.db.x("UPDATE threads SET priority='hoog' WHERE tid=?", (urgent,))
+    now = datetime.now(timezone.utc)
+    for tid, days in ((flight, 3), (concert, 200)):
+        MO.save(app.db, tid, [{"kind": "x", "title": "t", "detail": "", "at": (now + timedelta(days=days)).isoformat(),
+                               "until": (now + timedelta(days=days, hours=2)).isoformat()}])
+    order = [c["tid"] for c in client.get("/api/followup", headers=H).json()["waiting_on_me"]]
+    assert order == [flight, concert, flagged_only, urgent, plain]
+
+
+def test_flag_and_unflag_reach_the_server(app, client, acc):
+    from app import moments as MO
+
+    tid, _ = put(acc, "INBOX", 7, raw("TAP <noreply@flytap.com>", "Boeking", "<f1@x>"))
+    imap = mock.MagicMock()
+    with mock.patch.object(acc, "run_imap", side_effect=lambda fn: fn(imap)), mock.patch.object(app.ai, "enqueue_moments") as em:
+        assert client.post(f"/api/threads/{tid}/flag", headers=H, json={"flagged": True}).json()["flagged"]
+        imap.add_flags.assert_called_once_with([7], [b"\\Flagged"])
+        em.assert_called_once_with(tid)
+        assert client.get(f"/api/threads/{tid}", headers=H).json()["flagged"]
+
+        MO.save(app.db, tid, [{"kind": "vlucht", "title": "Inchecken", "detail": "", "at": "2099-01-01T08:00:00+00:00",
+                               "until": "2099-01-01T10:00:00+00:00"}])
+        client.post(f"/api/threads/{tid}/flag", headers=H, json={"flagged": False})
+        imap.remove_flags.assert_called_once_with([7], [b"\\Flagged"])
+    assert not client.get(f"/api/threads/{tid}", headers=H).json()["flagged"]
+    assert app.db.one("SELECT COUNT(*) n FROM moments")["n"] == 0
+
+
+def test_archive_all_advertising_in_one_move(app, client, acc):
+    for i in range(3):
+        put(acc, "INBOX", 10 + i, raw(f"Shop{i} <news@shop{i}.be>", "Promo", f"<p{i}@x>", unsub="<https://shop.be/u>"))
+    put(acc, "INBOX", 20, raw("Ann <ann@y.be>", "Vraag", "<q@x>"))
+    imap = mock.MagicMock()
+    imap.has_capability.return_value = True
+    with mock.patch.object(acc, "run_imap", side_effect=lambda fn: fn(imap)):
+        r = client.post("/api/senders/archive-kind", headers=H, json={"kind": "reclame"}).json()
+    assert r["moved"] == 3
+    imap.move.assert_called_once_with([10, 11, 12], "Archive")
+    left = [m["subject"] for m in app.db.q("SELECT subject FROM messages WHERE folder='INBOX'")]
+    assert left == ["Vraag"]
+    assert client.post("/api/senders/archive-kind", headers=H, json={"kind": "persoonlijk"}).status_code == 400

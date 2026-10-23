@@ -1,3 +1,4 @@
+import base64
 import re
 from datetime import timezone
 from email import message_from_bytes, policy
@@ -47,6 +48,71 @@ def html_to_text(html):
     return txt.strip()
 
 
+MAX_HTML = 2_000_000       # groter: enkel de tekst
+MAX_INLINE = 500_000       # per ingebedde afbeelding (cid:)
+MAX_INLINE_TOTAL = 1_500_000
+DROP_TAGS = ("script", "noscript", "iframe", "frame", "frameset", "object", "embed", "applet", "base", "link", "title",
+             "meta", "audio", "video", "source", "track")
+
+
+def clean_html(html, cids=None):
+    """HTML van een mail zonder scripts, gebeurtenissen, formulieren of externe stylesheets; ingebedde afbeeldingen
+    (cid:) worden data-URI's. De webinterface toont het daarna nog in een iframe zonder scripts."""
+    soup = BeautifulSoup(html, "html.parser")
+    for t in soup(DROP_TAGS):
+        t.decompose()
+    for t in soup(["form", "input", "button", "select", "textarea"]):
+        t.unwrap() if t.name == "form" else t.decompose()
+    for t in soup.find_all(True):
+        for attr in list(t.attrs):
+            v = t.attrs[attr]
+            if attr.lower().startswith("on") or attr.lower() in ("srcdoc", "formaction", "ping"):
+                del t.attrs[attr]
+            elif attr.lower() in ("href", "src", "action") and isinstance(v, str) and v.strip().lower().startswith(("javascript:", "vbscript:")):
+                del t.attrs[attr]
+        if t.name == "img" and cids and str(t.get("src", "")).lower().startswith("cid:"):
+            t["src"] = cids.get(t["src"][4:].strip("<>"), "")
+    return str(soup)
+
+
+def _content(part):
+    try:
+        content = part.get_content()
+    except Exception:
+        payload = part.get_payload(decode=True) or b""
+        cs = part.get_content_charset() or "utf-8"
+        try:
+            content = payload.decode(cs, "replace")
+        except LookupError:
+            content = payload.decode("utf-8", "replace")
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", "replace")
+    return content
+
+
+def _html(msg):
+    """De HTML-versie van een mail, schoongemaakt, of "" als er geen is."""
+    try:
+        part = msg.get_body(preferencelist=("html",))
+    except Exception:
+        part = None
+    if part is None:
+        return ""
+    cids, total = {}, 0
+    for p in msg.walk():
+        cid = p.get("Content-ID")
+        if cid and p.get_content_maintype() == "image":
+            data = p.get_payload(decode=True) or b""
+            if len(data) <= MAX_INLINE and total + len(data) <= MAX_INLINE_TOTAL:
+                total += len(data)
+                cids[str(cid).strip().strip("<>")] = f"data:{p.get_content_type()};base64,{base64.b64encode(data).decode()}"
+    try:
+        html = clean_html(_content(part), cids)
+    except Exception:
+        return ""
+    return html if len(html) <= MAX_HTML else ""
+
+
 def _decode_legacy(v):
     try:
         return str(make_header(decode_header(v)))
@@ -61,17 +127,7 @@ def _body(msg):
         part = None
     if part is None:
         return ""
-    try:
-        content = part.get_content()
-    except Exception:
-        payload = part.get_payload(decode=True) or b""
-        cs = part.get_content_charset() or "utf-8"
-        try:
-            content = payload.decode(cs, "replace")
-        except LookupError:
-            content = payload.decode("utf-8", "replace")
-    if isinstance(content, bytes):
-        content = content.decode("utf-8", "replace")
+    content = _content(part)
     if part.get_content_type() == "text/html":
         content = html_to_text(content)
     return content.replace("\r\n", "\n").strip()
@@ -149,6 +205,7 @@ def parse(raw, header_only=False):
         "subject": subject,
         "date": date,
         "body": body[:50000],
+        "html": "" if header_only else _html(msg),
         "snippet": make_snippet(body),
         "kind": kind,
         "bulk": bool(kind),

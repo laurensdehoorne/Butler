@@ -11,12 +11,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from . import actions, config, costs, moments
 from .accounts import Account
 from .avatars import MEDIA, Avatars
+from .mailhtml import MailImages, fetch_image
 from .ai import PROVIDERS, AIError, AIWorker
 from .db import DB, sender_rule, thread_messages, upsert_rule
 from .notify import Notifier
@@ -45,6 +46,7 @@ notifier = Notifier(CFG.get("notify") or {}, APP, push)
 costs.load_overrides(DATA_DIR)
 avatars = Avatars(DATA_DIR, APP.get("avatars") or {}, background=os.environ.get("BUTLER_NO_SYNC") != "1")
 meter = costs.Meter(db)
+images = MailImages(avatars.key, bool(APP.get("remote_images", True)))
 ai = AIWorker(db, AI_CFG, accounts, notifier, meter)
 syncer = Syncer(db, APP, AI_CFG, accounts, ai, notifier)
 FOLLOWUP_DAYS = int(APP.get("followup_days", 3))
@@ -231,6 +233,32 @@ def avatar(name: str):
     })
 
 
+@app.get("/img/{sig}/{enc}")
+def mail_image(sig: str, enc: str):
+    """Een afbeelding uit een mail, door Butler opgehaald; enkel adressen die Butler zelf ondertekend heeft."""
+    url = images.unpack(sig, enc)
+    if not url or not images.enabled:
+        raise HTTPException(404)
+    got = fetch_image(url)
+    if not got:
+        raise HTTPException(404)
+    data, ctype = got
+    return Response(data, media_type=ctype, headers={
+        "Cache-Control": "private, max-age=86400",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        "X-Content-Type-Options": "nosniff",
+    })
+
+
+@app.get("/api/messages/{mid}/html", dependencies=[Depends(auth)])
+def message_html(mid: int):
+    row = db.one("SELECT account FROM messages WHERE id=?", (mid,))
+    if not row:
+        raise HTTPException(404, "bericht niet gevonden")
+    html = _run(lambda: actions.fetch_html(db, _acc(row["account"]), mid))
+    return {"html": images.rewrite(html) if html else ""}
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -341,7 +369,9 @@ def followup(account: str = ""):
             if not waiting or CALENDAR_REPLY.match(last["subject"] or ""):
                 continue
             theirs.append(_card(t, msgs))
-    mine.sort(key=lambda c: (c["priority"] != "hoog", c["date"] or ""))
+    # belangrijkst eerst: wat je zelf markeerde, dan wat de AI dringend vond, dan wat het eerst nodig is
+    soonest = {r["tid"]: r["at"] for r in db.q("SELECT tid, MIN(at) AS at FROM moments WHERE until > ? GROUP BY tid", (now,))}
+    mine.sort(key=lambda c: (not c["flagged"], c["priority"] != "hoog", soonest.get(c["tid"], "9999"), c["date"] or ""))
     theirs.sort(key=lambda c: c["date"] or "")
     return {"waiting_on_me": mine[:150], "waiting_on_them": theirs[:150], "reminders": reminders[:50],
             "followup_days": FOLLOWUP_DAYS, **moment_cards(account)}
@@ -383,6 +413,8 @@ def get_thread(tid: int):
             "body": (m["body"] or "")[:30000],
             "outgoing": bool(m["outgoing"]),
             "pending": m["folder"] == "_pending",
+            # None = nog niet opgehaald (de app vraagt het op via /api/messages/<id>/html), "" = geen HTML-versie
+            "html": images.rewrite(m["html"]) if m.get("html") else m.get("html"),
         }
         for m in msgs
     ]
@@ -425,6 +457,23 @@ def read(tid: int):
     t = _thread_or_404(tid)
     _run(lambda: actions.mark_read(db, _acc(t["account"]), tid))
     return {"ok": True}
+
+
+class FlagIn(BaseModel):
+    flagged: bool = True
+
+
+@app.post("/api/threads/{tid}/flag", dependencies=[Depends(auth)])
+def flag(tid: int, body: FlagIn):
+    t = _thread_or_404(tid)
+    _run(lambda: actions.set_flag(db, _acc(t["account"]), tid, body.flagged))
+    if body.flagged:
+        if ai.active_for(t["account"]):
+            ai.enqueue_moments(tid)  # meteen kijken wanneer je deze mail nodig hebt
+    else:
+        db.x("DELETE FROM moments WHERE tid=?", (tid,))
+        db.x("UPDATE threads SET moments_ai=0 WHERE tid=?", (tid,))
+    return {"ok": True, "flagged": body.flagged}
 
 
 class DoneIn(BaseModel):
@@ -620,6 +669,20 @@ def sender_trash(body: SenderIn):
     acc = _acc(body.account)
     n = _run(lambda: actions.move_sender(db, acc, body.addr, "trash"))
     return {"ok": True, "moved": n}
+
+
+class KindIn(BaseModel):
+    kind: str
+    account: str = ""
+
+
+@app.post("/api/senders/archive-kind", dependencies=[Depends(auth)])
+def sender_archive_kind(body: KindIn):
+    if body.kind not in ("reclame", "notificatie"):
+        raise HTTPException(400, "ongeldige soort")
+    targets = [_acc(body.account)] if body.account else list(accounts.values())
+    moved = sum(_run(lambda a=a: actions.move_kind(db, a, body.kind, "archive")) for a in targets)
+    return {"ok": True, "moved": moved}
 
 
 @app.post("/api/senders/unsubscribe", dependencies=[Depends(auth)])

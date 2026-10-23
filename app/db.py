@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS messages(
   unsub TEXT DEFAULT '',
   unsub_post INTEGER DEFAULT 0,
   flagged INTEGER DEFAULT 0,
+  html TEXT,                 -- NULL = nog niet opgehaald, '' = geen HTML-versie
   UNIQUE(account, folder, uid)
 );
 CREATE INDEX IF NOT EXISTS ix_m_thread ON messages(account, thread_key);
@@ -125,7 +126,8 @@ class DB:
                 self.conn.execute("UPDATE messages SET kind='reclame' WHERE bulk=1")
             self.conn.executescript(SCHEMA)
             # migratie: vlag (Spark) en momenten
-            for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0")):
+            for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0"),
+                               ("messages", "html TEXT")):
                 if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")

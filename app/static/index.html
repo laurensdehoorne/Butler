@@ -171,7 +171,12 @@ a.item{touch-action:pan-y}
 .swipe-bg{position:absolute;z-index:0;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-right:20px;
   border-radius:12px;background:color-mix(in oklab,var(--danger) 55%,var(--paper));color:#fff;font-weight:600;transition:background .15s}
 .swipe-bg.ready{background:var(--danger)}
+.swipe-bg.flag{justify-content:flex-start;padding:0 0 0 20px;background:color-mix(in oklab,#e8890c 55%,var(--paper))}
+.swipe-bg.flag.ready{background:#e8890c}
+.btn.flagged{color:var(--danger)}
+.btn.flagged .i{fill:currentColor}
 .now .item.swiping{background:var(--raised)}
+.sender-head{display:block;width:100%;padding:0;border:0;background:none;text-align:left;color:inherit}
 .m-when{display:block;font-size:0.8125rem;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums}
 .info .tie{width:18px;height:9px}
 @container list (min-width:620px){
@@ -292,10 +297,13 @@ textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto
 .mb{padding:0 0 18px 46px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:0.9375rem;line-height:1.6;max-width:72ch}
 .msg.out .mb{border-left:2px solid color-mix(in oklab,var(--lapel) 50%,transparent);margin-left:46px;padding-left:14px}
 .msg.collapsed .mb{display:none}
+.mb.html{white-space:normal;max-width:none}
+.msg.out .mb.html{border-left:0;padding-left:46px;margin-left:0}
+.mail-html{display:block;width:100%;min-height:60px;border:0;border-radius:12px;background:#fff;box-shadow:0 0 0 1px var(--rule)}
 .msg.collapsed .mh .peek{display:block}
 .msg.collapsed .mh .to{display:none}
 #s-body{container-type:inline-size}
-@container (max-width:480px){.mb{padding-left:0}.msg.out .mb{margin-left:0}}
+@container (max-width:480px){.mb,.msg.out .mb.html{padding-left:0}.msg.out .mb{margin-left:0}}
 
 .compose{background:var(--raised);border:1px solid var(--rule);border-radius:14px;padding:16px;margin-top:22px}
 .compose h3{font:600 1.25rem var(--display);margin:0 0 12px}
@@ -595,7 +603,7 @@ function card(c, mode){
   if(c.category && c.category!=='overig') badges.push(`<span class="badge">${esc(c.category)}</span>`);
   if(S.accounts.length>1) badges.push(`<span class="badge">${esc(c.account_name)}</span>`);
   c.tags.forEach(t => badges.push(`<span class="badge tag">#${esc(t)}</span>`));
-  return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}">
+  return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}" data-flagged="${c.flagged?1:0}">
     ${avatar(c.who, c.last_outgoing, c.avatar)}
     <div class="c-main">
       <div class="c-top"><span class="who">${esc(c.who)}</span>${c.n>1?`<span class="n">${c.n}</span>`:''}${c.flagged?'<svg class="i flag" role="img" aria-label="Gemarkeerd"><use href="#i-flag"/></svg>':''}<time datetime="${esc(c.date)}">${esc(when(c.date))}</time></div>
@@ -665,15 +673,18 @@ async function load(animate=false){
       S.senders = d.senders;
       const dflt = S.cfilter==='notificatie' ? d.defaults.notificatie_days : S.cfilter==='reclame' ? d.defaults.reclame_days : 0;
       const inInbox = d.senders.reduce((a,x)=>a+x.in_inbox,0);
+      const kindIn = S.cfilter === 'alle' ? 0 : inInbox;
       html = `<div class="sec-h"><h2>Afzenders</h2><span class="num">${d.senders.length}</span><span class="hint">${inInbox} mails in je inbox</span></div>`
+        + (kindIn ? `<div class="actions" style="margin:4px 0 8px"><button class="btn primary" data-s="archive-kind">${I('archive')}Alle ${S.cfilter === 'reclame' ? 'reclame' : 'notificaties'} archiveren (${kindIn})</button></div>` : '')
         + (dflt ? `<div class="note">Zonder regel wordt na ${dflt} dagen automatisch gearchiveerd.</div>` : '')
         + (d.senders.length ? `<div class="items">${d.senders.map((x,i)=>senderCard(x,i)).join('')}</div>`
           : empty('Niets op te ruimen', 'Geen afzenders in deze categorie.', I('check')));
     } else {
       const d = await api(`/api/followup?account=${acc}`);
       for(const k of ['waiting_on_me', 'waiting_on_them', 'reminders', 'moments_now', 'moments_soon']) d[k] = vis(d[k]);
-      const sec = (title, arr, mode, emptyTxt, hint='') => `<section><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</div>` +
-        (arr.length ? `<div class="items">${arr.map(c=>card(c,mode)).join('')}</div>` : `<div class="quiet">${emptyTxt}</div>`) + '</section>';
+      // een vlak verschijnt pas als er iets in staat
+      const sec = (title, arr, mode, hint='') => !arr.length ? '' : `<section><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span>${hint?`<span class="hint">${hint}</span>`:''}</div>`
+        + `<div class="items">${arr.map(c=>card(c,mode)).join('')}</div></section>`;
       const now = d.moments_now || [], soon = d.moments_soon || [];
       const msec = (title, arr, active, cls='') => arr.length ? `<section class="${cls}"><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span></div>`
         + `<div class="items">${arr.map(c=>momentCard(c, active)).join('')}</div></section>` : '';
@@ -681,9 +692,9 @@ async function load(animate=false){
       html = (!d.waiting_on_me.length && !d.waiting_on_them.length && !d.reminders.length && !now.length && !soon.length)
         ? empty('Alles afgehandeld', 'Er wacht niets op jou, en jij wacht op niemand.', TIE())
         : msec('Nu nodig', now, true, 'now') +
-          (d.reminders.length ? sec('Herinneringen', d.reminders, 'rem', '') : '') +
-          sec('Wacht op jou', d.waiting_on_me, 'me', 'Niets dat op jou wacht.') +
-          sec('Wacht op antwoord', d.waiting_on_them, 'them', 'Geen openstaande vragen aan anderen.', `${d.followup_days} dagen of langer stil`) +
+          sec('Herinneringen', d.reminders, 'rem') +
+          sec('Wacht op jou', d.waiting_on_me, 'me') +
+          sec('Wacht op antwoord', d.waiting_on_them, 'them', `${d.followup_days} dagen of langer stil`) +
           msec('Binnenkort', soon, false);
     }
   }catch(e){ html = empty('Laden mislukt', esc(e.message) + '. Probeer opnieuw met de vernieuwknop bovenaan.', I('x')); }
@@ -705,12 +716,14 @@ function senderCard(x, i){
   return `<article class="item">
     ${avatar(x.name, false, x.avatar)}
     <div class="c-main">
-      <div class="c-top"><span class="who"><b>${esc(x.name)}</b></span><time>${esc(when(x.last_date))}</time></div>
-      <div class="addr">${esc(x.addr)}</div>
+      <button class="sender-head" data-s="mails" data-i="${i}" aria-label="Mails van ${esc(x.name)} bekijken">
+        <div class="c-top"><span class="who"><b>${esc(x.name)}</b></span><time>${esc(when(x.last_date))}</time></div>
+        <div class="addr">${esc(x.addr)}</div></button>
       <div class="meta">${b.join('')}</div>
       <div class="stats"><span><b>${x.n}</b> mails</span><span><b>${x.in_inbox}</b> in je inbox</span></div>
       ${x.read_pct!==null?`<div class="meter" style="--p:${x.read_pct}%"><span></span>${x.read_pct}% gelezen</div>`:''}
       <div class="actions">
+        <button class="btn" data-s="mails" data-i="${i}">${I('inbox')}Mails</button>
         ${unsub}
         ${x.in_inbox?`<button class="btn" data-s="archive" data-i="${i}">${I('archive')}Archiveer ${x.in_inbox}</button>`:''}
         ${x.in_inbox?`<button class="btn danger" data-s="trash" data-i="${i}" aria-label="Verwijder ${x.in_inbox} mails">${I('trash')}${x.in_inbox}</button>`:''}
@@ -724,7 +737,18 @@ function senderCard(x, i){
 }
 
 async function senderAction(a, i, btn){
+  if(a === 'archive-kind'){
+    const n = S.senders.reduce((t, x) => t + x.in_inbox, 0), what = S.cfilter === 'reclame' ? 'reclame' : 'notificaties';
+    if(!await ask({title:`${n} mails archiveren?`, msg:`Alle ${what} uit je inbox gaat naar het archief. Er wordt niets verwijderd.`, ok:'Archiveren'})) return;
+    toast(`${n} mails worden gearchiveerd`);
+    post('/api/senders/archive-kind', {kind: S.cfilter, account: S.account})
+      .then(r => toast(`${r.moved} gearchiveerd`)).catch(e => toast('Archiveren mislukt: ' + e.message)).finally(() => load());
+    return;
+  }
   const x = S.senders[i]; const who = {account:x.account, addr:x.addr};
+  if(a === 'mails'){  // alle mail van deze afzender, ook gearchiveerde: via zoeken in de inbox-tab
+    S.q = x.addr; $('#q').value = x.addr; S.tab = 'inbox'; S.filter = 'alle'; return load(true);
+  }
   if(btn) btn.disabled = true;
   try{
     if(a==='unsub'){
@@ -783,6 +807,7 @@ function renderThread(){
   $('#s-actions').innerHTML = [
     t.in_inbox ? A('archive','archive','Archiveer','primary') : '',
     t.done ? A('undone','undo','Heropen') : A('done','check','Klaar'),
+    `<button class="btn ${t.flagged?'flagged':''}" data-a="${t.flagged?'unflag':'flag'}" aria-label="${t.flagged?'Markering weghalen':'Markeren'}" aria-pressed="${!!t.flagged}">${I('flag')}</button>`,
     `<button class="btn" popovertarget="snooze-menu">${I('clock')}Snooze${I('down')}</button>`,
     `<button class="btn" popovertarget="more-menu" aria-label="Meer acties">${I('more')}</button>`
   ].join('');
@@ -828,7 +853,7 @@ function renderThread(){
           <div class="ln peek">${esc((m.body||'').replace(/\s+/g,' ').slice(0,160))}</div>
         </div>
       </button>
-      <div class="mb">${esc(m.body)}</div></article>`;
+      <div class="mb" data-mid="${m.id}">${esc(m.body)}</div></article>`;
   }).join('');
 
   const compose = `<section class="compose">
@@ -851,6 +876,53 @@ function renderThread(){
   $('#s-body').innerHTML = note + upcoming + snooze + tags + msgs + compose;
   if(keep) $('#reply').value = keep;
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
+  showHtmlMessages();
+}
+
+/* ---------- HTML-mails: in een iframe zonder scripts; externe afbeeldingen komen via Butler ---------- */
+const mailDoc = html => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: ${location.origin}; style-src 'unsafe-inline'; font-src data:">
+<base target="_blank"><style>html,body{margin:0;background:#fff;color:#1b1b1b}
+body{padding:14px;font:15px/1.5 -apple-system,system-ui,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}</style>
+</head><body>${html}</body></html>`;
+
+function showHtmlMessages(){
+  for(const el of $('#s-body').querySelectorAll('.mb[data-mid]')){
+    if(!el.dataset.done && !el.closest('.msg').classList.contains('collapsed')) showHtml(el);
+  }
+}
+async function showHtml(el){
+  el.dataset.done = '1';
+  const m = S.thread?.messages.find(x => x.id === +el.dataset.mid);
+  if(!m) return;
+  if(m.html === null){  // nog niet opgehaald (buiten de inbox): één keer van de server, intussen de tekst
+    try{ m.html = (await api(`/api/messages/${m.id}/html`)).html; }catch(e){ return; }
+  }
+  if(m.html && el.isConnected) mountHtml(el, m.html);
+}
+function mountHtml(el, html){
+  const f = document.createElement('iframe');
+  f.className = 'mail-html'; f.title = 'Inhoud van de mail';
+  // zonder allow-scripts kan de mail niets uitvoeren; same-origin enkel om de hoogte te kunnen meten
+  f.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+  f.setAttribute('referrerpolicy', 'no-referrer');
+  f.srcdoc = mailDoc(html);
+  el.replaceChildren(f);
+  el.classList.add('html');
+  f.addEventListener('load', () => {
+    const doc = f.contentDocument;
+    if(!doc) return;
+    const fit = () => {  // brede nieuwsbrieven verkleinen tot ze passen, en de hoogte volgen
+      const body = doc.body;
+      body.style.zoom = 1;
+      const z = Math.min(1, f.clientWidth / Math.max(doc.documentElement.scrollWidth, 1));
+      body.style.zoom = z;
+      f.style.height = Math.ceil(body.getBoundingClientRect().height + 2) + 'px';
+    };
+    fit();
+    doc.addEventListener('load', fit, true);  // afbeeldingen die later binnenkomen
+    setTimeout(fit, 400); setTimeout(fit, 1500);
+  });
 }
 
 async function doAction(a, btn){
@@ -864,6 +936,7 @@ async function doAction(a, btn){
     if(a==='trash'){ if(!await ask({title:'Naar de prullenbak?', msg:t.subject, ok:'Verwijderen', danger:true})) return;
       inBackground(t.tid, p+'/trash', 'Verwijderd', 'Verwijderen mislukt'); return closeThread(); }
     if(a==='read'){ await post(p+'/read'); toast('Gemarkeerd als gelezen'); }
+    if(a==='flag' || a==='unflag'){ await post(p+'/flag', {flagged: a==='flag'}); toast(a==='flag' ? 'Gemarkeerd' : 'Markering weggehaald'); }
     if(a==='done'){ await post(p+'/done',{done:true}); toast('Klaar, uit de opvolglijst'); return closeThread(); }
     if(a==='undone'){ await post(p+'/done',{done:false}); toast('Heropend'); }
     if(a.startsWith('snooze')){
@@ -899,7 +972,7 @@ document.addEventListener('click', e=>{
   else if(el.dataset.s){ senderAction(el.dataset.s, +el.dataset.i, el); }
   else if(el.dataset.tid){ if(e.metaKey||e.ctrlKey||e.shiftKey) return; e.preventDefault(); if(Date.now() - (S.swipedAt || 0) < 400) return; openThread(+el.dataset.tid); }
   else if(el.dataset.a){ doAction(el.dataset.a, el); }
-  else if(el.hasAttribute('data-toggle')){ const m=el.parentElement; m.classList.toggle('collapsed'); el.setAttribute('aria-expanded', !m.classList.contains('collapsed')); }
+  else if(el.hasAttribute('data-toggle')){ const m=el.parentElement; m.classList.toggle('collapsed'); el.setAttribute('aria-expanded', !m.classList.contains('collapsed')); showHtmlMessages(); }
 });
 document.addEventListener('change', async e=>{
   const el = e.target;
@@ -1194,7 +1267,8 @@ $('#refresh').onclick = refreshNow;
     g.dx = t.clientX - g.x; g.dy = t.clientY - g.y;
     if(!g.mode){
       if(Math.abs(g.dx) < 8 && Math.abs(g.dy) < 8) return;
-      g.mode = Math.abs(g.dx) > Math.abs(g.dy) ? (g.row && g.dx < 0 ? 'swipe' : 'none') : (g.dy > 0 && scrollY <= 0 ? 'pull' : 'none');
+      g.mode = Math.abs(g.dx) > Math.abs(g.dy) ? (g.row ? 'swipe' : 'none') : (g.dy > 0 && scrollY <= 0 ? 'pull' : 'none');
+      g.dir = g.dx < 0 ? -1 : 1;  // links = verwijderen, rechts = markeren
       if(g.mode === 'swipe') startSwipe(g);
     }
     if(g.mode === 'pull'){
@@ -1205,9 +1279,9 @@ $('#refresh').onclick = refreshNow;
       ptr.querySelector('.i').style.rotate = (g.dy * 1.5) + 'deg';
     }
     if(g.mode === 'swipe'){
-      const dx = Math.min(0, g.dx);
+      const dx = g.dir < 0 ? Math.min(0, g.dx) : Math.max(0, g.dx);
       g.row.style.translate = dx + 'px 0';
-      g.bg.classList.toggle('ready', -dx > threshold(g.row));
+      g.bg.classList.toggle('ready', Math.abs(dx) > threshold(g.row));
     }
   }, {passive: true});
   document.addEventListener('touchend', () => {
@@ -1222,8 +1296,9 @@ $('#refresh').onclick = refreshNow;
   function startSwipe(g){
     g.row.classList.add('swiping');
     g.bg = document.createElement('div');
-    g.bg.className = 'swipe-bg';
-    g.bg.innerHTML = `${I('trash')}<span>Verwijder</span>`;
+    const flagged = g.row.dataset.flagged === '1';
+    g.bg.className = g.dir < 0 ? 'swipe-bg' : 'swipe-bg flag';
+    g.bg.innerHTML = g.dir < 0 ? `${I('trash')}<span>Verwijder</span>` : `${I('flag')}<span>${flagged ? 'Markering weg' : 'Markeer'}</span>`;
     g.row.parentElement.style.position = 'relative';  // eerst: daarna meten de offsets t.o.v. de lijst
     Object.assign(g.bg.style, {top: g.row.offsetTop + 'px', height: g.row.offsetHeight + 'px',
                                left: g.row.offsetLeft + 'px', width: g.row.offsetWidth + 'px'});
@@ -1235,8 +1310,15 @@ $('#refresh').onclick = refreshNow;
   }
   function endSwipe(g){
     S.swipedAt = Date.now();  // de tik die op het vegen volgt, opent de mail niet
-    if(-g.dx <= threshold(g.row)) return snapBack(g);
+    if(Math.abs(g.dx) <= threshold(g.row) || Math.sign(g.dx) !== g.dir) return snapBack(g);
     const tid = +g.row.dataset.tid;
+    if(g.dir > 0){  // markeren: de rij blijft staan
+      const on = g.row.dataset.flagged !== '1';
+      snapBack(g);
+      toast(on ? 'Gemarkeerd' : 'Markering weggehaald');
+      post(`/api/threads/${tid}/flag`, {flagged: on}).catch(e => toast('Markeren mislukt: ' + e.message)).finally(() => load());
+      return;
+    }
     g.row.classList.add('settle'); g.row.style.translate = '-100% 0';
     setTimeout(() => { g.bg.remove(); g.row.classList.add('gone'); }, 200);
     inBackground(tid, `/api/threads/${tid}/trash`, 'Verwijderd', 'Verwijderen mislukt');

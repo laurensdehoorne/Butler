@@ -9,10 +9,10 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
 import httpx
-from imapclient import DRAFT, SEEN
+from imapclient import DRAFT, FLAGGED, SEEN
 
 from .db import thread_messages, upsert_rule
-from .mailparse import make_snippet
+from .mailparse import make_snippet, parse
 
 
 def _inbox_uids(db, t):
@@ -47,6 +47,71 @@ def move_thread(db, acc, tid, role):
     if ids:
         db.xm("UPDATE messages SET in_inbox=0, folder='_weg', uid=-id WHERE id=?", [(i,) for i in ids])
     return len(uids)
+
+
+MAX_HTML_FETCH = 15 * 1024 * 1024
+
+
+def fetch_html(db, acc, mid):
+    """HTML-versie van een bericht dat nog niet opgehaald was (alles buiten de inbox): één keer van de server, daarna
+    bewaard. Zoekt ook bij dezelfde mail in een andere map (bv. Alle e-mail na archiveren)."""
+    row = db.one("SELECT * FROM messages WHERE id=?", (mid,))
+    if not row:
+        return None
+    rows = [row] + (db.q("SELECT * FROM messages WHERE account=? AND message_id=? AND id!=?",
+                         (row["account"], row["message_id"], mid)) if row["message_id"] else [])
+    for r in rows:
+        if r["html"] is not None:
+            return r["html"]
+    html = ""
+    for r in rows:
+        if r["uid"] > 0 and not r["folder"].startswith("_"):
+            def fn(c, r=r):
+                c.select_folder(r["folder"], readonly=True)
+                size = c.fetch([r["uid"]], ["RFC822.SIZE"]).get(r["uid"], {}).get(b"RFC822.SIZE", 0)
+                if not size or size > MAX_HTML_FETCH:
+                    return ""
+                data = c.fetch([r["uid"]], ["BODY.PEEK[]"]).get(r["uid"], {}).get(b"BODY[]")
+                return parse(data)["html"] if data else ""
+            html = acc.run_imap(fn)
+            break
+    db.x("UPDATE messages SET html=? WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
+         (html, mid, row["account"], row["message_id"] or ""))
+    return html
+
+
+def set_flag(db, acc, tid, on):
+    """Vlag zetten of weghalen, ook op de server, zodat Spark (en Gmail: een ster) hetzelfde toont.
+    Aanzetten markeert het laatste ontvangen bericht; uitzetten haalt de vlag van elk bericht in de thread."""
+    t = db.one("SELECT * FROM threads WHERE tid=?", (tid,))
+    if not t:
+        raise ValueError("thread niet gevonden")
+    rows = db.q("""SELECT id, folder, uid, flagged, outgoing FROM messages WHERE account=? AND thread_key=?
+                   AND uid>0 AND folder NOT IN ('_weg', '_pending') ORDER BY date DESC, id DESC""",
+                (t["account"], t["thread_key"]))
+    if on:
+        targets = [r for r in rows if not r["outgoing"]][:1] or rows[:1]
+    else:
+        targets = [r for r in rows if r["flagged"]]
+    if not targets:
+        if on:
+            raise RuntimeError("geen bericht op de server om te markeren")
+        return 0
+    by_folder = {}
+    for r in targets:
+        by_folder.setdefault(r["folder"], []).append(r["uid"])
+
+    def fn(c):
+        for folder, uids in by_folder.items():
+            c.select_folder(folder)
+            (c.add_flags if on else c.remove_flags)(uids, [FLAGGED])
+
+    acc.run_imap(fn)
+    if on:
+        db.x("UPDATE messages SET flagged=1 WHERE id=?", (targets[0]["id"],))
+    else:
+        db.x("UPDATE messages SET flagged=0 WHERE account=? AND thread_key=?", (t["account"], t["thread_key"]))
+    return len(targets)
 
 
 def mark_read(db, acc, tid):
@@ -174,6 +239,17 @@ def move_sender(db, acc, addr, role):
         "SELECT id, uid FROM messages WHERE account=? AND from_addr=? AND folder='INBOX' AND uid>0",
         (acc.id, addr.lower()),
     )
+    return _move_rows(db, acc, rows, role)
+
+
+def move_kind(db, acc, kind, role):
+    """Alle reclame (of notificaties) uit de inbox in één keer: één IMAP-verplaatsing per account."""
+    rows = db.q("SELECT id, uid FROM messages WHERE account=? AND kind=? AND folder='INBOX' AND uid>0 AND outgoing=0",
+                (acc.id, kind))
+    return _move_rows(db, acc, rows, role)
+
+
+def _move_rows(db, acc, rows, role):
     if not rows:
         return 0
     dest = acc.folders.get(role)
