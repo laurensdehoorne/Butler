@@ -188,6 +188,7 @@ a.item:hover::before,a.item:hover + .item::before{opacity:0}
 .badge.gold{background:var(--gold-tint);color:var(--gold);font-weight:600}
 .badge.tag{background:transparent;padding-inline:0 4px}
 .c-top .flag{width:13px;height:13px;color:var(--flag);fill:currentColor;align-self:center}
+.c-top .kind{width:14px;height:14px;color:var(--muted);align-self:center}
 /* gemarkeerde mail die nu nodig is: Butler haalt ze naar voren, dus met de gouden rand */
 .now .items{background:var(--raised);border:1px solid var(--rule);border-left:3px solid var(--tie);border-radius:4px 14px 14px 4px;padding:2px 12px 2px 10px}
 .now .item{margin:0;padding-inline:4px}
@@ -796,8 +797,11 @@ function accBadge(id, name){
   return `<span class="acc-logo" role="img" aria-label="${esc(name)}" title="${esc(name)}">${ACC_LOGO[p]}</span>`;
 }
 
+// in de inbox (Alles): een belletje bij een notificatie, een etiket bij reclame
+const KIND_ICON = {notificatie: ['bell', 'Notificatie'], reclame: ['tag', 'Reclame']};
 function card(c, mode){
   const badges = [];
+  const kind = mode === 'inbox' && KIND_ICON[c.kind];
   if(c.priority==='hoog') badges.push('<span class="badge gold">Belangrijk</span>');
   if(c.deadline) badges.push(`<span class="badge">${I('clock')}${esc(dueLabel(c.deadline))}</span>`);
   if(mode==='them'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge">${d} dagen stil</span>`); }
@@ -809,7 +813,7 @@ function card(c, mode){
   return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}" data-flagged="${c.flagged?1:0}">
     ${avatar(c.who, c.last_outgoing, c.avatar)}
     <div class="c-main">
-      <div class="c-top"><span class="who">${esc(c.who)}</span>${c.n>1?`<span class="n">${c.n}</span>`:''}${c.flagged?'<svg class="i flag" role="img" aria-label="Gemarkeerd"><use href="#i-flag"/></svg>':''}<time datetime="${esc(c.date)}">${esc(when(c.date))}</time></div>
+      <div class="c-top"><span class="who">${esc(c.who)}</span>${c.n>1?`<span class="n">${c.n}</span>`:''}${kind?`<svg class="i kind" role="img" aria-label="${kind[1]}"><title>${kind[1]}</title><use href="#i-${kind[0]}"/></svg>`:''}${c.flagged?'<svg class="i flag" role="img" aria-label="Gemarkeerd"><use href="#i-flag"/></svg>':''}<time datetime="${esc(c.date)}">${esc(when(c.date))}</time></div>
       <div class="subj">${esc(c.subject || '(geen onderwerp)')}</div>
       <div class="sum">${c.summary ? TIE('Samenvatting door Butler')+esc(c.summary) : esc(c.snippet)}</div>
       ${badges.length?`<div class="meta">${badges.join('')}</div>`:''}
@@ -1058,7 +1062,7 @@ async function load(animate=false){
       const d = answered ? {threads: []} : await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
       d.threads = vis(d.threads);
       if(d.unread !== undefined) $('#count-inbox').textContent = d.unread || '';
-      html = askBlock() + (d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c)).join('')}</div>`
+      html = askBlock() + (d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c, S.filter === 'alle' ? 'inbox' : undefined)).join('')}</div>`
         : S.q ? (S.ask?.q === S.q ? '' : empty('Niets gevonden', `Geen mail met “${esc(S.q)}”. Probeer minder woorden, van:naam, na:2026-03 of pdf, of stel een vraag.`, I('search')))
         : empty('Inbox leeg', 'Nieuwe mail verschijnt hier vanzelf.'));
     } else if(S.tab==='cleanup'){
