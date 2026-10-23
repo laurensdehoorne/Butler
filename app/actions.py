@@ -52,32 +52,67 @@ def move_thread(db, acc, tid, role):
 MAX_HTML_FETCH = 15 * 1024 * 1024
 
 
-def fetch_html(db, acc, mid):
-    """HTML-versie van een bericht dat nog niet opgehaald was (alles buiten de inbox): één keer van de server, daarna
-    bewaard. Zoekt ook bij dezelfde mail in een andere map (bv. Alle e-mail na archiveren)."""
+def _copies(db, mid):
+    """Het bericht en dezelfde mail in andere mappen (bv. Alle e-mail na archiveren)."""
     row = db.one("SELECT * FROM messages WHERE id=?", (mid,))
     if not row:
-        return None
-    rows = [row] + (db.q("SELECT * FROM messages WHERE account=? AND message_id=? AND id!=?",
-                         (row["account"], row["message_id"], mid)) if row["message_id"] else [])
-    for r in rows:
-        if r["html"] is not None:
-            return r["html"]
-    html = ""
+        return None, []
+    return row, [row] + (db.q("SELECT * FROM messages WHERE account=? AND message_id=? AND id!=?",
+                              (row["account"], row["message_id"], mid)) if row["message_id"] else [])
+
+
+def _raw(acc, rows, limit=MAX_HTML_FETCH):
+    """De volledige mail van de server, via de eerste kopie die er nog staat; None als dat niet lukt of te groot is."""
     for r in rows:
         if r["uid"] > 0 and not r["folder"].startswith("_"):
             def fn(c, r=r):
                 c.select_folder(r["folder"], readonly=True)
                 size = c.fetch([r["uid"]], ["RFC822.SIZE"]).get(r["uid"], {}).get(b"RFC822.SIZE", 0)
-                if not size or size > MAX_HTML_FETCH:
-                    return ""
-                data = c.fetch([r["uid"]], ["BODY.PEEK[]"]).get(r["uid"], {}).get(b"BODY[]")
-                return parse(data)["html"] if data else ""
-            html = acc.run_imap(fn)
-            break
-    db.x("UPDATE messages SET html=? WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
-         (html, mid, row["account"], row["message_id"] or ""))
-    return html
+                if not size or size > limit:
+                    return None
+                return c.fetch([r["uid"]], ["BODY.PEEK[]"]).get(r["uid"], {}).get(b"BODY[]")
+            return acc.run_imap(fn)
+    return None
+
+
+def fetch_html(db, acc, mid):
+    """HTML-versie en bijlagenlijst van een bericht dat nog niet opgehaald was (alles buiten de inbox, en mail van
+    voor de bijlagen): één keer van de server, daarna bewaard. → (html, bijlagen)"""
+    row, rows = _copies(db, mid)
+    if not row:
+        return None, None
+    html = next((r["html"] for r in rows if r["html"] is not None), None)
+    atts = next((json.loads(r["attachments"]) for r in rows if r["attachments"] is not None), None)
+    if html is not None and atts is not None:
+        return html, atts
+    data = _raw(acc, rows)
+    p = parse(data) if data else None
+    html = html if html is not None else (p["html"] if p else "")
+    atts = atts if atts is not None else (p["attachments"] if p else [])
+    db.x("UPDATE messages SET html=?, attachments=? WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
+         (html, json.dumps(atts), mid, row["account"], row["message_id"] or ""))
+    return html, atts
+
+
+MAX_ATTACHMENT_FETCH = 40 * 1024 * 1024
+
+
+def fetch_attachment(db, acc, mid, idx):
+    """(bytes, type, naam) van bijlage nummer idx, rechtstreeks van de server; None als ze niet (meer) bestaat."""
+    from email import policy
+    from email.parser import BytesParser
+
+    from .mailparse import attachment_parts
+
+    _, rows = _copies(db, mid)
+    data = _raw(acc, rows, MAX_ATTACHMENT_FETCH) if rows else None
+    if not data:
+        return None
+    parts = attachment_parts(BytesParser(policy=policy.default).parsebytes(data))
+    if not 0 <= idx < len(parts):
+        return None
+    p = parts[idx]
+    return p.get_payload(decode=True) or b"", p.get_content_type(), p.get_filename() or f"bijlage-{idx + 1}"
 
 
 def set_flag(db, acc, tid, on):

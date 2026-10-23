@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS messages(
   unsub_post INTEGER DEFAULT 0,
   flagged INTEGER DEFAULT 0,
   html TEXT,                 -- NULL = nog niet opgehaald, '' = geen HTML-versie
+  attachments TEXT,          -- JSON [{name, type, size}]; NULL = nog niet bekend
   UNIQUE(account, folder, uid)
 );
 CREATE INDEX IF NOT EXISTS ix_m_thread ON messages(account, thread_key);
@@ -152,7 +153,8 @@ class DB:
             # migratie: vlag (Spark) en momenten
             for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0"),
                                ("messages", "html TEXT"), ("threads", "context TEXT"), ("sender_rules", "context TEXT"),
-                               ("threads", "dossier_id INTEGER"), ("threads", "dossier_ai INTEGER DEFAULT 0")):
+                               ("threads", "dossier_id INTEGER"), ("threads", "dossier_ai INTEGER DEFAULT 0"),
+                               ("messages", "attachments TEXT")):
                 if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
             # dossiers v2 (meerdere per mail, geen verzamelnamen, referentienummers): eenmalig opnieuw laten indelen,

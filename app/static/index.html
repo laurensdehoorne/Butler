@@ -378,14 +378,26 @@ textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto
 .mh .peek{display:none}
 .mb{padding:0 0 18px 46px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:0.9375rem;line-height:1.6;max-width:72ch}
 .msg.out .mb{border-left:2px solid color-mix(in oklab,var(--lapel) 50%,transparent);margin-left:46px;padding-left:14px}
-.msg.collapsed .mb{display:none}
+.msg.collapsed .mb,.msg.collapsed .atts{display:none}
+.atts{display:flex;flex-wrap:wrap;gap:8px;padding:0 0 16px 46px}
+.atts:empty{display:none}
+.att{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:8px 12px;border-radius:12px;background:var(--tint);color:var(--ink);font-size:0.875rem}
+.att .i{width:18px;height:18px;color:var(--lapel)}
+.att-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.att-size{color:var(--muted);font-size:0.8125rem;white-space:nowrap}
+#viewer{width:100%;max-width:none;height:100dvh;max-height:none;margin:0;background:#000;color:#fff;--off:0 0;--sc:.97}
+#viewer::backdrop{background:#000}
+#viewer img{display:block;width:100%;height:calc(100% - 56px - env(safe-area-inset-top));object-fit:contain}
+.viewer-bar{display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 6px) 8px 6px 16px;height:calc(56px + env(safe-area-inset-top))}
+.viewer-bar .viewer-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.viewer-bar .iconbtn{color:#fff}
 .mb.html{white-space:normal;max-width:none}
 .msg.out .mb.html{border-left:0;padding-left:46px;margin-left:0}
 .mail-html{display:block;width:100%;min-height:60px;border:0;border-radius:12px;background:#fff;box-shadow:0 0 0 1px var(--rule)}
 .msg.collapsed .mh .peek{display:block}
 .msg.collapsed .mh .to{display:none}
 #s-body{container-type:inline-size}
-@container (max-width:480px){.mb,.msg.out .mb.html{padding-left:0}.msg.out .mb{margin-left:0}}
+@container (max-width:480px){.mb,.msg.out .mb.html,.atts{padding-left:0}.msg.out .mb{margin-left:0}}
 
 .compose{background:var(--raised);border:1px solid var(--rule);border-radius:14px;padding:16px;margin-top:22px}
 .compose h3{font:600 1.25rem var(--display);margin:0 0 12px}
@@ -485,6 +497,10 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></symbol>
+  <symbol id="i-pdf" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 15h1.5a1.5 1.5 0 0 0 0-3H8v5M13 12v5h1a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2z"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 9"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
 </svg>
 
@@ -500,9 +516,9 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     </div>
     <div class="tabs" role="tablist" aria-label="Weergave">
       <button class="tab" role="tab" aria-selected="true" data-tab="followup"><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg>Opvolgen <span class="count" id="count-followup"></span></button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="inbox"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg>Inbox</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="agenda"><svg class="i" aria-hidden="true"><use href="#i-cal"/></svg>Agenda</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="dossiers"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg>Dossiers</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="inbox"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg>Inbox</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="cleanup"><svg class="i" aria-hidden="true"><use href="#i-broom"/></svg>Opruimen</button>
     </div>
   </div>
@@ -556,6 +572,12 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
       <button value="ok" class="btn primary" id="ask-ok">OK</button>
     </div>
   </form>
+</dialog>
+<dialog id="viewer" closedby="any" aria-label="Bijlage bekijken">
+  <div class="viewer-bar"><span class="viewer-name"></span>
+    <a class="iconbtn viewer-open" target="_blank" rel="noopener" aria-label="Openen of bewaren"><svg class="i" aria-hidden="true"><use href="#i-ext"/></svg></a>
+    <button class="iconbtn" data-viewer-close aria-label="Sluiten"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <img alt="">
 </dialog>
 <div class="toast" id="toast" role="status"></div>
 
@@ -1065,7 +1087,8 @@ function renderThread(){
           <div class="ln peek">${esc((m.body||'').replace(/\s+/g,' ').slice(0,160))}</div>
         </div>
       </button>
-      <div class="mb" data-mid="${m.id}">${esc(m.body)}</div></article>`;
+      <div class="mb" data-mid="${m.id}">${esc(m.body)}</div>
+      <div class="atts" data-atts="${m.id}">${attList(m)}</div></article>`;
   }).join('');
 
   const compose = `<section class="compose">
@@ -1110,6 +1133,32 @@ $('#s-body').addEventListener('change', e => {  // wisselen tussen deze mail en 
   if(e.target.id === 'ctx-sender' && S.thread) $('#ctx-text').value = e.target.checked ? (S.thread.sender?.context || '') : (S.thread.context || '');
 });
 
+/* ---------- bijlagen: de lijst staat bij de mail, het bestand komt pas van de server als je het opent ---------- */
+const attSize = n => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' kB';
+function attList(m){
+  const atts = m.attachments || [];
+  if(!atts.length) return '';
+  return atts.map(a => {
+    const icon = a.type === 'application/pdf' ? 'pdf' : a.type.startsWith('image/') ? 'image' : 'file';
+    const img = a.inline && a.type.startsWith('image/');
+    // pdf: de pdf-lezer van het toestel; afbeelding: hier bekijken; de rest: downloaden
+    return `<a class="att" href="${esc(a.url)}" ${img ? 'data-img' : 'target="_blank" rel="noopener"'} ${a.inline ? '' : `download="${esc(a.name)}"`}>
+      ${I(icon)}<span class="att-name">${esc(a.name)}</span><span class="att-size">${attSize(a.size)}</span></a>`;
+  }).join('');
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest('a.att[data-img]');
+  if(!a) return;
+  e.preventDefault();
+  const v = $('#viewer');
+  v.querySelector('img').src = a.getAttribute('href');
+  v.querySelector('.viewer-name').textContent = a.querySelector('.att-name').textContent;
+  v.querySelector('.viewer-open').href = a.getAttribute('href');
+  openDialog(v);
+});
+wireDialog($('#viewer'), () => closeTopLayer($('#viewer')));
+$('#viewer [data-viewer-close]').onclick = () => closeTopLayer($('#viewer'));
+
 /* ---------- HTML-mails: in een iframe zonder scripts; externe afbeeldingen komen via Butler ---------- */
 const mailDoc = html => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: ${location.origin}; style-src 'unsafe-inline'; font-src data:">
@@ -1126,8 +1175,10 @@ async function showHtml(el){
   el.dataset.done = '1';
   const m = S.thread?.messages.find(x => x.id === +el.dataset.mid);
   if(!m) return;
-  if(m.html === null){  // nog niet opgehaald (buiten de inbox): één keer van de server, intussen de tekst
-    try{ m.html = (await api(`/api/messages/${m.id}/html`)).html; }catch(e){ return; }
+  if(m.html === null || m.attachments === null){  // nog niet opgehaald: één keer van de server, intussen de tekst
+    try{ const r = await api(`/api/messages/${m.id}/html`); m.html = r.html; m.attachments = r.attachments; }catch(e){ return; }
+    const box = document.querySelector(`[data-atts="${m.id}"]`);
+    if(box) box.innerHTML = attList(m);
   }
   if(m.html && el.isConnected) mountHtml(el, m.html);
 }

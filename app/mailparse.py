@@ -113,6 +113,50 @@ def _html(msg):
     return html if len(html) <= MAX_HTML else ""
 
 
+def attachment_parts(msg):
+    """De bijlagen van een mail, in een vaste volgorde (de index is hun nummer): elk deel met een bestandsnaam of
+    "attachment", behalve de tekst zelf en afbeeldingen die in de HTML staan (die toont de mail al)."""
+    body = set()
+    for pref in (("plain",), ("html",)):
+        try:
+            b = msg.get_body(preferencelist=pref)
+        except Exception:
+            b = None
+        if b is not None:
+            body.add(id(b))
+    used = set()
+    try:
+        h = msg.get_body(preferencelist=("html",))
+        if h is not None:
+            used = {c.strip("<>") for c in re.findall(r"cid:([^\"'\s>)]+)", _content(h), re.I)}
+    except Exception:
+        pass
+    out = []
+    for p in msg.walk():
+        if p.is_multipart() or id(p) in body:
+            continue
+        disp = p.get_content_disposition()
+        cid = str(p.get("Content-ID") or "").strip().strip("<>")
+        if cid and cid in used and disp != "attachment":
+            continue  # ingebed in de HTML
+        if not p.get_filename() and disp != "attachment":
+            continue
+        out.append(p)
+    return out
+
+
+def attachments(msg):
+    """[{name, type, size}] voor de lijst in de app; het bestand zelf wordt pas opgehaald als je het opent."""
+    out = []
+    for i, p in enumerate(attachment_parts(msg)):
+        try:
+            size = len(p.get_payload(decode=True) or b"")
+        except Exception:
+            size = 0
+        out.append({"name": (p.get_filename() or f"bijlage-{i + 1}")[:200], "type": p.get_content_type(), "size": size})
+    return out
+
+
 def _decode_legacy(v):
     try:
         return str(make_header(decode_header(v)))
@@ -206,6 +250,7 @@ def parse(raw, header_only=False):
         "date": date,
         "body": body[:50000],
         "html": "" if header_only else _html(msg),
+        "attachments": None if header_only else attachments(msg),  # None = niet bekend (enkel headers opgehaald)
         "snippet": make_snippet(body),
         "kind": kind,
         "bulk": bool(kind),

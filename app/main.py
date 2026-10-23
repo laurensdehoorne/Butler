@@ -257,8 +257,53 @@ def message_html(mid: int):
     row = db.one("SELECT account FROM messages WHERE id=?", (mid,))
     if not row:
         raise HTTPException(404, "bericht niet gevonden")
-    html = _run(lambda: actions.fetch_html(db, _acc(row["account"]), mid))
-    return {"html": images.rewrite(html) if html else ""}
+    html, atts = _run(lambda: actions.fetch_html(db, _acc(row["account"]), mid))
+    return {"html": images.rewrite(html) if html else "", "attachments": attachment_links(mid, atts)}
+
+
+# --- bijlagen ----------------------------------------------------------------
+ATT_DAYS = 1  # zo lang blijft een bijlagelink geldig
+INLINE_TYPES = ("application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "image/heic", "text/plain")
+
+
+def _att_sig(mid, idx, exp):
+    return hmac.new(avatars.key, f"att:{mid}:{idx}:{exp}".encode(), "sha256").hexdigest()[:32]
+
+
+def attachment_links(mid, atts):
+    """Bijlagen met een ondertekende link die een dag geldig is: zo opent een pdf in de pdf-lezer van iOS, wat een
+    link met een token in de header niet kan. None = de lijst is nog niet bekend."""
+    if atts is None:
+        return None
+    exp = int(time.time()) + ATT_DAYS * 86400
+    return [{**a, "idx": i, "url": f"/att/{_att_sig(mid, i, exp)}/{mid}/{i}?e={exp}",
+             "inline": a["type"] in INLINE_TYPES} for i, a in enumerate(atts)]
+
+
+@app.get("/att/{sig}/{mid}/{idx}")
+def attachment(sig: str, mid: int, idx: int, e: int = 0):
+    """Een bijlage, van de server gehaald op het moment dat je ze opent. Zonder token (een gewone link), maar enkel met
+    een handtekening die Butler zelf gaf en die nog geldig is."""
+    if e < time.time() or not hmac.compare_digest(sig, _att_sig(mid, idx, e)):
+        raise HTTPException(404)
+    row = db.one("SELECT account FROM messages WHERE id=?", (mid,))
+    if not row:
+        raise HTTPException(404)
+    got = _run(lambda: actions.fetch_attachment(db, _acc(row["account"]), mid, idx))
+    if not got:
+        raise HTTPException(404, "bijlage niet (meer) gevonden")
+    data, ctype, name = got
+    from urllib.parse import quote
+
+    inline = ctype in INLINE_TYPES  # pdf en afbeeldingen meteen bekijken; html, svg en de rest downloaden
+    return Response(data, media_type=ctype if inline else "application/octet-stream", headers={
+        "Content-Disposition": f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(name)}",
+        # sandbox enkel voor downloads: Chrome weigert een pdf in een sandbox te tonen, en pdf en afbeeldingen voeren
+        # toch geen scripts uit in Butler
+        "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'" + ("" if inline else "; sandbox"),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=3600",
+    })
 
 
 @app.get("/health")
@@ -525,6 +570,7 @@ def get_thread(tid: int):
             "pending": m["folder"] == "_pending",
             # None = nog niet opgehaald (de app vraagt het op via /api/messages/<id>/html), "" = geen HTML-versie
             "html": images.rewrite(m["html"]) if m.get("html") else m.get("html"),
+            "attachments": attachment_links(m["id"], json.loads(m["attachments"]) if m.get("attachments") is not None else None),
         }
         for m in msgs
     ]

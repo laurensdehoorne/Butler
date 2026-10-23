@@ -308,14 +308,16 @@ class Syncer:
         self.db.x(
             """INSERT OR REPLACE INTO messages(account, folder, uid, message_id, thread_key, refs, from_addr, from_name,
                to_addrs, cc_addrs, reply_to, subject, date, snippet, body, seen, outgoing, in_inbox, bulk,
-               kind, unsub, unsub_post, flagged, html)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               kind, unsub, unsub_post, flagged, html, attachments)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (acc.id, folder, uid, p["message_id"], key, " ".join(p["refs"]), p["from_addr"], p["from_name"],
              json.dumps(p["to"]), json.dumps(p["cc"]), p["reply_to"], p["subject"], p["date"], p["snippet"],
              p["body"], 1 if (seen or outgoing) else 0, 1 if outgoing else 0, 1 if role == "inbox" else 0,
              1 if p["bulk"] else 0, p["kind"], p.get("unsub", ""), 1 if p.get("unsub_post") else 0, 1 if flagged else 0,
              # HTML enkel voor de inbox bewaren (opent meteen); de rest wordt opgehaald wanneer je de mail opent
-             p.get("html") if role == "inbox" else None),
+             p.get("html") if role == "inbox" else None,
+             # de lijst met bijlagen is klein: altijd bewaren; de bestanden zelf blijven op de server
+             json.dumps(p["attachments"]) if p.get("attachments") is not None else None),
         )
         self.db.x("INSERT OR IGNORE INTO threads(account, thread_key) VALUES(?,?)", (acc.id, key))
         tid = self.db.one("SELECT tid FROM threads WHERE account=? AND thread_key=?", (acc.id, key))["tid"]
