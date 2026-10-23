@@ -340,13 +340,15 @@ dialog.sheet.center .shead{padding-top:14px}
 .tb:disabled{opacity:.5}
 .sbody:focus{outline:none}
 
-#fwd{width:min(460px,calc(100% - 32px));border-radius:18px;--off:0 0;--sc:.96}
-#fwd form{padding:22px;display:flex;flex-direction:column;gap:6px}
-#fwd h2{font:700 var(--fs-title2)/1.25 var(--text);margin:0}
-#fwd p{margin:0 0 8px;color:var(--muted);font-size:var(--fs-subhead)}
-#fwd .flabel{font-size:var(--fs-subhead);color:var(--muted);margin-top:6px}
-#fwd .actions{margin-top:14px}
-#fwd .actions .btn{flex:1;justify-content:center;min-height:44px}
+#fwd,#newmail{width:min(460px,calc(100% - 32px));border-radius:18px;--off:0 0;--sc:.96}
+#fwd form,#newmail form{padding:22px;display:flex;flex-direction:column;gap:6px}
+#fwd h2,#newmail h2{font:700 var(--fs-title2)/1.25 var(--text);margin:0}
+#fwd p,#newmail p{margin:0 0 8px;color:var(--muted);font-size:var(--fs-subhead)}
+#fwd .flabel,#newmail .flabel{font-size:var(--fs-subhead);color:var(--muted);margin-top:6px}
+#fwd .actions,#newmail .actions{margin-top:14px}
+#fwd .actions .btn,#newmail .actions .btn{flex:1;justify-content:center;min-height:44px}
+#newmail textarea{min-height:140px}
+#newmail .reply-files{margin-top:8px}
 .ask-row{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:12px 0 0;padding:10px 14px;border:0;border-radius:14px;background:var(--tint);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .ask-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ask-card{margin-top:12px}
@@ -565,6 +567,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
         <h1><img class="appicon" src="/icon.svg" alt="" width="34" height="34">Butler</h1>
         <div class="status" id="status" aria-live="polite"></div>
       </div>
+      <button class="iconbtn" id="newmail-btn" title="Nieuwe mail" aria-label="Nieuwe mail"><svg class="i" aria-hidden="true"><use href="#i-draft"/></svg></button>
       <button class="iconbtn" id="refresh" title="Vernieuwen" aria-label="Vernieuwen"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></button>
       <button class="iconbtn" id="gear" title="Instellingen" aria-label="Instellingen"><svg class="i" aria-hidden="true"><use href="#i-sliders"/></svg></button>
     </div>
@@ -640,6 +643,28 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     <div class="actions">
       <button type="button" class="btn ghost" data-close>Annuleren</button>
       <button value="ok" class="btn primary" id="fwd-ok"><svg class="i" aria-hidden="true"><use href="#i-fwd"/></svg>Versturen</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="newmail" closedby="any" aria-labelledby="nm-title">
+  <form method="dialog">
+    <h2 id="nm-title">Nieuwe mail</h2>
+    <label class="flabel" for="nm-acc" id="nm-acc-l">Van</label>
+    <select class="field" id="nm-acc"></select>
+    <label class="flabel" for="nm-to">Aan</label>
+    <input class="field" id="nm-to" type="email" multiple autocomplete="off" list="fwd-list" placeholder="naam@voorbeeld.be" required>
+    <label class="flabel" for="nm-cc">Cc (niet verplicht)</label>
+    <input class="field" id="nm-cc" type="email" multiple autocomplete="off" list="fwd-list" placeholder="naam@voorbeeld.be">
+    <label class="flabel" for="nm-subject">Onderwerp</label>
+    <input class="field" id="nm-subject" type="text" autocomplete="off" enterkeyhint="next">
+    <label class="flabel" for="nm-body">Bericht</label>
+    <textarea class="field" id="nm-body" rows="6" required></textarea>
+    <div class="reply-files" id="nm-files"></div>
+    <input type="file" id="nm-pick" multiple hidden>
+    <div class="actions">
+      <button type="button" class="btn ghost" data-close>Annuleren</button>
+      <button value="draft" class="btn" id="nm-draft"><svg class="i" aria-hidden="true"><use href="#i-draft"/></svg>Concept</button>
+      <button value="ok" class="btn primary" id="nm-ok"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg>Versturen</button>
     </div>
   </form>
 </dialog>
@@ -722,6 +747,53 @@ wireDialog($('#ask'), () => closeTopLayer($('#ask'), ''));
 wireDialog($('#fwd'), () => closeTopLayer($('#fwd'), ''));
 $('#fwd [data-close]').onclick = () => closeTopLayer($('#fwd'), '');
 $('#ask [data-close]').onclick = () => closeTopLayer($('#ask'), '');
+wireDialog($('#newmail'), () => closeTopLayer($('#newmail'), ''));
+$('#newmail [data-close]').onclick = () => closeTopLayer($('#newmail'), '');
+
+
+/* ---------- nieuwe mail: los van een thread, rechtstreeks versturen of als concept bewaren ---------- */
+const nmFiles = [];
+function nmFilesView(){
+  $('#nm-files').innerHTML = nmFiles.map((f, i) => `<span class="att">${I('file')}<span class="att-name">${esc(f.name)}</span><span class="att-size">${attSize(f.size)}</span>
+      <button type="button" class="att-x" data-nm-x="${i}" aria-label="${esc(f.name)} weghalen">${I('x')}</button></span>`).join('')
+    + `<button type="button" class="btn ghost" data-nm-attach>${I('clip')}Bijlage toevoegen</button>`;
+}
+$('#newmail').addEventListener('click', e => {
+  if(e.target.closest('[data-nm-attach]')) $('#nm-pick').click();
+  const x = e.target.closest('[data-nm-x]');
+  if(x){ nmFiles.splice(+x.dataset.nmX, 1); nmFilesView(); }
+});
+$('#nm-pick').addEventListener('change', e => {
+  for(const f of e.target.files){
+    if(nmFiles.reduce((n, x) => n + x.size, 0) + f.size > MAX_UPLOAD){ toast(`${f.name} past er niet meer bij: samen hoogstens 18 MB`); continue; }
+    nmFiles.push(f);
+  }
+  e.target.value = ''; nmFilesView();
+});
+async function newMail(){
+  if(!S.accounts.length) return toast('Er is nog geen account');
+  const d = $('#newmail'), acc = $('#nm-acc');
+  acc.innerHTML = S.accounts.map(a => `<option value="${esc(a.id)}">${esc(a.name)} (${esc(a.email)})</option>`).join('');
+  acc.value = S.accounts.some(a => a.id === S.account) ? S.account : S.accounts[0].id;
+  const many = S.accounts.length > 1;
+  acc.hidden = $('#nm-acc-l').hidden = !many;
+  for(const id of ['to', 'cc', 'subject', 'body']) $('#nm-' + id).value = '';
+  nmFiles.length = 0; nmFilesView(); d.returnValue = '';
+  api('/api/recipients').then(r => $('#fwd-list').innerHTML = r.recipients.map(x => `<option value="${esc(x.addr)}">${esc(x.name)}</option>`).join('')).catch(() => {});
+  openDialog(d); $('#nm-to').focus();
+  const how = await new Promise(res => d.addEventListener('close', () => res(d.returnValue), {once: true}));
+  if(how !== 'ok' && how !== 'draft') return;
+  const split = v => v.split(/[,;\s]+/).filter(Boolean);
+  const files = await Promise.all(nmFiles.map(async f => ({name: f.name, type: f.type, data: await b64(f)})));
+  const payload = {account: acc.value, to: split($('#nm-to').value), cc: split($('#nm-cc').value),
+                   subject: $('#nm-subject').value, body: $('#nm-body').value, files};
+  toast(how === 'ok' ? 'Wordt verstuurd…' : 'Concept wordt bewaard…');
+  try{
+    const r = await post('/api/compose/' + (how === 'ok' ? 'send' : 'draft'), payload);
+    toast(how === 'ok' ? 'Verstuurd naar ' + r.to.join(', ') : 'Concept staat in ' + r.folder + '. Verstuur het vanuit Spark.');
+  }catch(err){ toast('Mislukt: ' + err.message); }
+}
+$('#newmail-btn').onclick = newMail;
 
 /* ---------- API ---------- */
 let login = null;

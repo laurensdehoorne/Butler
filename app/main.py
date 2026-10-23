@@ -1385,6 +1385,42 @@ def recipients():
     return {"recipients": forward.recipients(db)}
 
 
+class ComposeIn(BaseModel):
+    account: str
+    to: list[str]
+    cc: list[str] = []
+    subject: str = ""
+    body: str
+    files: list[FileIn] = []
+
+
+_ADDR = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
+
+
+def _compose_args(body: ComposeIn):
+    acc = _acc(body.account)
+    to = [a.strip() for a in body.to if a.strip()]
+    cc = [a.strip() for a in body.cc if a.strip()]
+    if not to or not all(_ADDR.match(a) for a in to + cc):
+        raise HTTPException(400, "Geef een geldig e-mailadres.")
+    if not body.body.strip():
+        raise HTTPException(400, "Leeg bericht")
+    subject = " ".join(body.subject.split())[:300]
+    return acc, to, cc, subject, body.body, _files(body.files)
+
+
+@app.post("/api/compose/send", dependencies=[Depends(auth)])
+def compose_send(body: ComposeIn):
+    acc, to, cc, subject, text, files = _compose_args(body)
+    return {"ok": True, **_run(lambda: actions.send_new(acc, to, cc, subject, text, files))}
+
+
+@app.post("/api/compose/draft", dependencies=[Depends(auth)])
+def compose_draft(body: ComposeIn):
+    acc, to, cc, subject, text, files = _compose_args(body)
+    return {"ok": True, **_run(lambda: actions.save_new_draft(acc, to, cc, subject, text, files))}
+
+
 @app.post("/api/threads/{tid}/send", dependencies=[Depends(auth)])
 def send(tid: int, body: SendIn):
     t = _thread_or_404(tid)

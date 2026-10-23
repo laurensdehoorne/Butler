@@ -253,15 +253,50 @@ def build_reply(db, acc, tid, body, reply_all=False, files=()):
     return t, em, mid, to, cc, subject, refs
 
 
-def save_draft(db, acc, tid, body, reply_all=False, files=()):
-    """Zet het antwoord als concept in de Concepten-map: verschijnt in Spark/Apple Mail/Gmail om daar te versturen."""
-    _, em, _, to, cc, subject, _ = build_reply(db, acc, tid, body, reply_all, files)
+def _append_draft(acc, em):
     folder = acc.folders.get("drafts")
     if not folder:
         raise RuntimeError(f"geen Concepten-map gevonden voor {acc.name}")
     raw = em.as_bytes()
     acc.run_imap(lambda c: c.append(folder, raw, flags=(DRAFT, SEEN)))
+    return folder
+
+
+def save_draft(db, acc, tid, body, reply_all=False, files=()):
+    """Zet het antwoord als concept in de Concepten-map: verschijnt in Spark/Apple Mail/Gmail om daar te versturen."""
+    _, em, _, to, cc, subject, _ = build_reply(db, acc, tid, body, reply_all, files)
+    folder = _append_draft(acc, em)
     return {"to": to, "cc": cc, "subject": subject, "folder": folder, "message_id": em["Message-ID"]}
+
+
+def build_new(acc, to, cc, subject, body, files=()):
+    """Een nieuwe mail, los van een thread."""
+    if not to:
+        raise ValueError("geen ontvanger")
+    em = EmailMessage()
+    em["From"] = formataddr((acc.display_name, acc.email)) if acc.display_name else acc.email
+    em["To"] = ", ".join(to)
+    if cc:
+        em["Cc"] = ", ".join(cc)
+    em["Subject"] = subject
+    em["Date"] = formatdate(localtime=True)
+    em["Message-ID"] = make_msgid(domain=acc.email.split("@", 1)[1])
+    em.set_content(body.rstrip() + "\n")
+    add_files(em, files)
+    return em
+
+
+def send_new(acc, to, cc, subject, body, files=()):
+    em = build_new(acc, to, cc, subject, body, files)
+    smtp_send(acc, em)
+    append_sent(acc, em)  # de kopie in 'Verzonden' komt bij de volgende sync ook in Butler
+    return {"to": to, "cc": cc, "subject": subject}
+
+
+def save_new_draft(acc, to, cc, subject, body, files=()):
+    em = build_new(acc, to, cc, subject, body, files)
+    folder = _append_draft(acc, em)
+    return {"to": to, "cc": cc, "subject": subject, "folder": folder}
 
 
 def append_sent(acc, em):
