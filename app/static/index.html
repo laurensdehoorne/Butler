@@ -398,6 +398,9 @@ textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto
 .mh .c-top b{font-size:0.9375rem;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mh .ln{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mh .peek{display:none}
+.mb details.q-text{margin-top:10px;white-space:pre-wrap;color:var(--muted)}
+.mb details.q-text summary,.butler-q summary{display:inline-block;margin:4px 0;padding:4px 10px;border-radius:99px;background:var(--tint);color:var(--muted);font-size:.8125rem;cursor:pointer;list-style:none;white-space:normal}
+.mb details summary::-webkit-details-marker{display:none}
 .mb{padding:0 0 18px 46px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:0.9375rem;line-height:1.6;max-width:72ch}
 .msg.out .mb{border-left:2px solid color-mix(in oklab,var(--lapel) 50%,transparent);margin-left:46px;padding-left:14px}
 .msg.collapsed .mb,.msg.collapsed .atts{display:none}
@@ -1272,7 +1275,7 @@ function renderThread(){
           <div class="ln peek">${esc((m.body||'').replace(/\s+/g,' ').slice(0,160))}</div>
         </div>
       </button>
-      <div class="mb" data-mid="${m.id}">${esc(m.body)}</div>
+      <div class="mb" data-mid="${m.id}">${textBody(m)}</div>
       <div class="atts" data-atts="${m.id}">${attList(m)}</div></article>`;
   }).join('');
 
@@ -1439,7 +1442,9 @@ $('#viewer [data-viewer-close]').onclick = closeViewer;
 const mailDoc = html => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: ${location.origin}; style-src 'unsafe-inline'; font-src data:">
 <base target="_blank"><style>html,body{margin:0;background:#fff;color:#1b1b1b}
-body{padding:14px;font:15px/1.5 -apple-system,system-ui,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}</style>
+body{padding:14px;font:15px/1.5 -apple-system,system-ui,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}
+.butler-q{margin-top:14px}.butler-q>summary{display:inline-block;padding:5px 12px;border-radius:99px;background:#f2f2f7;color:#6e6e73;font:13px/1.3 -apple-system,system-ui,sans-serif;cursor:pointer;list-style:none}
+.butler-q>summary::-webkit-details-marker{display:none}.butler-q[open]>summary{margin-bottom:10px}</style>
 </head><body>${html}</body></html>`;
 
 function showHtmlMessages(){
@@ -1458,13 +1463,66 @@ async function showHtml(el){
   }
   if(m.html && el.isConnected) mountHtml(el, m.html);
 }
+/* ---------- eerdere berichten die in een antwoord geciteerd staan: dicht, zoals in Mail ---------- */
+// waar het citaat begint: Gmail, Apple Mail/Spark, Outlook, Yahoo
+const QUOTE_SEL = '.gmail_quote, .gmail_extra, blockquote[type=cite], #appendonsend, [id^=divRplyFwdMsg], .yahoo_quoted, #mail-editor-reference-message-container, hr#stopSpelling';
+const QUOTE_HEAD = /^\s*(van|from|de|von|da)\s*:[\s\S]{0,400}?(verzonden|sent|envoyé|gesendet|inviato|datum|date)\s*:/i;
+const QUOTE_ON = /^\s*(op|on|le|am|el)\s.{4,160}(schreef|wrote|a écrit|schrieb|escribió)[^:]{0,40}:\s*$/i;
+function quoteStart(doc){
+  const body = doc.body;
+  let cut = body.querySelector(QUOTE_SEL);
+  // "Op 23 okt. 2026 om 10:24 schreef Nathan:" vlak voor het citaat hoort er ook bij
+  for(const e of body.querySelectorAll('div, p, span, td')){
+    const t = e.textContent.trim();
+    if(t.length > 600 || !(QUOTE_HEAD.test(t) || QUOTE_ON.test(t))) continue;
+    if([...e.children].some(c => QUOTE_HEAD.test(c.textContent.trim()) || QUOTE_ON.test(c.textContent.trim()))) continue;  // het kleinste blok
+    let top = e;  // Outlook: de kop zit in een blok met een lijn erboven
+    while(top.parentElement && top.parentElement !== body && top.parentElement.textContent.trim().startsWith(t.slice(0, 30))) top = top.parentElement;
+    const prev = top.previousElementSibling;
+    if(prev && prev.tagName === 'HR') top = prev;
+    if(!cut || (cut.compareDocumentPosition(top) & Node.DOCUMENT_POSITION_PRECEDING)) cut = top;
+    break;
+  }
+  return cut;
+}
+function splitQuoted(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const start = quoteStart(doc);
+  if(!start) return {main: html, quoted: ''};
+  const r = doc.createRange();
+  r.setStartBefore(start); r.setEndAfter(doc.body.lastChild);
+  const frag = r.extractContents();
+  if(doc.body.textContent.trim().length < 2 && !doc.body.querySelector('img')) return {main: html, quoted: ''};  // enkel een citaat: alles tonen
+  const box = doc.createElement('div'); box.append(frag);
+  return {main: doc.body.innerHTML, quoted: box.innerHTML};
+}
+const QUOTE_DETAILS = q => `<details class="butler-q"><summary>Eerdere berichten tonen</summary>${q}</details>`;
+// gewone tekst: vanaf "Op … schreef …:", een Outlook-kop of de eerste regels met >
+function splitQuotedText(text){
+  const lines = (text || '').split('\n');
+  let at = -1;
+  for(let i = 1; i < lines.length; i++){
+    const l = lines[i];
+    if(QUOTE_ON.test(l) || /^\s*(van|from)\s*:/i.test(l) && QUOTE_HEAD.test(lines.slice(i, i + 4).join('\n'))
+       || /^-{2,}\s*(original message|oorspronkelijk bericht|forwarded message|doorgestuurd bericht)/i.test(l.trim())
+       || /^>/.test(l) && lines.slice(i, i + 3).every(x => /^>|^\s*$/.test(x))){ at = i; break; }
+  }
+  if(at < 1 || !lines.slice(0, at).join('').trim()) return {main: text, quoted: ''};
+  return {main: lines.slice(0, at).join('\n').trimEnd(), quoted: lines.slice(at).join('\n')};
+}
+function textBody(m){
+  const {main, quoted} = splitQuotedText(m.body);
+  return esc(main) + (quoted ? `<details class="q-text"><summary>Eerdere berichten tonen</summary>${esc(quoted)}</details>` : '');
+}
+
 function mountHtml(el, html){
   const f = document.createElement('iframe');
   f.className = 'mail-html'; f.title = 'Inhoud van de mail';
   // zonder allow-scripts kan de mail niets uitvoeren; same-origin enkel om de hoogte te kunnen meten
   f.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
   f.setAttribute('referrerpolicy', 'no-referrer');
-  f.srcdoc = mailDoc(html);
+  const {main, quoted} = splitQuoted(html);
+  f.srcdoc = mailDoc(main + (quoted ? QUOTE_DETAILS(quoted) : ''));
   el.replaceChildren(f);
   el.classList.add('html');
   f.addEventListener('load', () => {
@@ -1479,6 +1537,7 @@ function mountHtml(el, html){
     };
     fit();
     doc.addEventListener('load', fit, true);  // afbeeldingen die later binnenkomen
+    doc.addEventListener('toggle', fit, true);  // eerdere berichten open- of dichtgeklapt
     setTimeout(fit, 400); setTimeout(fit, 1500);
   });
 }
