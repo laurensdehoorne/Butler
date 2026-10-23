@@ -35,6 +35,7 @@ class Account:
         self.smtp_port = int(cfg.get("smtp_port", p.get("smtp_port", 587)))
         self.smtp_user = cfg.get("smtp_username", cfg["email"])
         self.append_sent = bool(cfg.get("append_sent", p.get("append_sent", True)))
+        self.provider = provider
         self.gmail = provider == "gmail"
         self.ai = bool(cfg.get("ai", True))
         self.folders = {}
@@ -100,6 +101,7 @@ class Account:
             "id": self.id,
             "name": self.name,
             "email": self.email,
+            "provider": self.provider,
             "status": self.status,
             "error": self.error,
             "last_sync": self.last_sync,

@@ -178,6 +178,8 @@ a.item:hover::before,a.item:hover + .item::before{opacity:0}
 .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
 .badge{display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;border-radius:6px;padding:1px 7px;background:var(--tint);color:var(--muted);white-space:nowrap}
 .badge .i{width:12px;height:12px}
+.acc-logo{display:inline-flex;align-items:center;align-self:center}
+.acc-logo svg{width:18px;height:14px}
 .badge.gold{background:var(--gold-tint);color:var(--gold);font-weight:600}
 .badge.tag{background:transparent;padding-inline:0 4px}
 .c-top .flag{width:13px;height:13px;color:var(--flag);fill:currentColor;align-self:center}
@@ -763,6 +765,18 @@ function renderStatus(syncing=false){
       + (backlog ? `, nog ${backlog.toLocaleString('nl-BE')} oude mails te halen` : '');
 }
 
+/* ---------- account: het logo van Gmail of iCloud in plaats van de naam ---------- */
+const ACC_LOGO = {
+  gmail: '<svg viewBox="52 42 88 66" aria-hidden="true"><path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/><path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/><path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2"/><path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92"/><path fill="#c5221f" d="M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2"/></svg>',
+  icloud: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#3693f3" d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A6 6 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>'
+};
+// twee accounts van dezelfde soort (twee Gmails): dan blijft de naam, anders weet je niet welk
+function accBadge(id, name){
+  const p = S.accounts.find(a => a.id === id)?.provider;
+  if(!ACC_LOGO[p] || S.accounts.filter(a => a.provider === p).length > 1) return `<span class="badge">${esc(name)}</span>`;
+  return `<span class="acc-logo" role="img" aria-label="${esc(name)}" title="${esc(name)}">${ACC_LOGO[p]}</span>`;
+}
+
 function card(c, mode){
   const badges = [];
   if(c.priority==='hoog') badges.push('<span class="badge gold">Belangrijk</span>');
@@ -770,7 +784,7 @@ function card(c, mode){
   if(mode==='them'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge">${d} dagen stil</span>`); }
   if(mode==='me'){ const d=Math.floor(c.age_days); if(d>=1) badges.push(`<span class="badge">${d} dagen oud</span>`); }
   if(c.category && c.category!=='overig') badges.push(`<span class="badge">${esc(c.category)}</span>`);
-  if(S.accounts.length>1) badges.push(`<span class="badge">${esc(c.account_name)}</span>`);
+  if(S.accounts.length>1) badges.push(accBadge(c.account, c.account_name));
   c.tags.forEach(t => badges.push(`<span class="badge tag">#${esc(t)}</span>`));
   if(mode !== 'dossier') (c.dossiers || []).slice().reverse().forEach(d => badges.unshift(dossierBadge(d)));
   return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}" data-flagged="${c.flagged?1:0}">
@@ -1085,7 +1099,7 @@ async function load(animate=false){
 function senderCard(x, i){
   const b = [`<span class="badge">${x.kind==='reclame'?'reclame':x.kind==='notificatie'?'notificatie':'persoonlijk'}</span>`];
   if(x.unsubscribed_at) b.push(`<span class="badge">${I('check')}uitgeschreven</span>`);
-  if(S.accounts.length>1) b.push(`<span class="badge">${esc(x.account_name)}</span>`);
+  if(S.accounts.length>1) b.push(accBadge(x.account, x.account_name));
   const rule = RULES.map(([k,n])=>`<option value="${k}" ${x.action===k?'selected':''}>${n.replace('…', x.after_days)}</option>`).join('');
   const unsub = x.unsub_method && !x.unsubscribed_at
     ? `<button class="btn" data-s="unsub" data-i="${i}">${I(x.unsub_method==='link'?'ext':'bell-off')}Uitschrijven</button>` : '';
@@ -1204,8 +1218,8 @@ wireDialog(sheet, closeThread);
 function renderThread(){
   const t = S.thread;
   $('#s-title').textContent = t.subject || '(geen onderwerp)';
-  $('#s-meta').innerHTML = [S.accounts.length>1 ? t.account_name : '', `${t.n} bericht${t.n>1?'en':''}`, t.done?'afgehandeld':'']
-    .filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('')
+  $('#s-meta').innerHTML = (S.accounts.length>1 ? accBadge(t.account, t.account_name).replace('class="badge"', '') : '')
+    + [`${t.n} bericht${t.n>1?'en':''}`, t.done?'afgehandeld':''].filter(Boolean).map(x=>`<span>${esc(x)}</span>`).join('')
     + (t.dossiers || []).map(d => `<button class="linkbtn" data-dossier="${d.id}">${I('folder')}${esc(d.name)}</button>`).join('');
   // werkbalk onderaan: binnen duimbereik, enkel de hoofdactie getint
   const T = (id, icon, label, cls='', extra='') => `<button class="tb ${cls}" data-a="${id}" ${extra}>${I(icon)}<span>${label}</span></button>`;
