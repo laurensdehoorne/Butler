@@ -128,12 +128,12 @@ header .iconbtn:hover{background:var(--tint)}
   .tab .i{display:block;width:24px;height:24px}
   .tab[aria-selected=true] .i{animation:tab-bounce .45s cubic-bezier(.34,1.56,.64,1)}
   .tab .count{position:absolute;top:2px;left:calc(50% + 7px);font-size:var(--fs-caption2);min-width:18px;line-height:18px;padding:0 5px}
-  main{padding-bottom:calc(env(safe-area-inset-bottom) + 104px)}
 }
 @keyframes tab-bounce{40%{scale:1.18}}
 
 /* ---------- papier ---------- */
 main{padding:14px max(16px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 56px) max(16px,env(safe-area-inset-left))}
+@media (max-width:699px){main{padding-bottom:calc(env(safe-area-inset-bottom) + 104px)}}  /* ruimte onder de zwevende tabbalk */
 .searchbox{position:relative;display:block}
 .searchbox .i{position:absolute;left:14px;top:50%;translate:0 -50%;color:var(--muted);pointer-events:none}
 .searchbox input{width:100%;font-size:max(1rem,16px);padding:10px 40px 10px 40px;border-radius:999px;border:1px solid var(--rule);background:var(--raised);outline:none}
