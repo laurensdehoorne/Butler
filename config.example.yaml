@@ -8,6 +8,7 @@ app:
   base_url: "http://butler.jouw-tailnet.ts.net:8088"
   sync_days: 0           # hoeveel dagen mail lokaal bijgehouden wordt; 0 = alle mail (gemarkeerde mail altijd)
   sync_archive: true     # ook het archief: Alle e-mail (Gmail) of Archief (iCloud), zodat zoeken en vlaggen alles zien
+  sync_daily_mb: 1000    # oude mail ophalen gespreid over dagen: zoveel MB per account per dag (0 = geen limiet)
   followup_days: 3       # na hoeveel dagen zonder antwoord een thread in "Wacht op antwoord" komt
   poll_seconds: 300      # max. tijd tussen syncs (IDLE meldt nieuwe mail meestal binnen enkele seconden)
   timezone: Europe/Brussels

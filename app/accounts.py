@@ -41,6 +41,7 @@ class Account:
         self.status = "starten"
         self.error = None
         self.last_sync = None
+        self.backlog = {}  # map -> aantal oude berichten dat nog moet volgen (dagbudget)
         self.wake = threading.Event()
 
     def connect(self):
@@ -102,5 +103,6 @@ class Account:
             "status": self.status,
             "error": self.error,
             "last_sync": self.last_sync,
+            "backlog": sum(self.backlog.values()),
             "ai": self.ai,
         }
