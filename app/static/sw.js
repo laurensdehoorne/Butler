@@ -1,7 +1,7 @@
 // Butler-service worker (zoals in CellarPeaks): houdt de app-schil offline beschikbaar, toont een nette
 // "wordt bijgewerkt"-pagina wanneer Tailscale tijdens een herstart 502–504 geeft, en toont Web Push-meldingen.
 // De API wordt nooit gecachet: die gaat altijd naar de server.
-const CACHE = "butler-v2"; // een nieuwe versie wist de oudere caches
+const CACHE = "butler-v3"; // een nieuwe versie wist de oudere caches
 const SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/apple-touch-icon.png", "/icon-192.png", "/badge-96.png", "/fonts/bodoni-moda-latin.woff2"];
 
 self.addEventListener("install", (event) => {
@@ -56,10 +56,16 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   let msg = {};
   try { msg = event.data ? event.data.json() : {}; } catch { msg = { body: event.data?.text() }; }
-  event.waitUntil(self.registration.showNotification(msg.title || "Butler", {
+  const shown = self.registration.showNotification(msg.title || "Butler", {
     body: msg.body || "", icon: "/icon-192.png", badge: "/badge-96.png",
     data: { url: msg.url || "/" }, tag: msg.tag || "butler",
-  }));
+  });
+  // het getal op het app-icoon bijwerken, ook als de app dicht is (iOS 16.4+ op het beginscherm)
+  let badge = Promise.resolve();
+  if (typeof msg.badge === "number" && self.navigator.setAppBadge) {
+    badge = (msg.badge ? self.navigator.setAppBadge(msg.badge) : self.navigator.clearAppBadge()).catch(() => {});
+  }
+  event.waitUntil(Promise.all([shown, badge]));
 });
 
 self.addEventListener("notificationclick", (event) => {

@@ -33,7 +33,7 @@ def test_notifier_uses_web_push(app, client):
         app.notifier.send("iCloud: Piet", "Afspraak", tid=42, high=True)
     import json
     msg = json.loads(wp.call_args[0][1])
-    assert msg == {"title": "iCloud: Piet", "body": "Afspraak", "url": "/#t=42", "tag": "butler-42"}
+    assert msg == {"title": "iCloud: Piet", "body": "Afspraak", "url": "/#t=42", "tag": "butler-42", "badge": 0}
 
 
 def test_service_worker_served(client):
@@ -57,3 +57,15 @@ def test_push_error_is_reported_not_counted(app, client):
         r = client.post("/api/push/test", headers=H)
     assert r.status_code == 502 and "Missing 'sub'" in r.json()["detail"]
     assert app.push.count() == 1  # het toestel blijft: het lag niet aan het toestel
+
+
+def test_push_carries_badge_count(app, client, acc):
+    from tests.conftest import put, raw
+
+    put(acc, "INBOX", 1, raw("Piet <piet@x.be>", "Vraag", "<v1@x>"))  # nog niet getrieerd: wacht op jou
+    put(acc, "INBOX", 2, raw("Ann <ann@y.be>", "Nog een vraag", "<v2@x>"))
+    client.post("/api/push/subscribe", headers=H, json={"subscription": SUB})
+    with mock.patch("pywebpush.webpush") as wp:
+        client.post("/api/push/test", headers=H)
+    import json
+    assert json.loads(wp.call_args[0][1])["badge"] == 2

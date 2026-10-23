@@ -22,7 +22,7 @@ Je krijgt een e-mailthread. Antwoord met uitsluitend één JSON-object, zonder u
 - "prioriteit": "hoog" (dringend of belangrijk, vraagt snel een reactie), "normaal", of "laag" (informatief, reclame, automatische meldingen).
 - "categorie": één kort woord, bv. praktijk, patiënt, verwijzer, leverancier, factuur, reis, familie, bestelling, nieuwsbrief, systeem, overig.
 - "actie": "antwoorden" (er wordt een antwoord van {name} verwacht), "actie" (iets doen, maar niet per se antwoorden), "lezen", "wachten" ({name} wacht op de ander) of "geen".
-- "deadline": een datum "JJJJ-MM-DD" als er een duidelijke deadline of afspraakdatum is, anders null.
+- "deadline": een datum "JJJJ-MM-DD" als er een duidelijke deadline of afspraakdatum is, met het uur erbij ("JJJJ-MM-DDTUU:MM", lokale tijd) als dat in de mail staat (bv. een afspraak); anders null.
 Berichten gemarkeerd met [JIJ] zijn door {name} zelf verstuurd."""
 
 DRAFT_SYSTEM = """Je schrijft een e-mailantwoord namens {owner}. Vandaag is {today}.
@@ -305,7 +305,7 @@ class AIWorker:
                 "priority": prio if prio in PRIORITIES else "normaal",
                 "category": str(data.get("categorie", "overig")).lower()[:30],
                 "action": act if act in ACTIONS else "lezen",
-                "deadline": dl if isinstance(dl, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", dl) else None,
+                "deadline": dl if isinstance(dl, str) and re.match(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$", dl) else None,
             }
             dossiers.assign(self.db, tid, dossiers.extract(raw))
         self.db.x(

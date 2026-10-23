@@ -217,6 +217,8 @@ a.item{touch-action:pan-y}
 .item.agenda .ag-time{flex:none;width:52px;padding-top:2px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--gold)}
 .item.agenda .ag-time.allday{font-weight:500;font-size:0.8125rem;color:var(--muted)}
 .item.agenda .who{white-space:normal}
+.ag-rem{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:0.8125rem;color:var(--muted)}
+.ag-rem .i{width:13px;height:13px}
 .item.agenda + .item.agenda::before{left:64px}
 .m-when{display:block;font-size:0.8125rem;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums}
 .info .tie{width:18px;height:9px}
@@ -345,6 +347,9 @@ textarea.field{resize:vertical;line-height:1.55;field-sizing:content;height:auto
 .note-card p{margin:0;font-size:1rem;line-height:1.55}
 .ask-butler{width:100%;justify-content:center;padding:12px;margin-bottom:18px;border-style:dashed}
 .info{display:flex;align-items:center;gap:8px;font-size:0.8438rem;color:var(--muted);margin:0 0 14px}
+.info .sub{display:block;font-size:0.8125rem;color:var(--muted)}
+.info:has(.sub){align-items:flex-start}
+.info:has(.sub) .tie{margin-top:5px}
 .msg{border-top:1px solid var(--rule)}
 .msg:first-of-type{border-top:0}
 .mh{display:flex;gap:12px;align-items:flex-start;width:100%;border:0;background:transparent;text-align:left;padding:14px 0 10px}
@@ -699,18 +704,25 @@ const localDay = iso => { const d = new Date(iso); return `${d.getFullYear()}-${
 function agendaView(items){
   if(!items.length) return empty('Niets gepland', 'Markeer een mail met een vlucht, concert of afspraak; Butler zet het hier op de juiste dag.', I('cal'));
   const days = {};
-  for(const c of items){
-    const key = c.allday ? c.sort.slice(0, 10) : localDay(c.moment.at);
+  for(const c of items){  // gebeurtenissen in UTC → lokale dag; deadlines staan al in lokale tijd
+    const key = c.moment ? localDay(c.sort) : c.sort.slice(0, 10);
     (days[key] ||= []).push(c);
   }
+  const hm = d => d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
+  const listNl = xs => xs.length > 1 ? xs.slice(0, -1).join(', ') + ' en ' + xs[xs.length - 1] : xs[0];
   return Object.entries(days).map(([key, list]) => `<section><div class="sec-h"><h2>${esc(dayLabel(key))}</h2></div><div class="items">${list.map(c => {
-    const m = c.moment, time = m ? new Date(m.at).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : 'hele dag';
+    const m = c.moment;
+    const time = m ? hm(new Date(c.sort)) : c.allday ? 'hele dag' : c.sort.slice(11, 16);
+    // de herinneringen: op de dag zelf enkel het uur, anders ook de dag
+    const rem = m ? listNl((c.reminders || []).map(iso => { const d = new Date(iso);
+      return localDay(iso) === key ? hm(d) : d.toLocaleDateString('nl-BE', {weekday:'short', day:'numeric', month:'short'}) + ' ' + hm(d); })) : '';
     return `<a class="item agenda" href="#t=${c.tid}" data-tid="${c.tid}">
-      <time class="ag-time ${m ? '' : 'allday'}">${esc(time)}</time>
+      <time class="ag-time ${c.allday ? 'allday' : ''}">${esc(time)}</time>
       <div class="c-main">
         <div class="c-top"><span class="who"><b>${esc(m ? m.title : (c.subject || '(geen onderwerp)'))}</b></span></div>
         ${m?.detail ? `<div class="subj m-detail">${esc(m.detail)}</div>` : ''}
-        <div class="sum">${m ? TIE() + esc(c.who) + ': ' + esc(c.subject || '') : esc(m ? '' : 'Deadline, ' + c.who)}</div>
+        <div class="sum">${m ? TIE() + esc(c.who) + ': ' + esc(c.subject || '') : esc(c.who)}</div>
+        ${rem ? `<div class="ag-rem">${I('bell')}Herinnering om ${esc(rem)}</div>` : ''}
         ${c.dossier ? `<div class="meta"><span class="badge dossier" data-dossier="${c.dossier.id}">${I('folder')}${esc(c.dossier.name)}</span></div>` : ''}
       </div></a>`;
   }).join('')}</div></section>`).join('');
@@ -731,6 +743,11 @@ function momentCard(c, active){
 
 const empty = (title, sub='', mark=I('inbox')) => `<div class="empty"><span class="mark">${mark}</span><b>${title}</b>${sub?`<span>${sub}</span>`:''}</div>`;
 const placeholder = () => '<div style="margin-top:22px">' + '<div class="ph"></div>'.repeat(5) + '</div>';
+
+// het getal op het app-icoon (iOS 16.4+ op het beginscherm, met meldingen aan); 0 haalt het weg
+function setBadge(n){
+  try{ if('setAppBadge' in navigator) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {}); }catch(e){}
+}
 
 // wat op de achtergrond gearchiveerd of verwijderd wordt, staat al niet meer in de lijst
 const vis = arr => (arr || []).filter(c => !S.hidden.has(c.tid));
@@ -793,7 +810,9 @@ async function load(animate=false){
       const now = d.moments_now || [], soon = d.moments_soon || [];
       const msec = (title, arr, active, cls='') => arr.length ? `<section class="${cls}"><div class="sec-h"><h2>${title}</h2><span class="num">${arr.length}</span></div>`
         + `<div class="items">${arr.map(c=>momentCard(c, active)).join('')}</div></section>` : '';
-      $('#count-followup').textContent = (d.waiting_on_me.length + d.reminders.length + now.length) || '';
+      const waiting = d.waiting_on_me.length + d.reminders.length + now.length;
+      $('#count-followup').textContent = waiting || '';
+      setBadge(waiting);
       html = (!d.waiting_on_me.length && !d.waiting_on_them.length && !d.reminders.length && !now.length && !soon.length)
         ? empty('Alles afgehandeld', 'Er wacht niets op jou, en jij wacht op niemand.', TIE())
         : msec('Nu nodig', now, true, 'now') +
@@ -945,7 +964,17 @@ function renderThread(){
   const context = `<div id="ctx">${contextView(t)}</div>`;
   const related = (t.dossier_threads || []).length ? `<div class="related"><div class="related-h">${I('folder')}<span>Ook in ${esc(t.dossier.name)}</span></div>
     ${t.dossier_threads.map(r => `<a class="rel" href="#t=${r.tid}" data-tid="${r.tid}"><span>${esc(r.subject || '(geen onderwerp)')}</span><time>${esc(when(r.date))}</time></a>`).join('')}</div>` : '';
-  const upcoming = (t.moments || []).map(m => `<div class="info">${TIE()}<span><b>${esc(m.title)}</b>, ${esc(momentWhen(m, new Date(m.at) <= new Date()))}</span></div>`).join('');
+  // per gebeurtenis: het uur van de gebeurtenis zelf, met Butlers herinneringen erbij
+  const events = {};
+  for(const m of t.moments || []) (events[m.event_at] ||= []).push(m);
+  const at = iso => new Date(iso).toLocaleString('nl-BE', {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+  const hhmm = iso => new Date(iso).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'});
+  const upcoming = Object.entries(events).sort(([a], [b]) => a < b ? -1 : 1).map(([ev, ms]) => {
+    ms.sort((a, b) => a.at < b.at ? -1 : 1);
+    const rem = ms.map(m => localDay(m.at) === localDay(ev) ? hhmm(m.at) : at(m.at));
+    const remTxt = rem.length > 1 ? rem.slice(0, -1).join(', ') + ' en ' + rem[rem.length - 1] : rem[0];
+    return `<div class="info">${TIE()}<span><b>${esc(ms[ms.length - 1].title)}</b>, ${esc(at(ev))}<span class="sub">Herinnering om ${esc(remTxt)}</span></span></div>`;
+  }).join('');
   const snooze = t.snooze_until ? `<div class="info">${I('clock')}Gesnoozed tot ${esc(fullDate(t.snooze_until))}</div>` : '';
   const tags = t.tags.length ? `<div class="meta" style="margin:0 0 14px">${t.tags.map(x=>`<span class="badge tag">#${esc(x)}</span>`).join('')}</div>` : '';
 

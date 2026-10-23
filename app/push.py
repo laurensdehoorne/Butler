@@ -52,6 +52,7 @@ class Push:
         self.contact = contact_uri(contact or os.environ.get("PUSH_CONTACT", ""))
         self._vapid = None
         self.last_error = ""
+        self.badge_fn = None  # telt wat op je wacht: het getal op het app-icoon, mee met elke melding
 
     # --- sleutels -------------------------------------------------------
     def vapid(self):
@@ -124,6 +125,11 @@ class Push:
     def send(self, message):
         """message = {title, body, url, tag?}. Stuurt naar elk toestel; verdwenen toestellen worden vergeten.
         Geeft het aantal toestellen terug dat de melding echt kreeg."""
+        if self.badge_fn and "badge" not in message:
+            try:
+                message = {**message, "badge": int(self.badge_fn())}
+            except Exception as e:
+                log.warning("badge tellen mislukt: %s", e)
         sent = 0
         for r in self.db.q("SELECT endpoint, data FROM push_subs"):
             result = self._send_one(json.loads(r["data"]), message)

@@ -150,3 +150,39 @@ def test_agenda_lists_moments_and_deadlines_in_order(app, client, acc):
     items = client.get("/api/agenda", headers=H).json()["items"]
     assert [(i["tid"], i["allday"]) for i in items] == [(offer, True), (flight, False)]
     assert items[1]["moment"]["title"] == "Vertrek TP643"
+
+
+def test_agenda_shows_event_once_at_its_own_time(app, client, acc):
+    # webinar om 19:00: herinneringen om 9:00 en 17:00, uit twee mails (bevestiging en herinnering)
+    start = datetime(2026, 11, 12, 19, 0, tzinfo=BXL)
+    a, _ = put(acc, "INBOX", 1, raw("Zoom <no-reply@zoom.us>", "Bevestiging webinar", "<w1@x>"), flagged=True)
+    b, _ = put(acc, "INBOX", 2, raw("Zoom <no-reply@zoom.us>", "Herinnering webinar", "<w2@x>"), flagged=True)
+    reply = ('{"momenten": ['
+             '{"soort":"evenement","titel":"Webinar Oxytocine","detail":"ID 811","begin":"2026-11-12T09:00","einde":"2026-11-12T19:00","gebeurtenis":"2026-11-12T19:00","tijdzone":"Europe/Brussels"},'
+             '{"soort":"evenement","titel":"Webinar Oxytocine","detail":"ID 811","begin":"2026-11-12T17:00","einde":"2026-11-12T21:00","gebeurtenis":"2026-11-12T19:00","tijdzone":"Europe/Brussels"}]}')
+    now = datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
+    items = MO.parse(reply, BXL, now)
+    assert {i["event_at"] for i in items} == {start.astimezone(timezone.utc).isoformat()}
+    MO.save(app.db, a, items)
+    MO.save(app.db, b, items)
+    with mock.patch("app.main._now", return_value=now):
+        rows = client.get("/api/agenda", headers=H).json()["items"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["sort"] == "2026-11-12T18:00:00+00:00"  # 19:00 in Brussel
+    assert row["reminders"] == ["2026-11-12T08:00:00+00:00", "2026-11-12T16:00:00+00:00"]
+
+
+def test_deadline_can_have_a_time(app, client, acc):
+    tid, _ = put(acc, "INBOX", 1, raw("Progenda <noreply@progenda.be>", "Afspraak Dr. V.", "<p@x>"))
+    app.db.x("UPDATE threads SET deadline='2099-12-18T14:30' WHERE tid=?", (tid,))
+    row = client.get("/api/agenda", headers=H).json()["items"][0]
+    assert (row["sort"], row["allday"]) == ("2099-12-18T14:30", False)
+
+
+def test_appointment_stays_after_done_plain_deadline_does_not(app, client, acc):
+    appt, _ = put(acc, "INBOX", 1, raw("Progenda <noreply@progenda.be>", "Afspraak", "<p@x>"))
+    bill, _ = put(acc, "INBOX", 2, raw("Billit <f@billit.be>", "Factuur", "<f@x>"))
+    app.db.x("UPDATE threads SET deadline='2099-12-18T14:30', done=1 WHERE tid=?", (appt,))
+    app.db.x("UPDATE threads SET deadline='2099-12-20', done=1 WHERE tid=?", (bill,))
+    assert [i["tid"] for i in client.get("/api/agenda", headers=H).json()["items"]] == [appt]

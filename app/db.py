@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS moments(
   at TEXT NOT NULL,          -- UTC: vanaf wanneer tonen en melden
   until TEXT NOT NULL,       -- UTC: daarna verdwijnt het
   notified INTEGER DEFAULT 0,
+  event_at TEXT,             -- UTC: wanneer de gebeurtenis zelf is (vertrek, start); at/until zijn de herinnering
   UNIQUE(tid, at, title)
 );
 
@@ -137,6 +138,10 @@ class DB:
                     self.conn.execute(f"ALTER TABLE messages ADD COLUMN {col}")
                 self.conn.execute("UPDATE messages SET kind='reclame' WHERE bulk=1")
             self.conn.executescript(SCHEMA)
+            if "event_at" not in {r[1] for r in self.conn.execute("PRAGMA table_info(moments)")}:
+                self.conn.execute("ALTER TABLE moments ADD COLUMN event_at TEXT")
+                # bestaande momenten opnieuw laten bepalen, nu met het tijdstip van de gebeurtenis zelf
+                self.conn.execute("UPDATE threads SET moments_ai=0 WHERE tid IN (SELECT tid FROM moments)")
             # migratie: vlag (Spark) en momenten
             for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0"),
                                ("messages", "html TEXT"), ("threads", "context TEXT"), ("sender_rules", "context TEXT"),

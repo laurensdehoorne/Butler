@@ -393,21 +393,37 @@ def agenda(account: str = ""):
         return cards[tid]
 
     with_moments = set()
-    for r in moments.unique([dict(r) for r in db.q("SELECT * FROM moments WHERE until > ? ORDER BY at, id", (now,))]):
-        c = card_for(r["tid"])
+    rows = [dict(r) for r in db.q("SELECT * FROM moments WHERE until > ? ORDER BY at, id", (now,))]
+    for event, group in moments.events(rows):  # één regel per gebeurtenis, op het uur van de gebeurtenis zelf
+        main = group[-1]  # het moment het dichtst bij de gebeurtenis heeft de beste titel ("Vertrek", niet "Inchecken")
+        c = card_for(main["tid"])
         if c:
-            with_moments.add(r["tid"])
-            items.append({**c, "moment": _moment(r), "sort": r["at"], "allday": False})
-    for r in db.q("SELECT tid, deadline FROM threads WHERE done=0 AND deadline >= ? ORDER BY deadline", (today,)):
+            with_moments.update(r["tid"] for r in group)
+            items.append({**c, "moment": _moment(main), "sort": event, "allday": False,
+                          "reminders": sorted({r["at"] for r in group})})
+    # een afspraak (met uur) blijft staan als je de mail op Klaar zet; een gewone deadline is dan afgehandeld
+    for r in db.q("SELECT tid, deadline FROM threads WHERE deadline >= ? AND (done=0 OR length(deadline) > 10) ORDER BY deadline",
+                  (today,)):
         c = None if r["tid"] in with_moments else card_for(r["tid"])
-        if c:
-            items.append({**c, "moment": None, "sort": r["deadline"], "allday": True})
+        if c:  # met een uur (een afspraak) of de hele dag
+            items.append({**c, "moment": None, "sort": r["deadline"], "allday": len(r["deadline"]) <= 10})
     items.sort(key=lambda x: x["sort"])
     return {"items": items[:300]}
 
 
+def badge_count():
+    """Het getal op het app-icoon: hetzelfde als op de tab Opvolgen."""
+    d = followup()
+    return len(d["waiting_on_me"]) + len(d["reminders"]) + len(d["moments_now"])
+
+
+push.badge_fn = badge_count
+
+
 def _moment(r):
-    return {"id": r["id"], "kind": r["kind"], "title": r["title"], "detail": r["detail"], "at": r["at"], "until": r["until"]}
+    r = dict(r)
+    return {"id": r["id"], "kind": r["kind"], "title": r["title"], "detail": r["detail"], "at": r["at"], "until": r["until"],
+            "event_at": r.get("event_at") or r["until"]}
 
 
 def moment_cards(account=""):
