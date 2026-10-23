@@ -18,6 +18,7 @@ from . import actions, autopilot, config, costs, dossiers, fatigue, forward, ica
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
+from .mailparse import att_type
 from .ai import PROVIDERS, AIError, AIWorker
 from .db import DB, sender_rule, thread_messages, upsert_rule
 from .notify import Notifier
@@ -288,8 +289,11 @@ def attachment_links(mid, atts):
     if atts is None:
         return None
     exp = int(time.time()) + ATT_DAYS * 86400
-    return [{**a, "idx": i, "url": f"/att/{_att_sig(mid, i, exp)}/{mid}/{i}?e={exp}",
-             "inline": a["type"] in INLINE_TYPES} for i, a in enumerate(atts)]
+    out = []
+    for i, a in enumerate(atts):
+        t = att_type(a["type"], a["name"])  # lijsten van voor att_type: een pdf als octet-stream
+        out.append({**a, "type": t, "idx": i, "url": f"/att/{_att_sig(mid, i, exp)}/{mid}/{i}?e={exp}", "inline": t in INLINE_TYPES})
+    return out
 
 
 @app.get("/att/{sig}/{mid}/{idx}")
@@ -399,8 +403,8 @@ def get_shared(sid: int):
         raise HTTPException(404, "niet gevonden")
     for mi, m in enumerate(d["messages"]):
         m["html"] = images.rewrite(m["html"]) if m.get("html") else ""
-        m["attachments"] = [{**a, "url": f"/api/shared/{sid}/att/{mi}/{ai}" if a.get("stored") else None,
-                             "inline": a["type"] in INLINE_TYPES} for ai, a in enumerate(m.get("attachments") or [])]
+        m["attachments"] = [{**a, "type": att_type(a["type"], a["name"]), "url": f"/api/shared/{sid}/att/{mi}/{ai}" if a.get("stored") else None,
+                             "inline": att_type(a["type"], a["name"]) in INLINE_TYPES} for ai, a in enumerate(m.get("attachments") or [])]
     return d
 
 
@@ -412,6 +416,7 @@ def shared_attachment(sid: int, mi: int, ai: int):
     if not got:
         raise HTTPException(404, "bijlage niet gevonden")
     data, ctype, name = got
+    ctype = att_type(ctype, name)
     inline = ctype in INLINE_TYPES
     return Response(data, media_type=ctype if inline else "application/octet-stream", headers={
         "Content-Disposition": f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(name)}",
@@ -770,6 +775,13 @@ def _run(fn):
     except Exception as e:
         log.exception("actie mislukt")
         raise HTTPException(502, str(e)[:300])
+
+
+@app.post("/api/threads/{tid}/complete", dependencies=[Depends(auth)])
+def complete_thread(tid: int):
+    """De berichten van deze thread die Butler nog niet ophaalde (archief binnen het dagbudget): nu meteen."""
+    t = _thread_or_404(tid)
+    return {"added": _run(lambda: syncer.complete_thread(_acc(t["account"]), tid))}
 
 
 @app.post("/api/threads/{tid}/archive", dependencies=[Depends(auth)])

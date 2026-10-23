@@ -106,7 +106,7 @@ def fetch_attachment(db, acc, mid, idx):
     from email import policy
     from email.parser import BytesParser
 
-    from .mailparse import attachment_parts
+    from .mailparse import att_type, attachment_parts
 
     _, rows = _copies(db, mid)
     data = _raw(acc, rows, MAX_ATTACHMENT_FETCH) if rows else None
@@ -116,7 +116,8 @@ def fetch_attachment(db, acc, mid, idx):
     if not 0 <= idx < len(parts):
         return None
     p = parts[idx]
-    return p.get_payload(decode=True) or b"", p.get_content_type(), p.get_filename() or f"bijlage-{idx + 1}"
+    name = p.get_filename() or f"bijlage-{idx + 1}"
+    return p.get_payload(decode=True) or b"", att_type(p.get_content_type(), name), name
 
 
 def set_flag(db, acc, tid, on):

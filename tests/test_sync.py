@@ -81,3 +81,22 @@ def test_old_mail_spread_over_days(app, acc):
             app.syncer.sync_account(imap, acc)
     assert archived() == {"oud 1", "oud 2", "oud 3", "oud 4", "oud 5", "oud 6", "nieuw"}
     assert acc.public()["backlog"] == 0
+
+
+def test_opening_a_thread_fetches_archived_replies(app, acc, client):
+    """Oude mail binnen het dagbudget: van een gesprek kende Butler enkel je eigen antwoorden (Verzonden). Openen haalt
+    de gearchiveerde antwoorden van de anderen meteen op, één keer."""
+    from tests.conftest import H, put
+
+    app.syncer._completed.clear()
+    tid, _ = put(acc, "Sent Messages", 1, raw("Me <me@icloud.com>", "Pastorie", "<v1@me>", to="vero@w.be", days=10))
+    imap = FakeIMAP()
+    imap.box["Archive"] = {5: raw("Vero <vero@w.be>", "Re: Pastorie", "<v2@w>", irt="<v1@me>", refs="<v1@me>", days=9),
+                           6: raw("Ander <a@x.be>", "Iets anders", "<z@x>", days=9)}
+    imap.search = lambda criteria: [5] if "<v1@me>" in str(criteria) else []
+    with mock.patch.object(acc, "run_imap", side_effect=lambda fn: fn(imap)), mock.patch.object(app.ai, "enqueue") as enqueue:
+        assert client.post(f"/api/threads/{tid}/complete", headers=H).json() == {"added": 1}
+        assert client.post(f"/api/threads/{tid}/complete", headers=H).json() == {"added": 0}  # al aangevuld
+    msgs = client.get(f"/api/threads/{tid}", headers=H).json()["messages"]
+    assert [m["from_addr"] for m in msgs] == ["me@icloud.com", "vero@w.be"]
+    enqueue.assert_called_once_with(tid, False)  # opnieuw samenvatten, zonder melding

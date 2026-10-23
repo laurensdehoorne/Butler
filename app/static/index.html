@@ -1180,7 +1180,13 @@ async function openThread(tid, push=true){
   openDialog(sheet);
   try{ S.thread = await api('/api/threads/'+tid); renderThread(); if(fresh){ sheet.scrollTop = 0; $('#s-body').focus({preventScroll:true}); }
     // openen = gelezen, ook op de server (zoals in Spark en Mail), op de achtergrond
-    if(fresh && S.thread.unread) post(`/api/threads/${tid}/read`).then(() => { if(S.thread?.tid === tid){ S.thread.unread = false; $("#more-menu [data-a=read]")?.remove(); } }).catch(() => {}); }
+    if(fresh && S.thread.unread) post(`/api/threads/${tid}/read`).then(() => { if(S.thread?.tid === tid){ S.thread.unread = false; $("#more-menu [data-a=read]")?.remove(); } }).catch(() => {});
+    // gearchiveerde antwoorden die nog niet binnen waren (dagbudget): van de server halen en dan opnieuw tonen
+    if(fresh) post(`/api/threads/${tid}/complete`).then(async r => {
+      if(!r.added || S.thread?.tid !== tid) return;
+      const t = await api('/api/threads/'+tid);
+      if(S.thread?.tid === tid){ const y = sheet.scrollTop; S.thread = t; renderThread(); sheet.scrollTop = y; }
+    }).catch(() => {}); }
   catch(e){ $('#s-body').innerHTML = empty('Deze mail opent niet', esc(e.message), I('x')); }
 }
 function closeThread(){
@@ -1401,7 +1407,7 @@ async function freshFile(url, name, type){
 }
 async function openAttachment(a){
   const name = a.querySelector('.att-name').textContent, url = a.getAttribute('href'), type = a.dataset.type || '';
-  const kind = type === 'application/pdf' ? 'pdf' : type.startsWith('image/') && type !== 'image/heic' ? 'img' : 'file';
+  const kind = type === 'application/pdf' || /\.pdf$/i.test(name) ? 'pdf' : type.startsWith('image/') && type !== 'image/heic' ? 'img' : 'file';
   const seq = viewer.dataset.seq = String(Date.now());
   viewer.querySelector('.viewer-name').textContent = name;
   vbody.className = 'viewer-body'; vbody.innerHTML = '<div class="viewer-msg">Laden…</div>';
@@ -1443,6 +1449,7 @@ const mailDoc = html => `<!doctype html><html><head><meta charset="utf-8"><meta 
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: ${location.origin}; style-src 'unsafe-inline'; font-src data:">
 <base target="_blank"><style>html,body{margin:0;background:#fff;color:#1b1b1b}
 body{padding:14px;font:15px/1.5 -apple-system,system-ui,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}
+body{display:flow-root!important;box-sizing:border-box!important;height:auto!important;min-height:0!important}
 .butler-q{margin-top:14px}.butler-q>summary{display:inline-block;padding:5px 12px;border-radius:99px;background:#f2f2f7;color:#6e6e73;font:13px/1.3 -apple-system,system-ui,sans-serif;cursor:pointer;list-style:none}
 .butler-q>summary::-webkit-details-marker{display:none}.butler-q[open]>summary{margin-bottom:10px}</style>
 </head><body>${html}</body></html>`;
@@ -1533,8 +1540,11 @@ function mountHtml(el, html){
       body.style.zoom = 1;
       const z = Math.min(1, f.clientWidth / Math.max(doc.documentElement.scrollWidth, 1));
       body.style.zoom = z;
-      // sommige nieuwsbrieven zetten hun inhoud buiten de hoogte van <body> (floats, tabellen): de inhoud meten
-      f.style.height = Math.ceil(Math.max(body.getBoundingClientRect().height, body.scrollHeight * z) + 2) + 'px';
+      // sommige nieuwsbrieven zetten hun inhoud buiten de hoogte van <body> (een float rond alles, tabellen):
+      // flow-root houdt ze binnen <body>, en voor de zekerheid telt ook de onderkant van de laatste blokken
+      let bottom = body.getBoundingClientRect().bottom;
+      for(const e of body.children) bottom = Math.max(bottom, e.getBoundingClientRect().bottom);
+      f.style.height = Math.ceil(Math.max(bottom, body.scrollHeight * z) + 2) + 'px';
     };
     fit();
     doc.addEventListener('load', fit, true);  // afbeeldingen die later binnenkomen

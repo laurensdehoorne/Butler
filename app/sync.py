@@ -46,6 +46,7 @@ class Syncer:
         self.daily_bytes = int(app_cfg.get("sync_daily_mb", 1000) or 0) * 1024 * 1024
         self.tz = ZoneInfo(app_cfg.get("timezone", "Europe/Brussels"))
         self._triage_tried = set()  # inhaal-triage: één poging per thread per opstart
+        self._completed = set()  # threads die al aangevuld werden van de server (complete_thread), per opstart
         self.poll = int(app_cfg.get("poll_seconds", 300))
         self.ai_initial_days = int(ai_cfg.get("initial_days", 7))
         cl = app_cfg.get("cleanup") or {}
@@ -362,6 +363,45 @@ class Syncer:
         self.db.x("INSERT OR IGNORE INTO threads(account, thread_key) VALUES(?,?)", (acc.id, key))
         tid = self.db.one("SELECT tid FROM threads WHERE account=? AND thread_key=?", (acc.id, key))["tid"]
         return tid, outgoing
+
+    # --- een thread aanvullen als je hem opent ---------------------------------
+    def complete_thread(self, acc, tid, limit=50):
+        """Oude mail komt binnen het dagbudget binnen: tot dan kent Butler van een gesprek soms enkel je eigen
+        antwoorden (Verzonden is klein) en niet de gearchiveerde antwoorden van de anderen. Een thread die je opent,
+        meteen aanvullen uit het archief. Eén keer per thread per opstart. → aantal opgehaalde berichten."""
+        folder = acc.folders.get("archive")
+        t = self.db.one("SELECT thread_key FROM threads WHERE tid=? AND account=?", (tid, acc.id))
+        if not t or not folder or tid in self._completed:
+            return 0
+        self._completed.add(tid)
+        key = t["thread_key"]
+        ids = [r["message_id"] for r in self.db.q("SELECT DISTINCT message_id FROM messages WHERE account=? AND thread_key=? AND message_id!=''",
+                                                  (acc.id, key))][:20]
+
+        def fn(c):
+            c.select_folder(folder, readonly=True)
+            if key.startswith("gm:"):  # Gmail kent de thread zelf
+                found = set(c.search(["X-GM-THRID", int(key[3:])]))
+            else:  # elders: wat naar een bericht van de thread verwijst
+                found = set()
+                for mid in ids:
+                    found |= set(c.search(["OR", ["HEADER", "References", mid], ["HEADER", "In-Reply-To", mid]]))
+            known = {r["uid"] for r in self.db.q("SELECT uid FROM messages WHERE account=? AND folder=?", (acc.id, folder))}
+            missing = sorted(found - known, reverse=True)[:limit]
+            if missing:  # als oude mail: geen melding, geen triage
+                self.fetch_store(c, acc, folder, "archive", missing, True, max(missing), {})
+            return len(missing)
+
+        try:
+            n = acc.run_imap(fn)
+        except Exception:
+            self._completed.discard(tid)
+            raise
+        if n:
+            log.info("%s: thread %s aangevuld met %d berichten uit het archief", acc.id, tid, n)
+            if self.ai.active_for(acc.id):  # de samenvatting kende enkel je eigen antwoorden
+                self.ai.enqueue(tid, False)
+        return n
 
     # --- dagbudget voor oude mail -----------------------------------------
     def _budget(self, acc):

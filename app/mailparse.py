@@ -150,8 +150,23 @@ PDF_MAX_PAGES = 8
 PDF_MAX_CHARS = 8000
 
 
+GENERIC_TYPES = ("application/octet-stream", "binary/octet-stream", "application/x-download", "application/force-download",
+                 "application/download", "application/unknown")
+
+
+def att_type(ctype, name):
+    """Het echte type van een bijlage: veel mailprogramma's sturen een pdf als application/octet-stream, en dan
+    tonen iPhone en Butler ze niet. Bij zo'n algemeen type telt de extensie van de bestandsnaam."""
+    ctype = (ctype or "").lower()
+    if ctype and ctype not in GENERIC_TYPES:
+        return ctype
+    import mimetypes
+
+    return mimetypes.guess_type(name or "")[0] or ctype or "application/octet-stream"
+
+
 def _is_pdf(p):
-    return p.get_content_type() == "application/pdf" or (p.get_filename() or "").lower().endswith(".pdf")
+    return att_type(p.get_content_type(), p.get_filename()) == "application/pdf"
 
 
 def pdf_text(msg):
@@ -189,7 +204,8 @@ def attachments(msg):
             size = len(p.get_payload(decode=True) or b"")
         except Exception:
             size = 0
-        out.append({"name": (p.get_filename() or f"bijlage-{i + 1}")[:200], "type": p.get_content_type(), "size": size})
+        out.append({"name": (p.get_filename() or f"bijlage-{i + 1}")[:200], "type": att_type(p.get_content_type(), p.get_filename()),
+                    "size": size})
     return out
 
 

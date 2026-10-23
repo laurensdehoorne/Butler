@@ -75,3 +75,19 @@ def test_older_mail_gets_its_list_once(app, client, acc):
     assert [a["name"] for a in r["attachments"]] == ["E-ticket AF1068.pdf", "boarding.jpg", "factuur.html"]
     assert imap.select_folder.call_count == 1
     assert time.time() < int(r["attachments"][0]["url"].split("?e=")[1])
+
+
+def test_pdf_sent_as_octet_stream_is_a_pdf():
+    """Veel mailprogramma's sturen een pdf als application/octet-stream: toch tonen als pdf."""
+    from app.mailparse import att_type
+
+    assert att_type("application/octet-stream", "Klantofferte 270100358.pdf") == "application/pdf"
+    assert att_type("application/octet-stream", "data.bin") == "application/octet-stream"
+    assert att_type("image/png", "foto.pdf") == "image/png"  # een echt type blijft
+
+
+def test_attachment_links_fix_old_octet_stream_lists():
+    import app.main as M
+
+    a = M.attachment_links(1, [{"name": "offerte.PDF", "type": "application/octet-stream", "size": 10}])[0]
+    assert a["type"] == "application/pdf" and a["inline"]
