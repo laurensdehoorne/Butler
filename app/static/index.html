@@ -129,6 +129,11 @@ a.item:hover::before,a.item:hover + .item::before{opacity:0}
 .av{width:38px;height:38px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:0.875rem;
   background:oklch(var(--av-l) var(--av-c) var(--h,160));color:oklch(var(--av-ink) .05 var(--h,160))}
 .av.me{background:var(--out);color:var(--lapel)}
+/* foto of logo over de initialen; laadt het niet, dan blijven de initialen staan */
+.av{position:relative;overflow:hidden}
+.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%}
+.av img.logo{object-fit:contain;padding:18%;background:#fff}
+.av:has(img.logo){outline:1px solid var(--rule);outline-offset:-1px}
 .av .i{width:16px;height:16px}
 .c-main{flex:1;min-width:0}
 .c-top{display:flex;align-items:baseline;gap:6px;min-width:0}
@@ -508,13 +513,17 @@ const fullDate = iso => iso ? new Date(iso).toLocaleString('nl-BE',{dateStyle:'m
 const shortDay = d => new Date(Date.now()+d*864e5).toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short'});
 const dayMonth = iso => new Date(iso).toLocaleDateString('nl-BE',{day:'numeric',month:'short'});
 
-function avatar(name, me=false){
+function avatar(name, me=false, url=null){
   const s = String(name||'?').replace(/^Jij → /,'').replace(/<.*>/,'').trim();
   const words = s.split(/[\s@._-]+/).filter(w=>/^[\p{L}\p{N}]/u.test(w));
   const ini = ((words[0]||'?')[0] + (words.length>1 ? words[1][0] : '')).toUpperCase();
   let h = 0; for(const c of s.toLowerCase()) h = (h*31 + c.charCodeAt(0)) % 360;
-  return `<span class="av ${me?'me':''}" style="--h:${h}" aria-hidden="true">${me ? I('send') : esc(ini)}</span>`;
+  const img = url && !me ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" class="${url.includes('-logo.') ? 'logo' : 'face'}">` : '';
+  return `<span class="av ${me?'me':''}" style="--h:${h}" aria-hidden="true">${me ? I('send') : esc(ini)}${img}</span>`;
 }
+
+// een foto die niet laadt, verdwijnt: dan blijven de initialen eronder zichtbaar
+document.addEventListener('error', e => { if(e.target.matches?.('.av img')) e.target.remove(); }, true);
 
 /* ---------- lijst ---------- */
 function renderChips(){
@@ -544,7 +553,7 @@ function card(c, mode){
   if(S.accounts.length>1) badges.push(`<span class="badge">${esc(c.account_name)}</span>`);
   c.tags.forEach(t => badges.push(`<span class="badge tag">#${esc(t)}</span>`));
   return `<a class="item ${c.unread?'unread':''}" href="#t=${c.tid}" data-tid="${c.tid}">
-    ${avatar(c.who, c.last_outgoing)}
+    ${avatar(c.who, c.last_outgoing, c.avatar)}
     <div class="c-main">
       <div class="c-top"><span class="who">${esc(c.who)}</span>${c.n>1?`<span class="n">${c.n}</span>`:''}<time datetime="${esc(c.date)}">${esc(when(c.date))}</time></div>
       <div class="subj">${esc(c.subject || '(geen onderwerp)')}</div>
@@ -610,7 +619,7 @@ function senderCard(x, i){
   const unsub = x.unsub_method && !x.unsubscribed_at
     ? `<button class="btn" data-s="unsub" data-i="${i}">${I(x.unsub_method==='link'?'ext':'bell-off')}Uitschrijven</button>` : '';
   return `<article class="item">
-    ${avatar(x.name)}
+    ${avatar(x.name, false, x.avatar)}
     <div class="c-main">
       <div class="c-top"><span class="who"><b>${esc(x.name)}</b></span><time>${esc(when(x.last_date))}</time></div>
       <div class="addr">${esc(x.addr)}</div>
@@ -727,7 +736,7 @@ function renderThread(){
     const to = 'aan ' + names(m.to) + (m.cc.length ? ', cc ' + names(m.cc) : '');
     return `<article class="msg ${m.outgoing?'out':''} ${collapsed}">
       <button class="mh" data-toggle aria-expanded="${!collapsed}">
-        ${avatar(name, m.outgoing)}
+        ${avatar(name, m.outgoing, m.avatar)}
         <div class="c-main">
           <div class="c-top"><b>${esc(name)}</b><span class="ln" style="flex:1">${m.outgoing?'':esc(m.from_addr)}</span><time title="${esc(fullDate(m.date))}">${esc(when(m.date))}</time></div>
           <div class="ln to">${esc(to)}${m.pending?', verzonden':''}</div>

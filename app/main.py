@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from . import actions, costs
 from .accounts import Account
+from .avatars import MEDIA, Avatars
 from .ai import PROVIDERS, AIError, AIWorker
 from .db import DB, sender_rule, thread_messages, upsert_rule
 from .notify import Notifier
@@ -35,6 +36,7 @@ accounts = {str(a["id"]): Account(a) for a in (CFG.get("accounts") or [])}
 push = Push(db, DATA_DIR, (CFG.get("notify") or {}).get("push_contact", ""))
 notifier = Notifier(CFG.get("notify") or {}, APP, push)
 costs.load_overrides(DATA_DIR)
+avatars = Avatars(DATA_DIR, APP.get("avatars") or {}, background=os.environ.get("BUTLER_NO_SYNC") != "1")
 meter = costs.Meter(db)
 ai = AIWorker(db, AI_CFG, accounts, notifier, meter)
 syncer = Syncer(db, APP, AI_CFG, accounts, ai, notifier)
@@ -109,6 +111,7 @@ def _card(t, msgs, extra=None):
         "account_name": acc.name if acc else t["account"],
         "subject": (inc[-1] if inc else last)["subject"],
         "who": who,
+        "avatar": None if last["outgoing"] else avatars.url(last["from_addr"]),
         "snippet": last["snippet"],
         "date": last["date"],
         "n": len(msgs),
@@ -168,6 +171,20 @@ def font(name: str):
         raise HTTPException(404)
     return FileResponse(STATIC / "fonts" / f"{name}.woff2", media_type="font/woff2",
                         headers={"Cache-Control": "max-age=31536000, immutable"})
+
+
+@app.get("/avatars/{name}")
+def avatar(name: str):
+    # Zonder token: de namen zijn niet te raden (HMAC) en enkel wat al in de cache staat, wordt getoond.
+    # Een SVG-logo komt van buiten, dus nooit scripts: sandbox, ook als iemand het bestand rechtstreeks opent.
+    path = avatars.path(name)
+    if not path:
+        raise HTTPException(404)
+    return FileResponse(path, media_type=MEDIA[path.suffix[1:]], headers={
+        "Cache-Control": "max-age=604800",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox",
+        "X-Content-Type-Options": "nosniff",
+    })
 
 
 @app.get("/health")
@@ -294,6 +311,7 @@ def get_thread(tid: int):
             "id": m["id"],
             "from_name": m["from_name"],
             "from_addr": m["from_addr"],
+            "avatar": None if m["outgoing"] else avatars.url(m["from_addr"]),
             "to": json.loads(m["to_addrs"] or "[]"),
             "cc": json.loads(m["cc_addrs"] or "[]"),
             "date": m["date"],
@@ -472,6 +490,7 @@ def senders(kind: str = "alle", account: str = ""):
             "account_name": acc.name if acc else r["account"],
             "addr": r["from_addr"],
             "name": r["from_name"] or r["from_addr"],
+            "avatar": avatars.url(r["from_addr"]),
             "kind": k,
             "n": r["n"],
             "in_inbox": r["in_inbox"] or 0,

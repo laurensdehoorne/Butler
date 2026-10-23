@@ -100,6 +100,8 @@ Onder **⚙︎ → AI-kosten** zie je per maand wat samenvatten en antwoorden ko
 
 Met `ai.enabled: true` gaat de inhoud van persoonlijke mails naar de gekozen dienst (Claude API van Anthropic of OpenAI API). Beide trainen standaard niet op API-data en verwijderen ze na hoogstens 30 dagen; bij OpenAI stuurt Butler `store: false` mee, zodat het antwoord niet als opgeslagen *response* bij OpenAI blijft staan. Zet `ai: false` op accounts met gevoelige inhoud (bv. patiënt- of klantgegevens); die worden dan nooit doorgestuurd en krijgen gewoon een melding per persoonlijke mail.
 
+Afzenderfoto's (`app.avatars`) haalt de server op en bewaart ze in `/data/avatars`; je toestel laadt niets van buiten. Voor een **logo** (`logos: true`) gaat enkel de domeinnaam van de afzender naar buiten: Butler zoekt het BIMI-logo in de DNS en anders het pictogram van de website. Gratis mailboxen (gmail.com, icloud.com, …) krijgen geen logo. Voor een **profielfoto** (`gravatar: true`) stuurt Butler een SHA-256-hash van het afzenderadres naar Gravatar; zo weet Gravatar welke adressen je mail sturen. Zet `gravatar: false` als je dat niet wilt. Butler haalt enkel iets op bij publieke adressen, nooit in je eigen netwerk, en wat niet gevonden wordt, probeert hij pas na 14 dagen opnieuw.
+
 ## Pushmeldingen
 
 ### In de app (Web Push)
