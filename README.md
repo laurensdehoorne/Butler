@@ -53,7 +53,7 @@ andere ─┘ SMTP ◄──── SQLite-cache /data ────┘─ Webinte
 ```
 
 - Per account een IMAP-verbinding die met **IDLE** op nieuwe mail wacht (meestal binnen enkele seconden), met een volledige sync minstens elke `poll_seconds`.
-- Alle mail (INBOX, Verzonden en het archief: *Alle e-mail* bij Gmail, *Archief* bij iCloud) wordt lokaal gecachet in SQLite (`/data/butler.db`); met `sync_days` beperk je dat tot de laatste X dagen, gemarkeerde mail blijft dan altijd. De eerste sync van een groot archief duurt even: het nieuwste komt eerst. Threads worden opgebouwd via `X-GM-THRID` (Gmail) of `References`/`In-Reply-To` (iCloud en andere).
+- Alle mail (INBOX, Verzonden en het archief: *Alle e-mail* bij Gmail, *Archief* bij iCloud) wordt lokaal gecachet in SQLite (`/data/butler.db`); met `sync_days` beperk je dat tot de laatste X dagen, gemarkeerde mail blijft dan altijd. De eerste sync van een groot archief wordt gespreid over dagen (`sync_daily_mb`, standaard 1000 MB per account per dag; Gmail laat ongeveer 2,5 GB IMAP-download per dag toe): gemarkeerde mail eerst, dan van nieuw naar oud. Nieuwe mail komt altijd meteen binnen; bovenaan staat hoeveel oude mail nog volgt. Threads worden opgebouwd via `X-GM-THRID` (Gmail) of `References`/`In-Reply-To` (iCloud en andere).
 - Grote berichten (> 5 MB) worden enkel met headers opgehaald.
 - Bij de eerste sync worden geen meldingen verstuurd en enkel threads van de laatste `ai.initial_days` dagen samengevat, om kosten te beperken. Nieuwsbrieven (herkend aan `List-Unsubscribe` e.d.) gaan nooit naar de AI.
 
@@ -169,6 +169,7 @@ Zie [`config.example.yaml`](config.example.yaml). Belangrijkste opties:
 | `app.followup_days` | Na hoeveel dagen zonder antwoord een verstuurde mail in *Wacht op antwoord* verschijnt |
 | `app.sync_days` | Hoeveel dagen mail lokaal bijgehouden wordt; `0` = alle mail |
 | `app.sync_archive` | Ook het archief synchroniseren (standaard aan) |
+| `app.sync_daily_mb` | Zoveel MB oude mail per account per dag; `0` = geen limiet |
 | `ai.triage_model` / `ai.draft_model` | Claude-modellen voor samenvatten en antwoordvoorstellen |
 | `ai.owner`, `ai.name`, `ai.signature` | Context voor de AI: wie je bent en hoe je ondertekent |
 | `notify.mode` | `all`, `important` (enkel prioriteit *hoog*) of `off` |

@@ -57,3 +57,27 @@ def test_first_sync_is_silent_then_new_mail_notifies(app, acc):
     assert app.db.one("SELECT COUNT(*) n FROM messages WHERE folder='_weg'")["n"] == 1
     # AI staat aan voor dit account: de melding volgt na de samenvatting (enqueue), niet rechtstreeks
     assert enqueue.call_count >= 1
+
+
+def test_old_mail_spread_over_days(app, acc):
+    acc.backlog.clear()
+    imap = FakeIMAP()
+    imap.box["Archive"] = {u: raw("A <a@x.be>", f"oud {u}", f"<o{u}@x>", days=100 + u) for u in range(1, 7)}
+    imap.flagged = {("Archive", 1)}
+    size = len(imap.box["Archive"][1])
+    archived = lambda: {r["subject"] for r in app.db.q("SELECT subject FROM messages WHERE folder='Archive'")}  # noqa: E731
+    with mock.patch.object(app.syncer, "daily_bytes", size * 3 + 10), \
+         mock.patch.object(app.ai, "enqueue"), mock.patch.object(app.ai, "enqueue_moments"):
+        app.syncer.sync_account(imap, acc)
+        assert archived() == {"oud 1", "oud 6", "oud 5"}  # gemarkeerd eerst, dan van nieuw naar oud
+        assert acc.public()["backlog"] == 3
+        assert app.db.one("SELECT COUNT(*) n FROM messages WHERE folder='INBOX'")["n"] == 2  # inbox: nooit beperkt
+
+        imap.box["Archive"][20] = raw("B <b@x.be>", "nieuw", "<n20@x>")
+        app.syncer.sync_account(imap, acc)  # budget op, maar nieuwe mail komt toch binnen
+        assert "nieuw" in archived() and acc.public()["backlog"] == 3
+
+        with mock.patch.object(app.syncer, "_budget", return_value=("morgen", 0)):
+            app.syncer.sync_account(imap, acc)
+    assert archived() == {"oud 1", "oud 2", "oud 3", "oud 4", "oud 5", "oud 6", "nieuw"}
+    assert acc.public()["backlog"] == 0

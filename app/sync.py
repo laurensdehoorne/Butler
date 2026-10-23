@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from imapclient import FLAGGED, SEEN
 
@@ -14,6 +15,7 @@ log = logging.getLogger("butler.sync")
 MAX_FULL_SIZE = 5 * 1024 * 1024  # groter → enkel headers
 CHUNK = 40
 MOMENT_DAYS = 365  # gemarkeerde mails ouder dan dit gaan niet meer naar de AI voor momenten
+HEADER_COST = 20_000  # een bericht boven MAX_FULL_SIZE kost enkel zijn headers
 
 
 def _chunks(seq, n):
@@ -37,6 +39,9 @@ class Syncer:
         self.notifier = notifier
         self.sync_days = int(app_cfg.get("sync_days", 0))  # 0 = alle mail
         self.archive = bool(app_cfg.get("sync_archive", True))  # ook Alle e-mail (Gmail) / Archief (iCloud)
+        # oude mail ophalen (archief, verzonden) spreiden over dagen: Gmail laat ~2,5 GB IMAP-download per dag toe
+        self.daily_bytes = int(app_cfg.get("sync_daily_mb", 1000) or 0) * 1024 * 1024
+        self.tz = ZoneInfo(app_cfg.get("timezone", "Europe/Brussels"))
         self.poll = int(app_cfg.get("poll_seconds", 300))
         self.ai_initial_days = int(ai_cfg.get("initial_days", 7))
         cl = app_cfg.get("cleanup") or {}
@@ -179,6 +184,13 @@ class Syncer:
 
         # nieuwste eerst: bij de eerste sync van een groot archief verschijnt het recente meteen
         new = sorted(current - known, reverse=True)
+        flagged = set(c.search(["FLAGGED"])) & current
+        if role != "inbox":
+            # nieuw binnengekomen mail altijd; oude mail binnen het dagbudget, gemarkeerde eerst
+            fresh = [u for u in new if initialized and u > last_uid]
+            old, left = self.take_budget(c, acc, [u for u in new if u not in set(fresh)], flagged)
+            new = fresh + old
+            acc.backlog[folder] = left
         triage = {}
         for chunk in _chunks(new, CHUNK):
             self.fetch_store(c, acc, folder, role, chunk, initialized, last_uid, triage)
@@ -193,7 +205,6 @@ class Syncer:
                 )
 
         # vlaggen (Spark, Gmail-ster): de server zoekt ze op, zodat niet elk bericht opgehaald hoeft te worden
-        flagged = set(c.search(["FLAGGED"])) & current
         was = {r["uid"] for r in self.db.q("SELECT uid FROM messages WHERE account=? AND folder=? AND flagged=1",
                                            (acc.id, folder))}
         if flagged != was:
@@ -303,6 +314,40 @@ class Syncer:
         self.db.x("INSERT OR IGNORE INTO threads(account, thread_key) VALUES(?,?)", (acc.id, key))
         tid = self.db.one("SELECT tid FROM threads WHERE account=? AND thread_key=?", (acc.id, key))["tid"]
         return tid, outgoing
+
+    # --- dagbudget voor oude mail -----------------------------------------
+    def _budget(self, acc):
+        today = datetime.now(self.tz).date().isoformat()
+        row = self.db.one("SELECT value FROM settings WHERE key=?", (f"sync_budget:{acc.id}",))
+        d = json.loads(row["value"]) if row else {}
+        return today, (d.get("bytes", 0) if d.get("day") == today else 0)
+
+    def take_budget(self, c, acc, uids, priority=()):
+        """Welke oude berichten passen vandaag nog in het budget? → (uids, aantal dat moet wachten)."""
+        if not self.daily_bytes or not uids:
+            return uids, 0
+        today, used = self._budget(acc)
+        left = self.daily_bytes - used
+        order = [u for u in uids if u in priority] + [u for u in uids if u not in priority]
+        out, spent = [], 0
+        for chunk in _chunks(order, 500):
+            sizes = c.fetch(chunk, ["RFC822.SIZE"])
+            for u in chunk:
+                size = sizes.get(u, {}).get(b"RFC822.SIZE", 0)
+                cost = size if size <= MAX_FULL_SIZE else HEADER_COST
+                if spent + cost > left:
+                    break
+                out.append(u)
+                spent += cost
+            else:
+                continue
+            break
+        if spent:
+            self.db.x("INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)",
+                      (f"sync_budget:{acc.id}", json.dumps({"day": today, "bytes": used + spent})))
+        if len(out) < len(uids):
+            log.info("%s: dagbudget op, %d oude berichten volgen later", acc.id, len(uids) - len(out))
+        return out, len(uids) - len(out)
 
     # --- momenten uit gemarkeerde mail -------------------------------------
     def queue_moments(self, acc):

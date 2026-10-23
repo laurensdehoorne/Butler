@@ -547,9 +547,11 @@ function renderChips(){
 function renderStatus(syncing=false){
   const bad = S.accounts.filter(a=>a.status==='fout');
   const last = S.accounts.map(a=>a.last_sync).filter(Boolean).sort().pop();
+  const backlog = S.accounts.reduce((n,a)=>n+(a.backlog||0), 0);
   const errs = bad.map(a=>`<span class="err">${esc(a.name)}: ${esc(a.error||'fout')}</span>`).join(', ');
   $('#status').innerHTML = errs ? errs
-    : (syncing || !last) ? '<span class="busy">Synchroniseren…</span>' : 'Bijgewerkt om '+esc(new Date(last).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}));
+    : (syncing || !last) ? '<span class="busy">Synchroniseren…</span>' : 'Bijgewerkt om '+esc(new Date(last).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}))
+      + (backlog ? `, nog ${backlog.toLocaleString('nl-BE')} oude mails te halen` : '');
 }
 
 function card(c, mode){
