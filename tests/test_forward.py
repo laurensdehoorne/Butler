@@ -38,3 +38,13 @@ def test_invoice_goes_to_bookkeeping_in_one_tap(app, client, acc):
 
     plain, _ = put(acc, "INBOX", 6, raw("Ann <ann@y.be>", "Etentje", "<e@y>"))
     assert client.get(f"/api/threads/{plain}", headers=H).json()["invoice"] is None
+
+
+def test_older_invoice_without_attachment_list(app, client, acc):
+    put(acc, "Sent Messages", 40, raw("Me <me@icloud.com>", "", "<s@me>", to=BILLIT, days=30))
+    tid, _ = put(acc, "INBOX", 7, raw("Acerta <f@acerta.be>", "Jouw factuur van Acerta", "<a@x>"))
+    app.db.x("UPDATE messages SET attachments=NULL")  # van voor de bijlagen
+    inv = client.get(f"/api/threads/{tid}", headers=H).json()["invoice"]
+    assert inv["to"] == BILLIT and not inv["done"]
+    put(acc, "Sent Messages", 41, raw("Me <me@icloud.com>", "Fwd: Jouw factuur van Acerta", "<s2@me>", to=BILLIT))
+    assert client.get(f"/api/threads/{tid}", headers=H).json()["invoice"]["done"]

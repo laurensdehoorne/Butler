@@ -40,8 +40,13 @@ def _names(m):
 
 
 def invoice_message(t, msgs):
-    """Het ontvangen bericht met de factuur in deze thread, of None."""
+    """Het ontvangen bericht met de factuur in deze thread, of None. Van oudere mail is de bijlagenlijst er pas na
+    het openen; tot dan volstaan de categorie of het onderwerp, voor mail die nog in je inbox staat."""
     for m in reversed([m for m in msgs if not m["outgoing"]]):
+        if m.get("attachments") is None:
+            if m["in_inbox"] and (t.get("category") == "factuur" or INVOICE_RE.search(m["subject"] or "")):
+                return m
+            continue
         pdfs = [n for n in _names(m) if n.lower().endswith(".pdf")]
         if pdfs and (t.get("category") in ("factuur", "bestelling") or INVOICE_RE.search(" ".join(pdfs) + " " + (m["subject"] or ""))):
             return m
@@ -49,13 +54,14 @@ def invoice_message(t, msgs):
 
 
 def already_sent(db, addr, m):
-    """Ging een bijlage van dit bericht al naar dit adres?"""
+    """Ging dit bericht al naar dit adres: doorgestuurd met hetzelfde onderwerp, of met dezelfde bijlage?"""
     names = set(_names(m))
-    if not names:
-        return False
-    for r in db.q("SELECT attachments FROM messages WHERE outgoing=1 AND to_addrs LIKE ? AND attachments IS NOT NULL AND date >= ?",
+    fwd = {"fwd: " + (m["subject"] or "").lower(), (m["subject"] or "").lower()}
+    for r in db.q("SELECT subject, attachments FROM messages WHERE outgoing=1 AND to_addrs LIKE ? AND date >= ?",
                   (f'%"{addr}"%', (m["date"] or "")[:10])):
-        if names & {a["name"] for a in json.loads(r["attachments"] or "[]")}:
+        if m["subject"] and (r["subject"] or "").lower() in fwd:
+            return True
+        if names and names & {a["name"] for a in json.loads(r["attachments"] or "[]")}:
             return True
     return False
 
