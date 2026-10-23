@@ -20,22 +20,25 @@ def setup(app, monkeypatch, **on):
     return fake
 
 
-def test_new_invoice_goes_to_billit_by_itself(app, client, acc, monkeypatch):
-    fake = setup(app, monkeypatch, invoices=True)
+def test_butler_never_sends_mail_by_itself(app, client, acc, monkeypatch):
+    """Ook met alles aan (en een oude instelling 'invoices'): een factuur blijft een voorstel, er gaat niets de deur uit."""
+    fake = setup(app, monkeypatch, invoices=True, ads=True, drafts=True)
     put(acc, "Sent Messages", 40, raw("Me <me@icloud.com>", "", "<s@me>", to=BILLIT, days=30))
     data = mail_with_attachments()
     tid, _ = put(acc, "INBOX", 5, data)
-    fake.messages.create.return_value = claude_reply(TRIAGE % ("factuur", "lezen"))
+    fake.messages.create.return_value = claude_reply(TRIAGE % ("factuur", "antwoorden"))
     with mock.patch.object(acc, "run_imap", side_effect=lambda fn: fn(imap_for(data, 5))), \
-         mock.patch("app.actions.smtp_send") as smtp:
+         mock.patch("app.actions.smtp_send") as smtp, mock.patch("app.actions.forward") as fwd, \
+         mock.patch.object(app.ai, "draft", return_value="Dag,\n\nOk.\n\nLaurens"), \
+         mock.patch("app.actions.save_draft", return_value={"folder": "Drafts", "message_id": "<d@x>"}):
         app.ai.triage(tid)
         for hook in app.ai.after_triage:
             hook(tid)
-            hook(tid)  # nog eens bekeken: niet twee keer versturen
-    assert smtp.call_count == 1 and smtp.call_args.args[1]["To"] == BILLIT
-    e = client.get("/api/activity", headers=H).json()["entries"]
-    assert [(x["kind"], x["can_undo"]) for x in e] == [("factuur", 0)] and BILLIT in e[0]["detail"]
-    assert client.get(f"/api/threads/{tid}", headers=H).json()["auto"][0]["kind"] == "factuur"
+    smtp.assert_not_called()
+    fwd.assert_not_called()
+    t = client.get(f"/api/threads/{tid}", headers=H).json()
+    assert t["invoice"] and not t["invoice"]["done"]  # de knop blijft: jij beslist
+    assert [x["kind"] for x in client.get("/api/activity", headers=H).json()["entries"]] == ["concept"]
 
 
 def test_old_mail_is_left_alone(app, acc, monkeypatch):

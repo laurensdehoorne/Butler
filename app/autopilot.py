@@ -1,24 +1,24 @@
 """Wat Butler zelf doet, als je het aanzet (Instellingen → Automatisch), en wat hij deed (auto_log).
 
-- Facturen: een nieuwe mail met een factuur (pdf) gaat meteen naar je boekhouding (Billit, zie forward.py).
+Butler verstuurt nooit zelf mail: niets doorsturen, niets beantwoorden, niets delen. Versturen gebeurt enkel na een tik
+van jou. Wat hij wel zelf mag:
 - Reclame: reclame die een dag in je inbox staat, gaat naar het archief (nooit naar de prullenbak).
 - Antwoorden: bij nieuwe mail waar de AI een antwoord van jou verwacht, zet Butler een concept klaar in je
-  Concepten-map. Hij verstuurt nooit zelf een antwoord: dat doe jij, in Butler of in Spark.
+  Concepten-map. Versturen doe jij, in Butler of in Spark, na het nalezen.
 
-Enkel mail die binnenkomt nadat je iets aanzette, nooit je oude mail. Alles komt in het logboek "Wat Butler deed";
-opruimen en concepten kun je daar terugdraaien, een doorgestuurde factuur niet (die is verstuurd).
+Enkel mail die binnenkomt nadat je iets aanzette, nooit je oude mail. Alles komt in het logboek "Wat Butler deed",
+en kan daar teruggedraaid worden.
 """
 
 import json
 import logging
 from datetime import datetime, timedelta, timezone
 
-from . import forward
 from .db import thread_messages
 
 log = logging.getLogger("butler.auto")
 
-KINDS = ("invoices", "ads", "drafts")
+KINDS = ("ads", "drafts")
 ADS_AFTER_DAYS = 1
 
 
@@ -67,7 +67,7 @@ def _last_incoming(msgs):
     return inc[-1] if inc else None
 
 
-# --- na elke samenvatting: facturen en conceptantwoorden ----------------------------
+# --- na elke samenvatting: conceptantwoorden (nooit versturen) -----------------------
 def after_triage(db, app_cfg, ai, accounts, actions, tid, quiet=frozenset()):
     t, msgs = thread_messages(db, tid)
     if not t or not msgs:
@@ -76,8 +76,6 @@ def after_triage(db, app_cfg, ai, accounts, actions, tid, quiet=frozenset()):
     last = _last_incoming(msgs)
     if not acc or not last:
         return
-    if enabled(app_cfg, "invoices"):
-        _invoice(db, app_cfg, acc, actions, t, msgs)
     if enabled(app_cfg, "drafts") and ai.active_for(acc.id):
         _draft(db, ai, acc, actions, t, msgs, last, quiet)
 
@@ -85,23 +83,6 @@ def after_triage(db, app_cfg, ai, accounts, actions, tid, quiet=frozenset()):
 def _new(db, kind, m):
     s = since(db, kind)
     return bool(s and (m["date"] or "") >= s)
-
-
-def _invoice(db, app_cfg, acc, actions, t, msgs):
-    m = forward.invoice_message(t, msgs)
-    # enkel met een gekende pdf: een onderwerp alleen ("uw factuur") volstaat niet om zelf iets te versturen
-    if not m or m.get("attachments") is None or not _new(db, "invoices", m) or done_before(db, "factuur", t["tid"]):
-        return
-    if not any(a["name"].lower().endswith(".pdf") for a in json.loads(m["attachments"])):
-        return
-    addr = forward.invoice_address(db, app_cfg)
-    if not addr or forward.already_sent(db, addr, m):
-        return
-    res = actions.forward(db, acc, m["id"], [addr])
-    record(db, "factuur", acc.id, t["tid"], m["subject"] or "(geen onderwerp)",
-           f"Doorgestuurd naar {addr} ({res['attachments']} bijlage{'n' if res['attachments'] != 1 else ''})",
-           {"message_id": m["id"], "to": addr})
-    log.info("%s: factuur %s doorgestuurd naar %s", acc.id, t["tid"], addr)
 
 
 def _draft(db, ai, acc, actions, t, msgs, last, quiet):

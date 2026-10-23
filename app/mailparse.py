@@ -145,6 +145,42 @@ def attachment_parts(msg):
     return out
 
 
+PDF_MAX_BYTES = 10 * 1024 * 1024
+PDF_MAX_PAGES = 8
+PDF_MAX_CHARS = 8000
+
+
+def _is_pdf(p):
+    return p.get_content_type() == "application/pdf" or (p.get_filename() or "").lower().endswith(".pdf")
+
+
+def pdf_text(msg):
+    """De tekst uit pdf-bijlagen (een hotelbevestiging, een ticket, een factuur), zodat de AI en het zoeken weten wat
+    erin staat ook als de mail zelf leeg is. Enkel de eerste pagina's; "" als er niets te lezen is (een scan)."""
+    out = []
+    for p in attachment_parts(msg):
+        if not _is_pdf(p):
+            continue
+        try:
+            data = p.get_payload(decode=True) or b""
+            if not data or len(data) > PDF_MAX_BYTES:
+                continue
+            from io import BytesIO
+
+            from pypdf import PdfReader
+
+            reader = PdfReader(BytesIO(data))
+            text = "\n".join((page.extract_text() or "") for page in reader.pages[:PDF_MAX_PAGES])
+        except Exception:
+            continue
+        text = re.sub(r"[ \t]+", " ", re.sub(r"\n\s*\n+", "\n", text)).strip()
+        if text:
+            out.append(f"[{p.get_filename() or 'bijlage.pdf'}]\n{text}")
+        if sum(len(x) for x in out) >= PDF_MAX_CHARS:
+            break
+    return "\n\n".join(out)[:PDF_MAX_CHARS]
+
+
 def attachments(msg):
     """[{name, type, size}] voor de lijst in de app; het bestand zelf wordt pas opgehaald als je het opent."""
     out = []
