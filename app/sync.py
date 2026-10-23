@@ -377,13 +377,13 @@ class Syncer:
             (acc.id, since),
         )
         # waar jij het laatst schreef en de AI nog niet zei of je op antwoord wacht ("wacht op antwoord")
-        rows += self.db.q(
+        rows = self.db.q(
             """SELECT t.tid FROM threads t JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
                WHERE t.account=? AND (t.awaits IS NULL OR t.ai_count=0) GROUP BY t.tid
                HAVING MAX(m.date) >= ? AND MAX(CASE WHEN m.outgoing=1 THEN m.date END) = MAX(m.date) AND MIN(m.bulk) = 0
                ORDER BY MAX(m.date) DESC LIMIT 300""",
             (acc.id, (datetime.now(timezone.utc) - timedelta(days=AWAITS_DAYS)).isoformat()),
-        )
+        ) + rows  # eerst: die bepalen wat er in je lijst staat
         for r in rows:
             if r["tid"] not in self._triage_tried:
                 self._triage_tried.add(r["tid"])
