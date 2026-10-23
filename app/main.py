@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from . import actions, config, costs, dossiers, moments
+from . import actions, config, costs, dossiers, moments, tone
 from .accounts import Account
 from .avatars import MEDIA, Avatars
 from .mailhtml import MailImages, fetch_image
@@ -65,6 +65,7 @@ async def lifespan(_):
         import threading
         threading.Thread(target=digest_loop, daemon=True, name="digest").start()
         moments.loop(db, notifier)
+        threading.Thread(target=tone_loop, daemon=True, name="tone").start()
     yield
 
 
@@ -411,6 +412,61 @@ def agenda(account: str = ""):
     return {"items": items[:300]}
 
 
+def tone_loop():
+    """Het schrijfprofiel leren zodra er mail is, en daarna maandelijks opnieuw (tenzij je het zelf aanpaste)."""
+    time.sleep(120)  # eerst de eerste sync laten lopen
+    while True:
+        try:
+            if ai.enabled and tone.stale(db):
+                ai.enqueue_tone()
+        except Exception:
+            log.exception("schrijfprofiel plannen mislukt")
+        time.sleep(86400)
+
+
+@app.get("/api/tone", dependencies=[Depends(auth)])
+def get_tone():
+    return {"tone": tone.get(db), "samples_available": len(tone.samples(db))}
+
+
+class ToneIn(BaseModel):
+    text: str
+
+
+@app.put("/api/tone", dependencies=[Depends(auth)])
+def put_tone(body: ToneIn):
+    """Zelf aangepast profiel: blijft staan tot je het opnieuw laat leren."""
+    if not body.text.strip():
+        raise HTTPException(400, "Leeg profiel")
+    return {"tone": tone.put(db, body.text, (tone.get(db) or {}).get("samples", 0), edited=True)}
+
+
+@app.post("/api/tone/build", dependencies=[Depends(auth)])
+def build_tone():
+    if not ai.enabled:
+        raise HTTPException(400, "Zet eerst de AI aan.")
+    t = _run(lambda: tone.build(ai, db))
+    if not t:
+        raise HTTPException(400, "Te weinig verstuurde mail om je stijl uit te leren (minstens 5 mails).")
+    return {"tone": t}
+
+
+class QuickDraftIn(BaseModel):
+    instruction: str
+    reply_all: bool = False
+
+
+@app.post("/api/threads/{tid}/quick-draft", dependencies=[Depends(auth)])
+def quick_draft(tid: int, body: QuickDraftIn):
+    """Snel antwoorden: een paar woorden worden een volledig antwoord in jouw stijl, als concept in je Concepten-map."""
+    t = _thread_or_404(tid)
+    if not body.instruction.strip():
+        raise HTTPException(400, "Schrijf in een paar woorden wat je wilt antwoorden.")
+    text = _run(lambda: ai.draft(tid, body.instruction))
+    res = _run(lambda: actions.save_draft(db, _acc(t["account"]), tid, text, body.reply_all))
+    return {"ok": True, "folder": res["folder"], "draft": text}
+
+
 def badge_count():
     """Het getal op het app-icoon: hetzelfde als op de tab Opvolgen."""
     d = followup()
@@ -546,6 +602,24 @@ def set_context(tid: int, body: ContextIn):
         if any(m.get("flagged") for m in msgs):
             ai.enqueue_moments(tid)
     return get_thread(tid)
+
+
+@app.get("/api/dossiers", dependencies=[Depends(auth)])
+def list_dossiers():
+    """Alle dossiers, met de meest recente activiteit eerst: hoeveel mails, wanneer de laatste, wat eraan komt."""
+    now = _now().isoformat()
+    rows = db.q("""SELECT d.id, d.name, COUNT(DISTINCT td.tid) AS n, MAX(m.date) AS last
+                   FROM dossiers d JOIN thread_dossiers td ON td.dossier_id=d.id JOIN threads t ON t.tid=td.tid
+                   JOIN messages m ON m.account=t.account AND m.thread_key=t.thread_key
+                   GROUP BY d.id ORDER BY last DESC""")
+    out = []
+    for r in rows:
+        nxt = db.one("""SELECT mo.title, COALESCE(mo.event_at, mo.until) AS at FROM moments mo
+                        JOIN thread_dossiers td ON td.tid=mo.tid WHERE td.dossier_id=? AND mo.until > ?
+                        ORDER BY at LIMIT 1""", (r["id"], now))
+        out.append({"id": r["id"], "name": r["name"], "n": r["n"], "last": r["last"],
+                    "next": dict(nxt) if nxt else None})
+    return {"dossiers": out}
 
 
 @app.get("/api/dossiers/{did}", dependencies=[Depends(auth)])

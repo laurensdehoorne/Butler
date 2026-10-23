@@ -221,6 +221,10 @@ a.item{touch-action:pan-y}
 .ag-rem{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:0.8125rem;color:var(--muted)}
 .ag-rem .i{width:13px;height:13px}
 .item.agenda + .item.agenda::before{left:64px}
+.quick-cta{margin:18px 0 -14px;justify-content:flex-end}
+.item.quick .quick-in{margin-top:8px;min-height:44px;min-block-size:1lh;field-sizing:content;padding:9px 12px}
+.tone-text{white-space:pre-wrap;font-size:0.875rem;line-height:1.55;padding:0 0 12px;color:var(--ink)}
+#tone-text{min-height:260px;field-sizing:content;max-block-size:60vh}
 .m-when{display:block;font-size:0.8125rem;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums}
 .info .tie{width:18px;height:9px}
 @container list (min-width:620px){
@@ -484,6 +488,7 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     <div class="tabs" role="tablist" aria-label="Weergave">
       <button class="tab" role="tab" aria-selected="true" data-tab="followup"><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg>Opvolgen <span class="count" id="count-followup"></span></button>
       <button class="tab" role="tab" aria-selected="false" data-tab="agenda"><svg class="i" aria-hidden="true"><use href="#i-cal"/></svg>Agenda</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="dossiers"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg>Dossiers</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="inbox"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg>Inbox</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="cleanup"><svg class="i" aria-hidden="true"><use href="#i-broom"/></svg>Opruimen</button>
     </div>
@@ -549,7 +554,7 @@ const I = n => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const TIE = label => `<svg class="tie" ${label?`role="img" aria-label="${label}"`:'aria-hidden="true"'}><use href="#tie"/></svg>`;
 const FILTERS = [['alle','Alles'],['ongelezen','Ongelezen'],['belangrijk','Belangrijk'],['persoonlijk','Persoonlijk'],['reclame','Reclame'],['notificaties','Notificaties']];
 const CFILTERS = [['reclame','Reclame'],['notificatie','Notificaties'],['alle','Alles']];
-const TAB_NAMES = {followup:'Opvolgen', agenda:'Agenda', inbox:'Inbox', cleanup:'Opruimen'};
+const TAB_NAMES = {followup:'Opvolgen', agenda:'Agenda', dossiers:'Dossiers', inbox:'Inbox', cleanup:'Opruimen'};
 const RULES = [['none','Geen regel'],['archive_after','Archiveren na … dagen'],['archive','Altijd meteen archiveren'],['trash','Altijd meteen verwijderen'],['keep','Nooit automatisch opruimen']];
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -699,6 +704,37 @@ const dossierBadge = d => `<span class="badge dossier" data-dossier="${d.id}">${
 // een deadline met uur is een afspraak ("10 nov om 11:00"), zonder uur een uiterste datum ("tegen 10 nov")
 const dueLabel = dl => dl.length > 10 ? `${dayMonth(dl)} om ${dl.slice(11, 16)}` : `tegen ${dayMonth(dl)}`;
 
+/* snel antwoorden (naar de email-reply-skill): per mail in een paar woorden, Butler schrijft het antwoord uit in
+   jouw stijl en zet het als concept in je Concepten-map; versturen doe je zelf in Spark */
+function quickView(list){
+  if(!list.length) return `<button class="backbtn" data-dossier-back>${I('back')}<span>Opvolgen</span></button>` + empty('Niets te beantwoorden', 'Er wacht geen mail op een antwoord van jou.', I('check'));
+  return `<button class="backbtn" data-dossier-back>${I('back')}<span>Opvolgen</span></button>
+    <div class="sec-h"><h2>Snel antwoorden</h2><span class="num">${list.length}</span></div>
+    <p class="note">Typ per mail in een paar woorden wat je wilt antwoorden: "ja", "dinsdag past", "niet geïnteresseerd". Butler schrijft het uit in jouw stijl en zet het als concept klaar in Spark. Er wordt niets verstuurd.</p>
+    <div class="items">${list.map(c => `<div class="item quick">
+      ${avatar(c.who, false, c.avatar)}
+      <div class="c-main">
+        <div class="c-top"><span class="who"><b>${esc(c.who)}</b></span><time>${esc(when(c.date))}</time></div>
+        <div class="subj">${esc(c.subject || '(geen onderwerp)')}</div>
+        <div class="sum">${c.summary ? TIE() + esc(c.summary) : esc(c.snippet)}</div>
+        <textarea class="field quick-in" rows="1" data-quick="${c.tid}" placeholder="Je antwoord in een paar woorden"></textarea>
+      </div></div>`).join('')}</div>
+    <div class="actions"><button class="btn primary" data-quick-go>${I('draft')}Maak concepten</button></div>`;
+}
+async function quickGo(btn){
+  const todo = [...document.querySelectorAll('[data-quick]')].filter(t => t.value.trim()).map(t => ({tid: +t.dataset.quick, text: t.value.trim()}));
+  if(!todo.length) return toast('Vul bij minstens één mail een antwoord in');
+  btn.disabled = true;
+  let ok = 0; const failed = [];
+  for(const [i, q] of todo.entries()){
+    btn.innerHTML = `${TIE()}Concept ${i + 1} van ${todo.length}…`;
+    try{ await post(`/api/threads/${q.tid}/quick-draft`, {instruction: q.text}); ok++; }
+    catch(e){ failed.push(e.message); }
+  }
+  toast(failed.length ? `${ok} concept${ok === 1 ? '' : 'en'} klaar, ${failed.length} mislukt: ${failed[0]}` : `${ok} concept${ok === 1 ? '' : 'en'} klaar in Spark`);
+  if(!failed.length){ S.quick = false; load(true); } else { btn.disabled = false; btn.innerHTML = `${I('draft')}Opnieuw proberen`; }
+}
+
 function dayLabel(key){
   const d = new Date(key + 'T12:00:00'), today = new Date(), tomorrow = new Date(Date.now() + 864e5);
   if(d.toDateString() === today.toDateString()) return 'Vandaag';
@@ -772,12 +808,15 @@ function swapList(html, animate){
 
 async function load(animate=false){
   renderChips();
-  const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q+'|'+(S.dossier||''), seq = ++S.seq;
+  const key = S.tab+'|'+S.account+'|'+S.filter+'|'+S.cfilter+'|'+S.q+'|'+(S.dossier||'')+(S.quick?'|q':''), seq = ++S.seq;
   if(!S.loaded[key]) $('#list').innerHTML = placeholder();
   const acc = encodeURIComponent(S.account);
   let html;
   try{
-    if(S.dossier){  // alle mail die over hetzelfde gaat, met wat eraan komt bovenaan
+    if(S.quick){  // snel antwoorden: per mail een paar woorden, Butler schrijft het uit als concept
+      const d = await api(`/api/followup?account=${acc}`);
+      html = quickView(vis(d.waiting_on_me));
+    } else if(S.dossier){  // alle mail die over hetzelfde gaat, met wat eraan komt bovenaan
       const d = await api(`/api/dossiers/${S.dossier}`);
       const due = d.moments.filter(c => new Date(c.moment.at) <= new Date()), later = d.moments.filter(c => new Date(c.moment.at) > new Date());
       html = `<button class="backbtn" data-dossier-back>${I('back')}<span>${TAB_NAMES[S.tab]}</span></button>
@@ -785,6 +824,15 @@ async function load(animate=false){
         + (due.length ? `<section class="now"><div class="items">${due.map(c => momentCard(c, true)).join('')}</div></section>` : '')
         + (later.length ? `<div class="items">${later.map(c => momentCard(c, false)).join('')}</div>` : '')
         + `<div class="items">${vis(d.threads).map(c => card(c, 'dossier')).join('')}</div>`;
+    } else if(S.tab==='dossiers'){
+      const d = await api('/api/dossiers');
+      html = !d.dossiers.length ? empty('Nog geen dossiers', 'Butler groepeert mail die over dezelfde zaak gaat: een reis, een verbouwing, een schadegeval.', I('folder'))
+        : `<div class="items" style="margin-top:12px">${d.dossiers.map(x => `<a class="item" href="#" data-dossier="${x.id}">
+            <span class="av me" aria-hidden="true">${I('folder')}</span>
+            <div class="c-main"><div class="c-top"><span class="who"><b>${esc(x.name)}</b></span><time>${esc(when(x.last))}</time></div>
+              <div class="sum">${x.n} mail${x.n > 1 ? 's' : ''}</div>
+              ${x.next ? `<div class="m-when">${esc(x.next.title)}, ${esc(new Date(x.next.at).toLocaleDateString('nl-BE', {weekday:'short', day:'numeric', month:'short'}))}</div>` : ''}
+            </div></a>`).join('')}</div>`;
     } else if(S.tab==='agenda'){
       const d = await api(`/api/agenda?account=${acc}`);
       html = agendaView(vis(d.items));
@@ -823,6 +871,7 @@ async function load(animate=false){
         ? empty('Alles afgehandeld', 'Er wacht niets op jou, en jij wacht op niemand.', TIE())
         : msec('Nu nodig', now, true, 'now') +
           sec('Herinneringen', d.reminders, 'rem') +
+          (d.waiting_on_me.length && S.ai ? `<div class="actions quick-cta"><button class="btn" data-quick-open>${TIE()}Snel antwoorden</button></div>` : '') +
           sec('Wacht op jou', d.waiting_on_me, 'me') +
           sec('Wacht op antwoord', d.waiting_on_them, 'them', `${d.followup_days} dagen of langer stil`) +
           msec('Binnenkort', soon, false);
@@ -1138,11 +1187,13 @@ async function doAction(a, btn){
 
 /* ---------- events ---------- */
 document.addEventListener('click', e=>{
-  const el = e.target.closest('[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-tid],[data-a],[data-toggle]');
+  const el = e.target.closest('[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
+  if(el.hasAttribute('data-quick-open')){ S.quick = true; scrollTo(0, 0); return load(true); }
+  if(el.hasAttribute('data-quick-go')) return quickGo(el);
   if(el.dataset.dossier){ e.preventDefault(); if(S.thread) closeThread(); S.dossier = +el.dataset.dossier; scrollTo(0, 0); return load(true); }
-  if(el.hasAttribute('data-dossier-back')){ S.dossier = null; return load(true); }
-  if(el.dataset.tab){ if(S.tab!==el.dataset.tab || S.dossier){ S.tab=el.dataset.tab; S.dossier = null; load(true); } }
+  if(el.hasAttribute('data-dossier-back')){ S.dossier = null; S.quick = false; return load(true); }
+  if(el.dataset.tab){ if(S.tab!==el.dataset.tab || S.dossier || S.quick){ S.tab=el.dataset.tab; S.dossier = null; S.quick = false; load(true); } }
   else if(el.dataset.acc!==undefined){ S.account=el.dataset.acc; load(true); }
   else if(el.dataset.f){ S.filter=el.dataset.f; load(true); }
   else if(el.dataset.cf){ S.cfilter=el.dataset.cf; load(true); }
@@ -1195,9 +1246,9 @@ async function openSettings(view='root'){
   S.view = view; S.cfgErrors = {};
   $('#set-body').innerHTML = placeholder();
   openDialog(settings);
-  const [dev, cost, sub, cfg] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})),
-    mySub().catch(()=>null), api('/api/config').catch(()=>null)]);
-  S.set = {devices: dev.devices, costs: cost.months, here: !!sub};
+  const [dev, cost, sub, cfg, tn] = await Promise.all([api('/api/push/devices').catch(()=>({devices:[]})), api('/api/costs').catch(()=>({months:[]})),
+    mySub().catch(()=>null), api('/api/config').catch(()=>null), api('/api/tone').catch(()=>null)]);
+  S.set = {devices: dev.devices, costs: cost.months, here: !!sub, tone: tn};
   S.cfg = cfg;
   if(view === 'account:new') S.view = newAccount();
   renderSettings();
@@ -1244,10 +1295,23 @@ function rootSettings(){
     <h3 class="group-h">Meldingen</h3><div class="group">${push}</div>
     <h3 class="group-h">Toestellen met meldingen</h3><div class="group">${devs}</div>
     <h3 class="group-h">AI-dienst</h3><div class="group">${ai}</div>
+    <h3 class="group-h">Schrijfstijl</h3><div class="group" id="tone-group">${toneSettings()}</div>
     <h3 class="group-h">Configuratie</h3><div class="group">${config}</div>
     ${c && !c.saved_in_app ? '<p class="fine">Je instellingen komen nu uit config.yaml. Zodra je hier iets bewaart, bewaart Butler alles in /data/config.yaml, en dat gaat dan voor.</p>' : ''}
     <h3 class="group-h">AI-kosten</h3><div class="group">${costs}</div>
     <p class="fine">Een schatting: verbruik maal lijstprijs, omgerekend naar euro. Wat je echt betaalt, staat in de console van Anthropic of OpenAI.</p>`;
+}
+
+// het schrijfprofiel dat Butler uit je verstuurde mail leerde, voor antwoordvoorstellen
+function toneSettings(){
+  const st = S.set.tone, tn = st?.tone;
+  if(!S.ai) return '<div class="muted">Zet eerst de AI aan; dan leert Butler je schrijfstijl uit je verstuurde mail.</div>';
+  if(!tn) return `<div class="line"><span>Butler kent je schrijfstijl nog niet<span class="sub">${st?.samples_available || 0} verstuurde mail${(st?.samples_available || 0) === 1 ? '' : 's'} om uit te leren</span></span>
+    <button class="btn primary" data-set="tone-build">Leer mijn stijl</button></div>`;
+  return `<details class="month"><summary><span>Je schrijfprofiel<span class="sub">Geleerd uit ${tn.samples} verstuurde mails, ${esc(when(tn.built_at))}${tn.edited ? ', door jou aangepast' : ''}</span></span></summary>
+      <div class="tone-text">${esc(tn.text)}</div></details>
+    <div class="line"><span class="sub">Butler gebruikt dit, plus je laatste mails aan dezelfde persoon, voor elk antwoordvoorstel.</span>
+      <span class="group-actions"><button class="btn" data-set="tone-edit">Aanpassen</button><button class="btn" data-set="tone-build">Opnieuw leren</button></span></div>`;
 }
 
 function sectionSummary(s){
@@ -1360,6 +1424,23 @@ async function waitForRestart(){
 async function settingAction(a, el){
   if(a === 'open'){ S.view = el.dataset.view; S.cfgErrors = {}; S.cfg.accounts = S.cfg.accounts.filter(x => !x.isNew || S.view.startsWith('account:')); renderSettings(); settings.scrollTop = 0; return; }
   if(a === 'add-account'){ S.view = newAccount(); renderSettings(); return; }
+  if(a === 'tone-edit'){
+    $('#tone-group').innerHTML = `<div class="fld"><textarea class="field" id="tone-text">${esc(S.set.tone.tone.text)}</textarea></div>
+      <div class="actions" style="margin-bottom:12px"><button class="btn primary" data-set="tone-save">Bewaren</button><button class="btn ghost" data-set="tone-cancel">Annuleren</button></div>`;
+    return;
+  }
+  if(a === 'tone-cancel'){ $('#tone-group').innerHTML = toneSettings(); return; }
+  if(a === 'tone-save' || a === 'tone-build'){
+    el.disabled = true;
+    if(a === 'tone-build') el.innerHTML = TIE() + 'Butler leest je verstuurde mail…';
+    try{
+      const r = a === 'tone-save' ? await api('/api/tone', {method:'PUT', body:JSON.stringify({text: $('#tone-text').value})}) : await post('/api/tone/build');
+      S.set.tone = {...(S.set.tone || {}), tone: r.tone};
+      toast(a === 'tone-save' ? 'Schrijfprofiel bewaard' : 'Butler kent je schrijfstijl');
+    }catch(e){ toast(e.message); }
+    $('#tone-group').innerHTML = toneSettings();
+    return;
+  }
   if(a === 'save-section') return saveConfig({values: collect($('#cfg-form'))}, el);
   if(a === 'save-account'){ readAccount(+el.dataset.i); return saveConfig({accounts: accountsPayload()}, el); }
   if(a === 'remove-account'){

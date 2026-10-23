@@ -6,7 +6,7 @@ import re
 import threading
 from datetime import date, datetime
 
-from . import dossiers, moments
+from . import dossiers, moments, tone
 
 from .db import sender_rule, thread_messages
 from .mailparse import strip_quotes
@@ -237,6 +237,9 @@ class AIWorker:
     def enqueue_moments(self, tid):
         self._put(("moments", tid, False))
 
+    def enqueue_tone(self):
+        self._put(("tone", 0, False))
+
     def _put(self, job):
         with self.lock:
             if job in self.pending:
@@ -253,6 +256,9 @@ class AIWorker:
             try:
                 if kind == "moments":
                     self.moments(tid)
+                    continue
+                if kind == "tone":
+                    tone.build(self, self.db)
                     continue
                 res = self.triage(tid)
                 if notify:
@@ -351,9 +357,21 @@ class AIWorker:
             raise RuntimeError("thread niet gevonden")
         if not self.active_for(t["account"]):
             raise RuntimeError("AI staat uit voor deze mailbox")
+        name = self.cfg.get("name", "de gebruiker")
+        system = self._fmt(DRAFT_SYSTEM)
+        if not self.cfg.get("signature", "").strip():
+            system = system.replace("Sluit af met:\n", "Sluit af zoals in het schrijfprofiel.").rstrip()
+        profile = tone.get(self.db)
+        if profile and profile.get("text"):  # zo schrijft de gebruiker zelf, geleerd uit verstuurde mail
+            system += f"\n\nSchrijfstijl van {name} (volg die: taal, u of je, aanhef, opbouw, afsluiting):\n{profile['text']}"
         user = thread_text(msgs) + self.context(t, msgs)
+        incoming = [m for m in msgs if not m["outgoing"]]
+        examples = tone.examples_for(self.db, t["account"], incoming[-1]["from_addr"] if incoming else "")
+        if examples:
+            user += (f"\n\n--- Eerdere mails van {name} aan deze persoon (neem dezelfde aanspreking en toon over, niet de inhoud):\n"
+                     + "\n---\n".join(examples))
         if instruction.strip():
-            user += f"\n\n--- Instructie van {self.cfg.get('name', 'de gebruiker')} voor het antwoord:\n{instruction.strip()}"
+            user += f"\n\n--- Instructie van {name} voor het antwoord:\n{instruction.strip()}"
         else:
             user += "\n\n--- Schrijf een gepast antwoord op het laatste bericht."
-        return self._call("draft", self._fmt(DRAFT_SYSTEM), user, 1500)
+        return self._call("draft", system, user, 1500)
