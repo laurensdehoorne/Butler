@@ -102,3 +102,13 @@ def test_failed_html_fetch_is_not_cached_as_no_html(app, acc):
         assert actions.fetch_html(app.db, acc, mid) == ("", [])
     row = app.db.one("SELECT html, attachments FROM messages WHERE id=?", (mid,))
     assert row["html"] is None and row["attachments"] is None  # volgende keer opnieuw proberen
+
+
+def test_stub_text_part_is_replaced_by_html_text():
+    em = EmailMessage()
+    em["From"], em["To"], em["Subject"] = "a@x.be", "me@x.be", "Uw factuur"
+    em.set_content("To view this email online, https://x.example/r?id=1 please click here.\n\nUW FACTUUR")
+    em.add_alternative("<html><body><h1>Uw factuur</h1><p>Beste klant, uw factuur voor augustus ter waarde van "
+                       "EUR 123,45 staat klaar. Gelieve te betalen voor 15 september. " + "Meer uitleg. " * 20 +
+                       "</p></body></html>", subtype="html")
+    assert "EUR 123,45" in parse(em.as_bytes())["body"]

@@ -216,6 +216,16 @@ def _decode_legacy(v):
         return str(v)
 
 
+STUB_CHARS = 600
+
+
+def is_stub(text, alt):
+    """Is `text` een lege of nutteloze tekstversie, vergeleken met de tekst uit de HTML?"""
+    t = re.sub(r"[\s\u034f\u200b-\u200d\ufeff]", "", text or "")
+    a = re.sub(r"[\s\u034f\u200b-\u200d\ufeff]", "", alt or "")
+    return bool(a) and (len(t) < 20 or (len(t) < STUB_CHARS and len(a) > 2 * len(t)))
+
+
 def _body(msg):
     try:
         part = msg.get_body(preferencelist=("plain", "html"))
@@ -226,12 +236,15 @@ def _body(msg):
     content = _content(part)
     if part.get_content_type() == "text/html":
         content = html_to_text(content)
-    elif len(re.sub(r"[\s\u034f\u200b-\u200d\ufeff]", "", content)) < 20:
-        # een lege tekstversie naast een volledige HTML-versie (veel nieuwsbrieven): de tekst uit de HTML halen
+    elif len(content) < STUB_CHARS:
+        # een lege of nagenoeg lege tekstversie ("View this email online, klik hier") naast een volledige HTML-versie
+        # (veel nieuwsbrieven en facturen): de tekst uit de HTML halen
         try:
             h = msg.get_body(preferencelist=("html",))
             if h is not None:
-                content = html_to_text(_content(h)) or content
+                alt = html_to_text(_content(h))
+                if is_stub(content, alt):
+                    content = alt
         except Exception:
             pass
     return content.replace("\r\n", "\n").strip()

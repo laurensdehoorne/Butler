@@ -12,7 +12,7 @@ import httpx
 from imapclient import DRAFT, FLAGGED, SEEN
 
 from .db import thread_messages, upsert_rule
-from .mailparse import make_snippet, parse
+from .mailparse import is_stub, make_snippet, parse
 
 
 def _inbox_uids(db, t):
@@ -93,7 +93,7 @@ def fetch_html(db, acc, mid):
     atts = atts if atts is not None else p["attachments"]
     db.x("UPDATE messages SET html=?, attachments=?, att_text=COALESCE(att_text, ?) WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
          (html, json.dumps(atts), p.get("att_text"), mid, row["account"], row["message_id"] or ""))
-    if p.get("body") and not (row["body"] or "").strip():  # lege tekstversie: nu met de tekst uit de HTML
+    if p.get("body") and is_stub(row["body"], p["body"]):  # lege of nagenoeg lege tekstversie: nu met de tekst uit de HTML
         db.x("UPDATE messages SET body=?, snippet=? WHERE id=? OR (account=? AND message_id=? AND message_id!='')",
              (p["body"][:50000], make_snippet(p["body"]), mid, row["account"], row["message_id"] or ""))
         db.x("UPDATE threads SET ai_count=0 WHERE account=? AND thread_key=?", (row["account"], row["thread_key"]))
