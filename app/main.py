@@ -419,6 +419,12 @@ def get_thread(tid: int):
         for m in msgs
     ]
     card["ai_available"] = ai.active_for(t["account"])
+    card["context"] = t.get("context") or ""
+    incoming = [m for m in msgs if not m["outgoing"]]
+    if incoming:
+        rule = sender_rule(db, t["account"], incoming[-1]["from_addr"]) or {}
+        card["sender"] = {"addr": incoming[-1]["from_addr"], "name": incoming[-1]["from_name"] or incoming[-1]["from_addr"],
+                          "context": rule.get("context") or ""}
     card["moments"] = [_moment(r) for r in db.q("SELECT * FROM moments WHERE tid=? AND until > ? ORDER BY at",
                                                   (tid, _now().isoformat()))]
     return card
@@ -457,6 +463,31 @@ def read(tid: int):
     t = _thread_or_404(tid)
     _run(lambda: actions.mark_read(db, _acc(t["account"]), tid))
     return {"ok": True}
+
+
+class ContextIn(BaseModel):
+    text: str = ""
+    sender: bool = False  # voor alle mail van deze afzender in plaats van enkel deze mail
+
+
+@app.post("/api/threads/{tid}/context", dependencies=[Depends(auth)])
+def set_context(tid: int, body: ContextIn):
+    """Context voor Butler; daarna meteen opnieuw samenvatten (en momenten zoeken als de mail gemarkeerd is)."""
+    t = _thread_or_404(tid)
+    text = body.text.strip()[:2000] or None
+    _, msgs = thread_messages(db, tid)
+    incoming = [m for m in msgs if not m["outgoing"]]
+    if body.sender:
+        if not incoming:
+            raise HTTPException(400, "Deze mail heeft geen afzender behalve jezelf.")
+        upsert_rule(db, t["account"], incoming[-1]["from_addr"], context=text)
+    else:
+        db.x("UPDATE threads SET context=? WHERE tid=?", (text, tid))
+    if ai.active_for(t["account"]):
+        _run(lambda: ai.triage(tid))
+        if any(m.get("flagged") for m in msgs):
+            ai.enqueue_moments(tid)
+    return get_thread(tid)
 
 
 class FlagIn(BaseModel):

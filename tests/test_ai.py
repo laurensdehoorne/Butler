@@ -86,3 +86,22 @@ def test_newsletters_never_sent_to_ai(app, acc):
     app.ai._clients["claude"] = fake
     res = app.ai.triage(tid)
     assert res["priority"] == "laag" and not fake.messages.create.called
+
+
+def test_context_reaches_every_prompt(app, client, acc):
+    tid, _ = put(acc, "INBOX", 1, raw("Billit <factuur@billit.be>", "Factuur 2026-118", "<f@x>", unsub="<https://b.be/u>"))
+    fake = mock.MagicMock()
+    fake.messages.create.return_value = claude_reply(TRIAGE)
+    app.ai._clients["claude"] = fake
+    t = client.post(f"/api/threads/{tid}/context", headers=H, json={"text": "Al betaald via domiciliëring."}).json()
+    assert t["context"] == "Al betaald via domiciliëring." and t["summary"] == "Piet vraagt dinsdag."  # meteen opnieuw samengevat
+    prompt = fake.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "Al betaald via domiciliëring." in prompt  # ook een notificatie gaat mét context naar de AI
+
+    t = client.post(f"/api/threads/{tid}/context", headers=H, json={"text": "Mijn boekhoudpakket", "sender": True}).json()
+    assert t["sender"]["context"] == "Mijn boekhoudpakket" and t["context"] == "Al betaald via domiciliëring."
+    prompt = fake.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "Wat Jan weet over factuur@billit.be:\nMijn boekhoudpakket" in prompt
+
+    client.post(f"/api/threads/{tid}/context", headers=H, json={"text": ""})
+    assert client.get(f"/api/threads/{tid}", headers=H).json()["context"] == ""

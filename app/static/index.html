@@ -177,6 +177,13 @@ a.item{touch-action:pan-y}
 .btn.flagged .i{fill:currentColor}
 .now .item.swiping{background:var(--raised)}
 .sender-head{display:block;width:100%;padding:0;border:0;background:none;text-align:left;color:inherit}
+.ctx-add{margin:-6px 0 12px -8px;color:var(--muted)}
+.ctx-show{padding:10px 14px;margin-bottom:14px;border-radius:12px;background:var(--tint)}
+.ctx-show .ctx-h{display:flex;align-items:center;gap:8px}
+.ctx-show .ctx-h .btn{margin-left:auto;margin-right:-8px;padding:4px 8px;font-size:0.8125rem}
+.ctx-show p{margin:6px 0 0;white-space:pre-wrap}
+.ctx-form{margin-bottom:16px}
+.ctx-form .hint{font-size:0.8125rem;color:var(--muted);margin-top:8px}
 .m-when{display:block;font-size:0.8125rem;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums}
 .info .tie{width:18px;height:9px}
 @container list (min-width:620px){
@@ -834,6 +841,7 @@ function renderThread(){
   } else if(t.ai_available){
     note = `<button class="btn ask-butler" data-a="summarize">${TIE()}Laat Butler samenvatten</button>`;
   }
+  const context = `<div id="ctx">${contextView(t)}</div>`;
   const upcoming = (t.moments || []).map(m => `<div class="info">${TIE()}<span><b>${esc(m.title)}</b>, ${esc(momentWhen(m, new Date(m.at) <= new Date()))}</span></div>`).join('');
   const snooze = t.snooze_until ? `<div class="info">${I('clock')}Gesnoozed tot ${esc(fullDate(t.snooze_until))}</div>` : '';
   const tags = t.tags.length ? `<div class="meta" style="margin:0 0 14px">${t.tags.map(x=>`<span class="badge tag">#${esc(x)}</span>`).join('')}</div>` : '';
@@ -873,11 +881,30 @@ function renderThread(){
     </section>`;
 
   const keep = $('#reply')?.value, keepInstr = $('#instr')?.value;
-  $('#s-body').innerHTML = note + upcoming + snooze + tags + msgs + compose;
+  $('#s-body').innerHTML = note + context + upcoming + snooze + tags + msgs + compose;
   if(keep) $('#reply').value = keep;
   if(keepInstr && $('#instr')) $('#instr').value = keepInstr;
   showHtmlMessages();
 }
+
+/* ---------- context voor Butler: wat je zelf weet over deze mail of afzender ---------- */
+function contextView(t){
+  const ctx = t.context, sctx = t.sender?.context;
+  if(!ctx && !sctx) return `<button class="btn ghost ctx-add" data-a="ctx-edit">${I('plus')}Geef Butler context</button>`;
+  return `<div class="ctx-show"><div class="ctx-h">${TIE()}<span class="muted">Wat Butler van jou weet</span><button class="btn ghost" data-a="ctx-edit">Wijzigen</button></div>
+    ${ctx ? `<p>${esc(ctx)}</p>` : ''}${sctx ? `<p><span class="muted">Over ${esc(t.sender.name)}:</span> ${esc(sctx)}</p>` : ''}</div>`;
+}
+function contextForm(t){
+  const forSender = !t.context && !!t.sender?.context;
+  return `<div class="ctx-form">
+    <textarea class="field short" id="ctx-text" placeholder="Bv. dit is al betaald. Of: dit is mijn boekhouder, antwoord altijd formeel.">${esc(forSender ? t.sender.context : t.context)}</textarea>
+    ${t.sender ? `<div class="opts"><label><input type="checkbox" switch id="ctx-sender" ${forSender ? 'checked' : ''}> Voor alle mail van ${esc(t.sender.name)}</label></div>` : ''}
+    <div class="actions"><button class="btn primary" data-a="ctx-save">Bewaren</button><button class="btn ghost" data-a="ctx-cancel">Annuleren</button></div>
+    <div class="hint">Butler gebruikt dit bij samenvatten, antwoordvoorstellen en momenten.</div></div>`;
+}
+$('#s-body').addEventListener('change', e => {  // wisselen tussen deze mail en de afzender toont wat daar al staat
+  if(e.target.id === 'ctx-sender' && S.thread) $('#ctx-text').value = e.target.checked ? (S.thread.sender?.context || '') : (S.thread.context || '');
+});
 
 /* ---------- HTML-mails: in een iframe zonder scripts; externe afbeeldingen komen via Butler ---------- */
 const mailDoc = html => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -935,6 +962,11 @@ async function doAction(a, btn){
     if(a==='archive'){ inBackground(t.tid, p+'/archive', 'Gearchiveerd', 'Archiveren mislukt'); return closeThread(); }
     if(a==='trash'){ if(!await ask({title:'Naar de prullenbak?', msg:t.subject, ok:'Verwijderen', danger:true})) return;
       inBackground(t.tid, p+'/trash', 'Verwijderd', 'Verwijderen mislukt'); return closeThread(); }
+    if(a==='ctx-edit'){ $('#ctx').innerHTML = contextForm(t); $('#ctx-text').focus(); return; }
+    if(a==='ctx-cancel'){ $('#ctx').innerHTML = contextView(t); return; }
+    if(a==='ctx-save'){ btn.innerHTML = TIE()+'Butler leest opnieuw…';
+      S.thread = await post(p+'/context', {text: $('#ctx-text').value, sender: !!$('#ctx-sender')?.checked});
+      toast('Context bewaard'); return renderThread(); }
     if(a==='read'){ await post(p+'/read'); toast('Gemarkeerd als gelezen'); }
     if(a==='flag' || a==='unflag'){ await post(p+'/flag', {flagged: a==='flag'}); toast(a==='flag' ? 'Gemarkeerd' : 'Markering weggehaald'); }
     if(a==='done'){ await post(p+'/done',{done:true}); toast('Klaar, uit de opvolglijst'); return closeThread(); }

@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS threads(
   snooze_until TEXT,
   done INTEGER DEFAULT 0,
   moments_ai INTEGER DEFAULT 0,  -- aantal berichten toen de momenten bepaald werden
+  context TEXT,                  -- wat je Butler over deze mail vertelde
   UNIQUE(account, thread_key)
 );
 
@@ -71,6 +72,7 @@ CREATE TABLE IF NOT EXISTS sender_rules(
   action TEXT DEFAULT 'none',-- none | keep | archive | trash | archive_after
   after_days INTEGER DEFAULT 7,
   unsubscribed_at TEXT,
+  context TEXT,              -- wat je Butler over deze afzender vertelde
   PRIMARY KEY(account, addr)
 );
 
@@ -127,7 +129,7 @@ class DB:
             self.conn.executescript(SCHEMA)
             # migratie: vlag (Spark) en momenten
             for table, col in (("messages", "flagged INTEGER DEFAULT 0"), ("threads", "moments_ai INTEGER DEFAULT 0"),
-                               ("messages", "html TEXT")):
+                               ("messages", "html TEXT"), ("threads", "context TEXT"), ("sender_rules", "context TEXT")):
                 if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
             self.conn.execute("CREATE INDEX IF NOT EXISTS ix_m_from ON messages(account, from_addr)")
@@ -180,6 +182,6 @@ def upsert_rule(db, account, addr, **fields):
     addr = addr.lower()
     db.x("INSERT OR IGNORE INTO sender_rules(account, addr) VALUES(?,?)", (account, addr))
     for k, v in fields.items():
-        if k in ("kind", "action", "after_days", "unsubscribed_at"):
+        if k in ("kind", "action", "after_days", "unsubscribed_at", "context"):
             db.x(f"UPDATE sender_rules SET {k}=? WHERE account=? AND addr=?", (v, account, addr))
     return sender_rule(db, account, addr)

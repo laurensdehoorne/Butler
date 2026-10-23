@@ -8,7 +8,7 @@ from datetime import date, datetime
 
 from . import moments
 
-from .db import thread_messages
+from .db import sender_rule, thread_messages
 from .mailparse import strip_quotes
 
 log = logging.getLogger("butler.ai")
@@ -283,7 +283,7 @@ class AIWorker:
         t, msgs = thread_messages(self.db, tid)
         if not t or not msgs:
             return None
-        if all(m["bulk"] for m in msgs):
+        if all(m["bulk"] for m in msgs) and not (t.get("context") or "").strip():
             res = {"summary": msgs[-1]["snippet"][:200], "priority": "laag", "category": msgs[-1].get("kind") or "reclame",
                    "action": "geen", "deadline": None}
         elif not self.active_for(t["account"]):
@@ -292,7 +292,7 @@ class AIWorker:
             raw = self._call(
                 "triage",
                 self._fmt(TRIAGE_SYSTEM),
-                thread_text(msgs),
+                thread_text(msgs) + self.context(t, msgs),
                 600,
             )
             m = re.search(r"\{.*\}", raw, re.S)
@@ -313,6 +313,19 @@ class AIWorker:
         )
         return res
 
+    def context(self, t, msgs):
+        """Wat je Butler zelf vertelde over deze mail en over de afzender; gaat mee met elke AI-vraag."""
+        name = self.cfg.get("name", "de gebruiker")
+        parts = []
+        if (t.get("context") or "").strip():
+            parts.append(f"--- Context van {name} bij deze mail (gaat voor op wat de mail lijkt te zeggen):\n{t['context'].strip()}")
+        incoming = [m for m in msgs if not m["outgoing"]]
+        if incoming:
+            rule = sender_rule(self.db, t["account"], incoming[-1]["from_addr"]) or {}
+            if (rule.get("context") or "").strip():
+                parts.append(f"--- Wat {name} weet over {incoming[-1]['from_addr']}:\n{rule['context'].strip()}")
+        return ("\n\n" + "\n\n".join(parts)) if parts else ""
+
     def moments(self, tid):
         """Momenten waarop een gemarkeerde thread nodig is. Ook voor notificaties: de vlag is een bewuste keuze."""
         t, msgs = thread_messages(self.db, tid)
@@ -321,7 +334,7 @@ class AIWorker:
         tz = self.notifier.tz
         system = moments.SYSTEM.format(owner=self.cfg.get("owner", "de gebruiker"), name=self.cfg.get("name", "de gebruiker"),
                                        now=datetime.now(tz).strftime("%Y-%m-%d %H:%M"), tz=tz.key)
-        items = moments.parse(self._call("triage", system, thread_text(msgs, per_msg=6000), 900), tz)
+        items = moments.parse(self._call("triage", system, thread_text(msgs, per_msg=6000) + self.context(t, msgs), 900), tz)
         moments.save(self.db, tid, items)
         self.db.x("UPDATE threads SET moments_ai=? WHERE tid=?", (len(msgs), tid))
         return items
@@ -334,7 +347,7 @@ class AIWorker:
             raise RuntimeError("thread niet gevonden")
         if not self.active_for(t["account"]):
             raise RuntimeError("AI staat uit voor deze mailbox")
-        user = thread_text(msgs)
+        user = thread_text(msgs) + self.context(t, msgs)
         if instruction.strip():
             user += f"\n\n--- Instructie van {self.cfg.get('name', 'de gebruiker')} voor het antwoord:\n{instruction.strip()}"
         else:
