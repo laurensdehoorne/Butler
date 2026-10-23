@@ -123,7 +123,6 @@ def find(db, q, account="", limit=150, any_word=False, words=None, filters=None,
         where.append("m.attachments IS NOT NULL AND m.attachments != '[]'")
     if filters.get("pdf"):
         where.append("m.attachments LIKE '%.pdf%'")
-    where.append("m.folder NOT IN ('_weg', '_pending')")
 
     def run(op):
         sql_words = _match(words, op)
