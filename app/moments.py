@@ -19,6 +19,7 @@ log = logging.getLogger("butler.moments")
 KINDS = {"vlucht", "trein", "concert", "evenement", "reservatie", "afspraak", "afhaling", "ander"}
 MAX_MOMENTS = 4
 DEFAULT_SPAN = timedelta(hours=6)  # zonder einde: zo lang blijft een moment staan
+MAX_LEAD = timedelta(days=2)  # een herinnering begint nooit eerder dan dit voor de gebeurtenis zelf
 NIGHT = (22, 7)  # 's nachts geen melding, tenzij het moment voor de ochtend al voorbij is
 
 SYSTEM = """Je bent de e-mailassistent van {owner}. Het is nu {now} ({tz}).
@@ -70,6 +71,8 @@ def parse(raw, default_tz, now=None):
             event = _local(it.get("gebeurtenis"), tz) if it.get("gebeurtenis") else until
         except (TypeError, ValueError):
             event = until
+        if at < event - MAX_LEAD:  # de AI nam de boekingsdatum of iets anders: niet maanden vooraf tonen
+            at = event - MAX_LEAD
         kind = str(it.get("soort") or "ander").lower()
         out.append({"kind": kind if kind in KINDS else "ander", "title": str(it["titel"]).strip()[:140],
                     "detail": str(it.get("detail") or "").strip()[:300],

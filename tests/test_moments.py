@@ -186,3 +186,11 @@ def test_appointment_stays_after_done_plain_deadline_does_not(app, client, acc):
     app.db.x("UPDATE threads SET deadline='2099-12-18T14:30', done=1 WHERE tid=?", (appt,))
     app.db.x("UPDATE threads SET deadline='2099-12-20', done=1 WHERE tid=?", (bill,))
     assert [i["tid"] for i in client.get("/api/agenda", headers=H).json()["items"]] == [appt]
+
+
+def test_parse_does_not_start_a_reminder_months_before_the_event():
+    now = datetime(2026, 10, 24, 8, 0, tzinfo=timezone.utc)
+    raw_reply = ('{"momenten": [{"soort":"vlucht","titel":"Online inchecken voor TG932","begin":"2026-10-20T08:00",'
+                 '"einde":"2027-01-02T12:15","gebeurtenis":"2027-01-02T12:15","tijdzone":"Asia/Bangkok"}]}')
+    got = MO.parse(raw_reply, BXL, now)
+    assert got[0]["at"] == "2026-12-31T05:15:00+00:00"  # 2 dagen voor het vertrek, niet bij de boeking
