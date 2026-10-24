@@ -19,6 +19,8 @@ def test_sender_overview(client, acc):
     notif = client.get("/api/senders?kind=notificatie", headers=H).json()["senders"]
     assert [s["addr"] for s in notif] == ["noreply@bol.com"]
     assert [t["subject"] for t in client.get("/api/inbox?filter=persoonlijk", headers=H).json()["threads"]] == ["Vraagje"]
+    counts = client.get("/api/inbox?filter=persoonlijk", headers=H).json()["counts"]
+    assert (counts["ongelezen"], counts["persoonlijk"], counts["reclame"], counts["notificaties"]) == (5, 1, 3, 1)
 
 
 def test_unsubscribe_one_click_and_mailto(client, acc):

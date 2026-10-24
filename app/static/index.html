@@ -147,6 +147,9 @@ main{padding:14px max(16px,env(safe-area-inset-right)) calc(env(safe-area-inset-
 .chip{position:relative;border:1px solid var(--rule);background:transparent;border-radius:999px;padding:4px 12px;white-space:nowrap;font-size:var(--fs-subhead);color:var(--muted)}
 .chip:hover{color:var(--ink)}
 .chip[aria-pressed=true]{background:var(--lapel);border-color:var(--lapel);color:#fff}
+.chip .n{display:inline-block;margin-left:6px;min-width:18px;padding:0 5px;border-radius:99px;background:var(--badge);color:#fff;font-size:var(--fs-caption);font-weight:700;text-align:center;vertical-align:1px}
+.chip .n:empty{display:none}
+.chip[aria-pressed=true] .n{background:#fff;color:var(--lapel)}
 
 #list{overflow-x:clip;container:list/inline-size;view-transition-name:list}
 .sec-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:26px 0 4px}
@@ -872,7 +875,7 @@ function renderChips(){
   const multi = S.accounts.length>1;
   $('#accounts').innerHTML = multi ? [['','Alle accounts'],...S.accounts.map(a=>[a.id,a.name])]
     .map(([id,n])=>`<button class="chip" aria-pressed="${S.account===id}" data-acc="${esc(id)}">${esc(n)}</button>`).join('') : '';
-  $('#filters').innerHTML = S.tab==='inbox' ? FILTERS.map(([k,n])=>`<button class="chip" aria-pressed="${S.filter===k}" data-f="${k}">${n}</button>`).join('')
+  $('#filters').innerHTML = S.tab==='inbox' ? FILTERS.map(([k,n])=>`<button class="chip" aria-pressed="${S.filter===k}" data-f="${k}">${n}${k==='alle'?'':`<span class="n" data-n="${k}">${S.counts?.[k]||''}</span>`}</button>`).join('')
     : S.tab==='cleanup' ? CFILTERS.map(([k,n])=>`<button class="chip" aria-pressed="${S.cfilter===k}" data-cf="${k}">${n}</button>`).join('') : '';
   document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===S.tab));
 }
@@ -1222,6 +1225,7 @@ async function load(animate=false){
       const d = answered ? {threads: []} : await api(`/api/inbox?account=${acc}&filter=${S.filter}&q=${encodeURIComponent(S.q)}`);
       d.threads = vis(d.threads);
       if(d.unread !== undefined) $('#count-inbox').textContent = d.unread || '';
+      if(d.counts){ S.counts = d.counts; document.querySelectorAll('#filters [data-n]').forEach(e => e.textContent = d.counts[e.dataset.n] || ''); }
       html = askBlock() + (d.threads.length ? `<div class="items" style="margin-top:12px">${d.threads.map(c=>card(c, S.filter === 'alle' ? 'inbox' : undefined)).join('')}</div>`
         : S.q ? (S.ask?.q === S.q ? '' : empty('Niets gevonden', `Geen mail met “${esc(S.q)}”. Probeer minder woorden, van:naam, na:2026-03 of pdf, of stel een vraag.`, I('search')))
         : empty('Inbox leeg', 'Nieuwe mail verschijnt hier vanzelf.'));

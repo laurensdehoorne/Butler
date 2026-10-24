@@ -483,7 +483,10 @@ def inbox(account: str = "", filter: str = "alle", q: str = "", limit: int = 150
                    WHERE (?='' OR t.account=?) GROUP BY t.tid HAVING SUM(m.in_inbox) > 0
                    ORDER BY last_date DESC LIMIT ?""", (account, account, min(limit, 500) * 2))]
 
-    out = []
+    tests = {"ongelezen": lambda c: c["unread"], "belangrijk": lambda c: c["priority"] == "hoog",
+             "persoonlijk": lambda c: not c["bulk"], "reclame": lambda c: c["kind"] == "reclame",
+             "notificaties": lambda c: c["kind"] == "notificatie"}
+    out, counts = [], dict.fromkeys(tests, 0)  # counts: ongelezen threads per filterknop
     for tid in tids:
         t, msgs = thread_messages(db, tid)
         if not msgs:
@@ -491,20 +494,12 @@ def inbox(account: str = "", filter: str = "alle", q: str = "", limit: int = 150
         card = _card(t, msgs)
         if not q and _snoozed(t):
             continue
-        if filter == "ongelezen" and not card["unread"]:
-            continue
-        if filter == "belangrijk" and card["priority"] != "hoog":
-            continue
-        if filter == "persoonlijk" and card["bulk"]:
-            continue
-        if filter == "reclame" and card["kind"] != "reclame":
-            continue
-        if filter == "notificaties" and card["kind"] != "notificatie":
-            continue
-        out.append(card)
-        if len(out) >= limit:
-            break
-    return {"threads": out, "unread": inbox_unread(account)}
+        if card["unread"]:
+            for k, ok in tests.items():
+                counts[k] += bool(ok(card))
+        if len(out) < limit and (filter not in tests or tests[filter](card)):
+            out.append(card)
+    return {"threads": out, "unread": inbox_unread(account), "counts": counts}
 
 
 @app.get("/api/followup", dependencies=[Depends(auth)])
