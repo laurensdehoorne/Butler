@@ -194,3 +194,43 @@ def test_parse_does_not_start_a_reminder_months_before_the_event():
                  '"einde":"2027-01-02T12:15","gebeurtenis":"2027-01-02T12:15","tijdzone":"Asia/Bangkok"}]}')
     got = MO.parse(raw_reply, BXL, now)
     assert got[0]["at"] == "2026-12-31T05:15:00+00:00"  # 2 dagen voor het vertrek, niet bij de boeking
+
+
+def test_parse_fixes_year_that_did_not_roll_over():
+    # bij de jaarwissel: inchecken op 1 januari 2026 voor een vlucht op 2 januari 2027 stond een jaar lang "nu nodig"
+    now = datetime(2026, 10, 24, 9, 0, tzinfo=timezone.utc)
+    got = MO.parse('{"momenten": [{"soort":"vlucht","titel":"Online inchecken voor TG932","begin":"2026-01-01T12:15",'
+                   '"einde":"2027-01-02T12:15","gebeurtenis":"2027-01-02T12:15","tijdzone":"Asia/Bangkok"}]}', BXL, now)
+    assert got[0]["at"] == "2027-01-01T05:15:00+00:00" and got[0]["until"] == "2027-01-02T05:15:00+00:00"
+
+
+def test_fix_moves_and_removes_moments_and_keeps_ai_off(app, client, acc):
+    tid, _ = put(acc, "INBOX", 1, raw("THAI <eticket@thaiairways.com>", "Booking Confirmed", "<th@x>"), flagged=True)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    depart = now + timedelta(days=3)
+    MO.save(app.db, tid, [
+        {"kind": "vlucht", "title": "Online inchecken", "detail": "", "at": (now - timedelta(days=300)).isoformat(),
+         "until": depart.isoformat(), "event_at": depart.isoformat()},
+        {"kind": "vlucht", "title": "Vertrek", "detail": "", "at": (depart - timedelta(hours=3)).isoformat(),
+         "until": depart.isoformat(), "event_at": depart.isoformat()}])
+    checkin, leave = (r["id"] for r in app.db.q("SELECT id FROM moments ORDER BY at"))
+    assert [c["moment"]["id"] for c in client.get("/api/followup", headers=H).json()["moments_now"]] == [checkin]
+
+    later = depart + timedelta(days=1)
+    r = client.post(f"/api/threads/{tid}/moments", headers=H, json={
+        "update": [{"id": checkin, "at": (later - timedelta(hours=24)).isoformat(), "until": later.isoformat(), "event_at": later.isoformat()}],
+        "remove": [leave]})
+    assert r.status_code == 200 and r.json()["moments_fixed"]
+    assert [(m["id"], m["at"]) for m in r.json()["moments"]] == [(checkin, (later - timedelta(hours=24)).isoformat())]
+    assert client.get("/api/followup", headers=H).json()["moments_now"] == []
+
+    fake = mock.MagicMock()
+    fake.messages.create.return_value = claude_reply(flight_reply(datetime.now(ZoneInfo("Europe/Lisbon")) + timedelta(hours=10)))
+    app.ai._clients["claude"] = fake
+    assert app.ai.moments(tid) == [] and not fake.messages.create.called  # jouw correctie blijft staan
+
+    # opnieuw laten kijken: met wat er niet klopte als context
+    r = client.post(f"/api/threads/{tid}/moments/redo", headers=H, json={"note": "Inchecken kan pas 24 uur voor vertrek"})
+    assert r.status_code == 200 and not r.json()["moments_fixed"]
+    assert "Inchecken kan pas 24 uur voor vertrek" in fake.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert [m["title"] for m in r.json()["moments"]] == ["Online inchecken voor TP643", "Vertrek TP643 naar Brussel"]

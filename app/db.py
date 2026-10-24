@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS threads(
   snooze_until TEXT,
   done INTEGER DEFAULT 0,
   moments_ai INTEGER DEFAULT 0,  -- aantal berichten toen de momenten bepaald werden
+  moments_fixed INTEGER DEFAULT 0,  -- jij paste de momenten aan: de AI blijft eraf tot je haar opnieuw laat kijken
   context TEXT,                  -- wat je Secretaresse over deze mail vertelde
   dossier_id INTEGER,
   dossier_ai INTEGER DEFAULT 0,  -- 0 = nog niet bepaald, 1 = door de AI, -1 = door jou eruit gehaald
@@ -192,9 +193,19 @@ class DB:
                                ("threads", "dossier_id INTEGER"), ("threads", "dossier_ai INTEGER DEFAULT 0"),
                                ("messages", "attachments TEXT"), ("threads", "awaits INTEGER"), ("dossiers", "closed_at TEXT"),
                                ("sender_rules", "notify INTEGER"), ("sender_rules", "notify_auto INTEGER DEFAULT 0"),
-                               ("messages", "att_text TEXT"), ("threads", "has_event INTEGER DEFAULT 0")):
+                               ("messages", "att_text TEXT"), ("threads", "has_event INTEGER DEFAULT 0"),
+                               ("threads", "moments_fixed INTEGER DEFAULT 0")):
                 if col.split()[0] not in {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}:
                     self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
+            # herinneringen met een jaartal dat bij de jaarwissel niet meeschoof (een jaar "nu nodig"): eenmalig rechtzetten
+            if not self.conn.execute("SELECT 1 FROM settings WHERE key='moments_year_fix'").fetchone():
+                from datetime import datetime
+
+                from .moments import fix_year
+                for r in self.conn.execute("SELECT id, at, until FROM moments WHERE julianday(until) - julianday(at) > 60").fetchall():
+                    at = fix_year(datetime.fromisoformat(r[1]), datetime.fromisoformat(r[2]))
+                    self.conn.execute("UPDATE OR IGNORE moments SET at=? WHERE id=?", (at.isoformat(), r[0]))
+                self.conn.execute("INSERT INTO settings(key, value) VALUES('moments_year_fix', '1')")
             # dossiers v2 (meerdere per mail, geen verzamelnamen, referentienummers): eenmalig opnieuw laten indelen,
             # anders blijft de AI oude verzamelnamen als "Lopende schadedossiers" hergebruiken
             if not self.conn.execute("SELECT 1 FROM settings WHERE key='dossiers_v2'").fetchone():

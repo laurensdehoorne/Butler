@@ -361,6 +361,22 @@ dialog.sheet.center .shead{padding-top:14px}
 .invoice{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border-radius:14px;background:var(--tint)}
 .invoice span{flex:1;min-width:12em}
 .invoice .btn{width:auto}
+#mom{width:min(460px,calc(100% - 32px));border-radius:18px;--off:0 0;--sc:.96}
+#mom form{padding:22px;display:flex;flex-direction:column;gap:6px}
+#mom h2{font:700 var(--fs-title2)/1.25 var(--text);margin:0}
+#mom p{margin:0 0 8px;color:var(--muted);font-size:var(--fs-subhead)}
+#mom .flabel{font-size:var(--fs-subhead);color:var(--muted);margin-top:8px}
+#mom .mom-row{display:flex;align-items:center;gap:6px}
+#mom .mom-row .field{flex:1;min-width:0}
+#mom .mom-row.gone .field{opacity:.4;text-decoration:line-through}
+#mom .mom-t{font-size:var(--fs-footnote);color:var(--muted);margin-top:6px}
+#mom textarea.field{min-height:0;min-block-size:3lh}
+#mom .mom-redo .btn{width:auto;margin-top:6px}
+#mom .actions{margin-top:14px}
+#mom .actions .btn{flex:1;justify-content:center;min-height:44px}
+#mom .mom-all{width:auto;align-self:flex-start;margin-top:6px}
+.m-fix{display:inline-block;margin-top:4px;font-size:var(--fs-footnote);color:var(--muted);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.info .m-fix{margin:0 0 0 auto;flex:none;align-self:center;border:0;background:none;padding:4px 0}
 #ask{width:min(420px,calc(100% - 32px));border-radius:18px;--off:0 0;--sc:.96}
 #ask form{padding:22px}
 #ask h2{font:700 var(--fs-title2)/1.25 var(--text);margin:0 0 6px}
@@ -668,6 +684,17 @@ textarea.field.short{min-height:90px;min-block-size:3lh}
     </div>
   </form>
 </dialog>
+<dialog id="mom" closedby="any" aria-labelledby="mom-title">
+  <form method="dialog">
+    <h2 id="mom-title">Klopt dit niet?</h2>
+    <p id="mom-msg"></p>
+    <div id="mom-body"></div>
+    <div class="actions">
+      <button type="button" class="btn ghost" data-close>Annuleren</button>
+      <button value="ok" class="btn primary">Bewaren</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="viewer" closedby="any" aria-label="Bijlage bekijken">
   <div class="viewer-bar">
     <button class="viewer-done" data-viewer-close>Gereed</button>
@@ -794,6 +821,8 @@ async function newMail(){
   }catch(err){ toast('Mislukt: ' + err.message); }
 }
 $('#newmail-btn').onclick = newMail;
+wireDialog($('#mom'), () => closeTopLayer($('#mom'), ''));
+$('#mom [data-close]').onclick = () => closeTopLayer($('#mom'), '');
 
 /* ---------- API ---------- */
 let login = null;
@@ -1065,8 +1094,65 @@ function momentCard(c, active){
       <time class="m-when" datetime="${esc(active ? m.until : m.at)}">${esc(momentWhen(m, active))}</time>
       ${m.detail ? `<div class="subj m-detail">${esc(m.detail)}</div>` : ''}
       <div class="sum">${TIE()}${esc(c.who)}: ${esc(c.subject || '(geen onderwerp)')}</div>
+      <span class="m-fix" role="button" tabindex="0" data-mfix="${c.tid}" data-ev="${esc(m.event_at)}">Klopt niet?</span>
     </div>
   </a>`;
+}
+
+/* een moment rechtzetten: het uur van de gebeurtenis (de herinneringen schuiven mee), een herinnering apart, weghalen,
+   of Butler opnieuw laten kijken met wat er niet klopte */
+const localInput = iso => { const d = new Date(iso); return localDay(iso) + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
+async function fixMoments(tid, ev){
+  const t = S.thread?.tid === tid ? S.thread : await api(`/api/threads/${tid}`);
+  const ms = (t.moments || []).filter(m => m.event_at === ev).sort((a, b) => a.at < b.at ? -1 : 1);
+  if(!ms.length) return toast('Dit moment is al voorbij');
+  const d = $('#mom'), body = $('#mom-body'), gone = new Set();
+  $('#mom-msg').textContent = ms[ms.length - 1].title;
+  body.innerHTML = `<label class="flabel" for="mom-ev">Wanneer is het?</label>
+    <input class="field" type="datetime-local" id="mom-ev" value="${localInput(ev)}">
+    <div class="flabel">Herinneringen</div>
+    ${ms.map(m => `<div class="mom-t">${esc(m.title)}</div><div class="mom-row">
+      <input class="field" type="datetime-local" data-mid="${m.id}" value="${localInput(m.at)}" aria-label="Herinnering: ${esc(m.title)}">
+      <button type="button" class="iconbtn" data-mrm="${m.id}" aria-label="Herinnering weghalen">${I('x')}</button></div>`).join('')}
+    <button type="button" class="btn ghost danger mom-all" data-mall>${I('trash')}Alles weghalen</button>
+    ${t.ai_available ? `<div class="mom-redo"><label class="flabel" for="mom-note">Of zeg Secretaresse wat er niet klopt</label>
+      <textarea class="field" id="mom-note" rows="2" placeholder="Bv. de vlucht is op 2 januari, inchecken kan pas 24 uur ervoor"></textarea>
+      <button type="button" class="btn" data-mredo>${TIE()}Laat Secretaresse opnieuw kijken</button></div>` : ''}`;
+  body.onclick = e => {
+    const rm = e.target.closest('[data-mrm]');
+    if(rm){ const id = +rm.dataset.mrm, row = rm.closest('.mom-row');
+      gone.has(id) ? gone.delete(id) : gone.add(id); row.classList.toggle('gone', gone.has(id));
+      rm.setAttribute('aria-label', gone.has(id) ? 'Herinnering terugzetten' : 'Herinnering weghalen'); rm.innerHTML = I(gone.has(id) ? 'undo' : 'x'); }
+    if(e.target.closest('[data-mall]')) closeTopLayer(d, 'all');
+    if(e.target.closest('[data-mredo]')) closeTopLayer(d, 'redo');
+  };
+  d.returnValue = '';
+  openDialog(d);
+  const how = await new Promise(res => d.addEventListener('close', () => res(d.returnValue), {once:true}));
+  if(!how) return;
+  const p = `/api/threads/${tid}/moments`;
+  let fixed;
+  try{
+    if(how === 'redo'){ toast('Secretaresse kijkt opnieuw…'); fixed = await post(p + '/redo', {note: $('#mom-note').value}); toast('Secretaresse keek opnieuw'); }
+    else if(how === 'all'){ fixed = await post(p, {remove: ms.map(m => m.id)}); toast('Weggehaald'); }
+    else{
+      const evNew = new Date($('#mom-ev').value);
+      if(isNaN(evNew)) return toast('Kies een geldig tijdstip');
+      const delta = evNew - new Date(ev);
+      const update = ms.filter(m => !gone.has(m.id)).map(m => {
+        const v = body.querySelector(`[data-mid="${m.id}"]`).value;
+        const at = v && v !== localInput(m.at) ? new Date(v) : new Date(+new Date(m.at) + delta);
+        const until = m.until === m.event_at ? evNew : new Date(+new Date(m.until) + delta);
+        return {id: m.id, at: at.toISOString(), until: until.toISOString(), event_at: evNew.toISOString()};
+      }).filter(x => !isNaN(new Date(x.at)));
+      const changed = gone.size || update.some(x => { const m = ms.find(m => m.id === x.id);
+        return +new Date(x.at) !== +new Date(m.at) || +new Date(x.event_at) !== +new Date(m.event_at); });
+      if(!changed) return;
+      fixed = await post(p, {update, remove: [...gone]}); toast('Aangepast');
+    }
+  }catch(e){ return toast('Mislukt: ' + e.message); }
+  if(S.thread?.tid === tid){ S.thread = fixed; renderThread(); }
+  load();
 }
 
 const empty = (title, sub='', mark=I('inbox')) => `<div class="empty"><span class="mark">${mark}</span><b>${title}</b>${sub?`<span>${sub}</span>`:''}</div>`;
@@ -1372,7 +1458,8 @@ function renderThread(){
     ms.sort((a, b) => a.at < b.at ? -1 : 1);
     const rem = ms.map(m => localDay(m.at) === localDay(ev) ? hhmm(m.at) : at(m.at));
     const remTxt = rem.length > 1 ? rem.slice(0, -1).join(', ') + ' en ' + rem[rem.length - 1] : rem[0];
-    return `<div class="info">${TIE()}<span><b>${esc(ms[ms.length - 1].title)}</b>, ${esc(at(ev))}<span class="sub">Herinnering om ${esc(remTxt)}</span></span></div>`;
+    return `<div class="info">${TIE()}<span><b>${esc(ms[ms.length - 1].title)}</b>, ${esc(at(ev))}<span class="sub">Herinnering om ${esc(remTxt)}${t.moments_fixed ? ', door jou aangepast' : ''}</span></span>
+      <button class="m-fix" data-a="mfix" data-ev="${esc(ev)}">Klopt niet?</button></div>`;
   }).join('');
   const snooze = t.snooze_until ? `<div class="info">${I('clock')}Gesnoozed tot ${esc(fullDate(t.snooze_until))}</div>` : '';
   const tags = t.tags.length ? `<div class="meta" style="margin:0 0 14px">${t.tags.map(x=>`<span class="badge tag">#${esc(x)}</span>`).join('')}</div>` : '';
@@ -1775,6 +1862,7 @@ async function doAction(a, btn){
       toast(`Doorgestuurd naar ${addrs.join(', ')}`);
       S.thread = await api(p); return renderThread(); }
     if(a==='dossier-remove'){ S.thread = await post(p+'/dossier/remove'); toast('Uit het dossier gehaald'); return renderThread(); }
+    if(a==='mfix') return fixMoments(t.tid, btn.dataset.ev);
     if(a==='ctx-edit'){ $('#ctx').innerHTML = contextForm(t); $('#ctx-text').focus(); return; }
     if(a==='ctx-cancel'){ $('#ctx').innerHTML = contextView(t); return; }
     if(a==='ctx-save'){ btn.innerHTML = TIE()+'Secretaresse leest opnieuw…';
@@ -1811,8 +1899,9 @@ async function doAction(a, btn){
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e=>{
-  const el = e.target.closest('[data-subscribe],[data-ask],[data-activity],[data-activity-back],[data-activity-settings],[data-undo],[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
+  const el = e.target.closest('[data-mfix],[data-subscribe],[data-ask],[data-activity],[data-activity-back],[data-activity-settings],[data-undo],[data-shared],[data-shared-back],[data-shared-done],[data-shared-del],[data-dossier-state],[data-tab],[data-acc],[data-f],[data-cf],[data-s],[data-dossier],[data-dossier-back],[data-quick-open],[data-quick-go],[data-tid],[data-a],[data-toggle]');
   if(!el) return;
+  if(el.dataset.mfix){ e.preventDefault(); return fixMoments(+el.dataset.mfix, el.dataset.ev); }
   if(el.hasAttribute('data-quick-open')){ S.quick = true; scrollTo(0, 0); return load(true); }
   if(el.hasAttribute('data-quick-go')) return quickGo(el);
   if(el.dataset.dossierState){
@@ -1883,6 +1972,7 @@ $('#q').addEventListener('keydown', e => {  // Enter op een vraag: Secretaresse 
 });
 document.addEventListener('keydown', e=>{
   if(e.key==='/' && !e.target.closest('input,textarea,select,[contenteditable]') && !document.querySelector('dialog[open]')){ e.preventDefault(); $('#q').focus(); }
+  if((e.key==='Enter' || e.key===' ') && e.target.dataset?.mfix){ e.preventDefault(); e.target.click(); }
   if(e.key==='Enter' && e.target.id==='instr'){ e.preventDefault(); $('[data-a=draft]')?.click(); }
 });
 

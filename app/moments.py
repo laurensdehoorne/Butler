@@ -20,6 +20,7 @@ KINDS = {"vlucht", "trein", "concert", "evenement", "reservatie", "afspraak", "a
 MAX_MOMENTS = 4
 DEFAULT_SPAN = timedelta(hours=6)  # zonder einde: zo lang blijft een moment staan
 MAX_LEAD = timedelta(days=2)  # een herinnering begint nooit eerder dan dit voor de gebeurtenis zelf
+YEAR_SLIP = timedelta(days=60)  # zo lang voor het einde: dan is het jaartal bij de jaarwissel niet meegeschoven
 NIGHT = (22, 7)  # 's nachts geen melding, tenzij het moment voor de ochtend al voorbij is
 
 SYSTEM = """Je bent de e-mailassistent van {owner}. Het is nu {now} ({tz}).
@@ -63,6 +64,7 @@ def parse(raw, default_tz, now=None):
             until = _local(it.get("einde"), tz) if it.get("einde") else at + DEFAULT_SPAN
         except (TypeError, ValueError):
             until = at + DEFAULT_SPAN
+        at = fix_year(at, until)
         if until <= at:
             until = at + DEFAULT_SPAN
         if until <= now:
@@ -80,6 +82,19 @@ def parse(raw, default_tz, now=None):
                     "event_at": event.astimezone(timezone.utc).isoformat()})
     out.sort(key=lambda x: x["at"])
     return out[:MAX_MOMENTS]
+
+
+def fix_year(at, until):
+    """Een herinnering die maanden voor haar einde begint, is soms een jaartal dat bij de jaarwissel niet meeschoof
+    (inchecken op 1 januari 2026 voor een vlucht op 2 januari 2027): dan het jaar van het einde nemen. Komt ze daarmee
+    na het einde (de boekingsdatum), dan blijft ze; MAX_LEAD begrenst die."""
+    shifted = at
+    while until - shifted > YEAR_SLIP:
+        try:
+            shifted = shifted.replace(year=shifted.year + 1)
+        except ValueError:  # 29 februari
+            shifted += timedelta(days=365)
+    return shifted if shifted < until else at
 
 
 def _local(value, tz):

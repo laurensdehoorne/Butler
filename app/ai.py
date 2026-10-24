@@ -365,7 +365,7 @@ class AIWorker:
     def moments(self, tid):
         """Momenten waarop een thread nodig is: gemarkeerde mail, en mail die een boeking of afspraak bevestigt."""
         t, msgs = thread_messages(self.db, tid)
-        if not t or not msgs or not self.active_for(t["account"]):
+        if not t or not msgs or not self.active_for(t["account"]) or t.get("moments_fixed"):
             return []
         tz = self.notifier.tz
         system = moments.SYSTEM.format(owner=self.cfg.get("owner", "de gebruiker"), name=self.cfg.get("name", "de gebruiker"),

@@ -751,6 +751,7 @@ def get_thread(tid: int):
                           "muted_auto": bool(rule.get("notify_auto"))}
     card["moments"] = [_moment(r) for r in db.q("SELECT * FROM moments WHERE tid=? AND until > ? ORDER BY at",
                                                   (tid, _now().isoformat()))]
+    card["moments_fixed"] = bool(t.get("moments_fixed"))
     card["invoice"] = forward.suggestion(db, APP, t, msgs)  # factuur: met één tik naar je boekhouding
     card["auto"] = [dict(r) for r in db.q("SELECT id, at, kind, detail, can_undo, undone_at FROM auto_log WHERE tid=? ORDER BY at", (tid,))]
     return card
@@ -826,8 +827,69 @@ def set_context(tid: int, body: ContextIn):
         sender_set_rule(RuleIn(account=t["account"], addr=incoming[-1]["from_addr"], kind=kind))
     if ai.active_for(t["account"]):
         _run(lambda: ai.triage(tid))
-        if any(m.get("flagged") for m in msgs):
+        if any(m.get("flagged") for m in msgs) or t["has_event"] or db.one("SELECT 1 FROM moments WHERE tid=?", (tid,)):
             ai.enqueue_moments(tid)
+    return get_thread(tid)
+
+
+class MomentFix(BaseModel):
+    id: int
+    at: str
+    until: str
+    event_at: str
+
+
+class MomentsFixIn(BaseModel):
+    update: list[MomentFix] = []
+    remove: list[int] = []
+
+
+@app.post("/api/threads/{tid}/moments", dependencies=[Depends(auth)])
+def fix_moments(tid: int, body: MomentsFixIn):
+    """Momenten die niet klopten, door jou rechtgezet of weggehaald. Daarna blijft de AI eraf voor deze mail."""
+    _thread_or_404(tid)
+    now = _now()
+
+    def utc(value):
+        try:
+            d = datetime.fromisoformat(value)
+        except ValueError:
+            raise HTTPException(400, f"ongeldig tijdstip: {value}")
+        return (d if d.tzinfo else d.replace(tzinfo=notifier.tz)).astimezone(timezone.utc)
+
+    for x in body.update:
+        old = db.one("SELECT * FROM moments WHERE id=? AND tid=?", (x.id, tid))
+        if not old:
+            continue
+        at, until, event = utc(x.at), utc(x.until), utc(x.event_at)
+        if until <= at:
+            until = at + moments.DEFAULT_SPAN
+        # later begonnen dan eerst gedacht: dan ook opnieuw melden
+        notified = 0 if at.isoformat() != old["at"] and at > now else old["notified"]
+        db.x("UPDATE OR IGNORE moments SET at=?, until=?, event_at=?, notified=? WHERE id=?",
+             (at.isoformat(), until.isoformat(), event.isoformat(), notified, x.id))
+    for mid in body.remove:
+        db.x("DELETE FROM moments WHERE id=? AND tid=?", (mid, tid))
+    db.x("UPDATE threads SET moments_fixed=1 WHERE tid=?", (tid,))
+    return get_thread(tid)
+
+
+class MomentsRedoIn(BaseModel):
+    note: str = ""
+
+
+@app.post("/api/threads/{tid}/moments/redo", dependencies=[Depends(auth)])
+def redo_moments(tid: int, body: MomentsRedoIn):
+    """Secretaresse kijkt opnieuw wanneer je deze mail nodig hebt, met wat je zegt dat er niet klopte als context erbij."""
+    t = _thread_or_404(tid)
+    if not ai.active_for(t["account"]):
+        raise HTTPException(400, "AI staat uit voor dit account")
+    note = body.note.strip()
+    if note:
+        context = "\n".join(x for x in ((t["context"] or "").strip(), note) if x)[:2000]
+        db.x("UPDATE threads SET context=? WHERE tid=?", (context, tid))
+    db.x("UPDATE threads SET moments_fixed=0 WHERE tid=?", (tid,))
+    _run(lambda: ai.moments(tid))
     return get_thread(tid)
 
 
